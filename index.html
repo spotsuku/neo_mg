@@ -214,11 +214,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .editable-cell {
   cursor: pointer;
   position: relative;
-  transition: background .1s;
+  transition: background .15s, box-shadow .15s;
+  /* 平常時：薄い黄色がかった背景で「入力できる」と示す */
+  background: rgba(239,159,39,0.10) !important;
+}
+/* 予算セルは薄い青系 */
+td.budget.editable-cell {
+  background: rgba(55,138,221,0.10) !important;
+}
+/* 実績セルは薄い緑系 */
+td.actual.editable-cell {
+  background: rgba(39,174,96,0.10) !important;
 }
 .editable-cell:hover {
-  background: var(--bg-blue) !important;
-  color: var(--tc-blue) !important;
+  background: rgba(55,138,221,0.22) !important;
+  box-shadow: inset 0 0 0 1.5px rgba(55,138,221,0.5);
 }
 .editable-cell:hover::after {
   content: '✏';
@@ -226,17 +236,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
   position: absolute;
   top: 2px;
   right: 3px;
-  opacity: .5;
+  color: var(--tc-blue);
+  opacity: .7;
 }
 .cell-editing {
-  background: var(--bg-blue) !important;
-  outline: 2px solid var(--tc-blue) !important;
-  outline-offset: -2px;
+  background: rgba(55,138,221,0.18) !important;
+  box-shadow: inset 0 0 0 2px var(--tc-blue) !important;
+  padding: 0 !important;
 }
 .cell-input {
   width: 100%;
   height: 100%;
-  padding: 3px 5px;
+  min-height: 24px;
+  padding: 4px 6px;
   border: none;
   background: transparent;
   color: var(--tc-blue);
@@ -245,6 +257,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
   text-align: right;
   font-family: inherit;
   outline: none;
+  display: block;
 }
 .pl-cf-save-bar {
   display: none;
@@ -855,14 +868,14 @@ const DEFAULT_2025 = {
   cf: {
     budget: {
       open:         [15863,7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706],
-      cfIn:         [3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000],
+      cfIn:         [6250,13750,16625,9875,6625,13200,8500,500,875,3500,16500,10000],
       laborPay:     [2500,2500,2500,2500,2500,2500,2500,2500,2500,2500,2500,2500],
       outsourcePay: [4000,4000,4000,4000,4000,4000,4000,4000,4000,4000,4000,4000],
-      advPay:       [1667,1667,1667,1667,1667,1667,1667,1667,1667,1667,1667,1667],
+      advPay:       [1670,1670,1670,1670,1670,1670,1670,1670,1670,1670,1670,1670],
       rentPay:      [900,900,900,900,900,900,900,900,900,900,900,900],
-      gaichuPay:    [500,500,500,500,500,500,500,500,500,500,500,500],
+      gaichuPay:    [167,167,167,167,167,167,167,167,167,167,167,167],
       otherPay:     [800,800,800,800,800,800,800,800,800,800,800,800],
-      funding:      [0,0,0,0,0,0,0,0,0,0,0,0]
+      funding:      [0,0,0,0,0,0,0,0,0,15000,0,0]
     },
     actual: {
       open:         [15863,7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706],
