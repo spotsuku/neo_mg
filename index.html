@@ -570,7 +570,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       <div class="fl" style="display:flex;align-items:center;gap:6px">
         <label style="font-size:11px;color:var(--text3);white-space:nowrap">対象年度</label>
         <select id="sim-year-sel" onchange="onSimYearChange()" style="padding:5px 8px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-family:inherit">
-          <option value="2025">2025年度（2504〜2603）</option>
+          <option value="2025" selected>2025年度（2504〜2603）</option>
           <option value="2026">2026年度（2604〜2703）</option>
         </select>
       </div>
@@ -860,7 +860,11 @@ function setSimView(v, el) {
   el.classList.add('active');
   document.getElementById('sim-pl').style.display = v === 'pl' ? '' : 'none';
   document.getElementById('sim-cf').style.display = v === 'cf' ? '' : 'none';
-  setTimeout(drawQSChart, 50);
+  setTimeout(() => {
+    drawQSChart();
+    if (v === 'pl' && window._simPlDirty) recalcSimPL();
+    if (v === 'cf' && window._simCfDirty) recalcSimCF();
+  }, 50);
 }
 
 // ═══════════════════════════════════════════
@@ -899,9 +903,9 @@ function updateWeeklyKPIs() {
   const months12Labor = pl.actual.labor.slice(Math.max(0, lastActualIdx - 2), lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
   const countMonths = Math.min(lastActualIdx + 1, 3);
   const burnrate = countMonths > 0 ? Math.round((cumOpex / (lastActualIdx + 1))) : 1022;
-  const runway = lastCash ? (lastCash / burnrate / 10).toFixed(1) : '—'; // cash is in 千円, burnrate in 万円
+  const runway = lastCash ? (lastCash / 10 / burnrate).toFixed(1) : '—'; // lastCash:千円→÷10→万円, burnrate:万円/月
 
-  document.getElementById('kpi-cash').textContent = lastCash ? fmt万(lastCash / 100) + '万円' : '5,371万円';
+  document.getElementById('kpi-cash').textContent = lastCash ? fmt万(lastCash / 10) + '万円' : '5,371万円';
   document.getElementById('kpi-cash-s').innerHTML = lastCash ? `<span class="${riskClass(runway)}">残り約${runway}ヶ月</span>` : '<span class="badge ba">残り約7.5ヶ月</span>';
   document.getElementById('kpi-rev').textContent = cumRev ? fmt万(cumRev) + '万円' : '7,737万円';
   document.getElementById('kpi-rev-s').innerHTML = budRev ? `<span class="badge ${cumRev >= budRev ? 'bg' : 'br'}">予算比 ${Math.round(cumRev / budRev * 100)}%</span>` : '';
@@ -1409,7 +1413,7 @@ async function saveManual() {
 //  SIMULATION – 月次入力型 PL / CF
 // ═══════════════════════════════════════════
 let simPlChart = null, simCfChart = null;
-let currentSimYear = '2026'; // シミュレーションの年度（独立管理）
+let currentSimYear = '2025'; // シミュレーションの年度（独立管理）
 
 // シミュレーション用データ構造（年度ごと、永続保存）
 const SIM_MONTHS = {
@@ -1445,8 +1449,52 @@ const CF_ROWS = [
 
 // インメモリ シムデータ
 let SIM_DATA = {
-  '2025': { pl: {}, cf: { cfOpenFirst: 15863 } }, // 千円
-  '2026': { pl: {}, cf: { cfOpenFirst: 7620 } }   // 2603末残高を初期値（万円）
+  '2025': {
+    pl: {
+      fee:       [900,900,900,1000,1000,1000,1100,1100,1100,1200,1200,1200],
+      training:  [100,100,200,200,300,300,400,400,500,500,500,500],
+      event:     [0,50,100,0,50,100,0,50,300,50,50,100],
+      labor:     [310,310,310,310,310,310,360,360,360,360,360,360],
+      outsource: [380,380,380,380,380,380,380,380,380,380,380,380],
+      adv:       [80,80,150,80,80,250,80,80,350,80,80,150],
+      rent:      [90,90,90,90,90,90,90,90,90,90,90,90],
+      gaichu:    [80,80,80,80,80,80,80,80,80,80,80,80],
+      other:     [50,50,50,50,50,50,50,50,50,50,50,50]
+    },
+    cf: {
+      cfOpenFirst: 5371,
+      cfIn:        [900,900,900,1000,1000,1000,1100,1100,1100,1200,1200,1200],
+      laborPay:    [310,310,310,310,310,310,360,360,360,360,360,360],
+      outsourcePay:[380,380,380,380,380,380,380,380,380,380,380,380],
+      advPay:      [80,80,150,80,80,250,80,80,350,80,80,150],
+      rentPay:     [90,90,90,90,90,90,90,90,90,90,90,90],
+      gaichuPay:   [80,80,80,80,80,80,80,80,80,80,80,80],
+      otherPay:    [50,50,50,50,50,50,50,50,50,50,50,50]
+    }
+  },
+  '2026': {
+    pl: {
+      fee:       [1000,1000,1000,1100,1100,1100,1200,1200,1200,1300,1300,1300],
+      training:  [200,200,300,300,400,400,500,500,500,500,500,500],
+      event:     [0,50,100,0,50,200,0,50,400,50,50,100],
+      labor:     [400,400,400,400,400,400,450,450,450,450,450,450],
+      outsource: [400,400,400,400,400,400,400,400,400,400,400,400],
+      adv:       [100,100,200,100,100,300,100,100,400,100,100,200],
+      rent:      [90,90,90,90,90,90,90,90,90,90,90,90],
+      gaichu:    [100,100,100,100,100,100,100,100,100,100,100,100],
+      other:     [60,60,60,60,60,60,60,60,60,60,60,60]
+    },
+    cf: {
+      cfOpenFirst: 7620,
+      cfIn:        [1000,1000,1000,1100,1100,1100,1200,1200,1200,1300,1300,1300],
+      laborPay:    [400,400,400,400,400,400,450,450,450,450,450,450],
+      outsourcePay:[400,400,400,400,400,400,400,400,400,400,400,400],
+      advPay:      [100,100,200,100,100,300,100,100,400,100,100,200],
+      rentPay:     [90,90,90,90,90,90,90,90,90,90,90,90],
+      gaichuPay:   [100,100,100,100,100,100,100,100,100,100,100,100],
+      otherPay:    [60,60,60,60,60,60,60,60,60,60,60,60]
+    }
+  }
 };
 // 各 key → 12要素配列
 
@@ -1677,7 +1725,12 @@ function drawSimPLChart(revArr, costArr, profitArr, cumArr) {
   const cumBase2 = profitArr.map(p  => { cumBase += p; return cumBase; });
 
   const plCanvas = document.getElementById('sim-pl-chart');
-  if (!plCanvas) return;
+  if (!plCanvas || plCanvas.offsetParent === null) {
+    // タブが非表示のとき→次回表示時に再描画するフラグをセット
+    window._simPlDirty = true;
+    return;
+  }
+  window._simPlDirty = false;
   destroyChart('sim-pl-chart');
   simPlChart = new Chart(plCanvas, {
     type: 'bar',
@@ -1920,7 +1973,11 @@ function drawSimCFChart(months, netArr, balArr) {
   });
 
   const cfCanvas = document.getElementById('sim-cf-chart');
-  if (!cfCanvas) return;
+  if (!cfCanvas || cfCanvas.offsetParent === null) {
+    window._simCfDirty = true;
+    return;
+  }
+  window._simCfDirty = false;
   destroyChart('sim-cf-chart');
   simCfChart = new Chart(cfCanvas, {
     type: 'bar',
