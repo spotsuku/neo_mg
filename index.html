@@ -210,6 +210,58 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 
 .save-ok{font-size:11px;color:var(--tc-green);font-weight:700;display:none}
 
+/* ── インライン編集セル ── */
+.editable-cell {
+  cursor: pointer;
+  position: relative;
+  transition: background .1s;
+}
+.editable-cell:hover {
+  background: var(--bg-blue) !important;
+  color: var(--tc-blue) !important;
+}
+.editable-cell:hover::after {
+  content: '✏';
+  font-size: 8px;
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  opacity: .5;
+}
+.cell-editing {
+  background: var(--bg-blue) !important;
+  outline: 2px solid var(--tc-blue) !important;
+  outline-offset: -2px;
+}
+.cell-input {
+  width: 100%;
+  height: 100%;
+  padding: 3px 5px;
+  border: none;
+  background: transparent;
+  color: var(--tc-blue);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+  font-family: inherit;
+  outline: none;
+}
+.pl-cf-save-bar {
+  display: none;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-green);
+  color: var(--tc-green);
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--r);
+  margin-top: 8px;
+  align-items: center;
+  gap: 10px;
+}
+.pl-cf-save-bar.visible { display: flex; }
+
 /* ── MODAL ── */
 #budget-modal-overlay{align-items:center;justify-content:center}
 #budget-modal-overlay.open{display:flex!important}
@@ -801,8 +853,29 @@ const DEFAULT_2025 = {
     actual: { rev:[1203,1257,3015,1,605,3,771,29,82,322,450,0], labor:[141,141,140,498,153,138,183,263,263,308,302,0], outsource:[156,767,450,475,391,512,414,349,502,160,87,0], adv:[116,71,194,63,51,17,220,27,216,248,365,0], gaichu:[110,192,175,359,228,629,343,517,366,134,214,0], other:[110,192,174,359,227,628,342,516,366,133,214,0] }
   },
   cf: {
-    budget: { open:[15863,7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706], cfIn:[3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000] },
-    actual: { open:[15863,7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706], cfIn:[3322,13791,16656,9901,6650,13212,8479,504,877,3539,48674,39164], cfClose:[7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706,76195] }
+    budget: {
+      open:         [15863,7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706],
+      cfIn:         [3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000],
+      laborPay:     [2500,2500,2500,2500,2500,2500,2500,2500,2500,2500,2500,2500],
+      outsourcePay: [4000,4000,4000,4000,4000,4000,4000,4000,4000,4000,4000,4000],
+      advPay:       [1667,1667,1667,1667,1667,1667,1667,1667,1667,1667,1667,1667],
+      rentPay:      [900,900,900,900,900,900,900,900,900,900,900,900],
+      gaichuPay:    [500,500,500,500,500,500,500,500,500,500,500,500],
+      otherPay:     [800,800,800,800,800,800,800,800,800,800,800,800],
+      funding:      [0,0,0,0,0,0,0,0,0,0,0,0]
+    },
+    actual: {
+      open:         [15863,7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706],
+      cfIn:         [3322,13791,16656,9901,6650,13212,8479,504,877,3539,48674,39164],
+      cfClose:      [7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706,76195],
+      laborPay:     [1523,1289,1788,5007,1551,1651,1412,1431,2593,2880,3185,3185],
+      outsourcePay: [5164,2186,8024,7003,6069,5333,5175,5122,4977,3916,4036,4036],
+      advPay:       [101,367,0,1004,335,0,2437,3304,911,4026,873,6165],
+      rentPay:      [249,249,887,249,1380,904,1627,1165,1409,1132,883,883],
+      gaichuPay:    [22,22,330,95,48,62,543,52,22,207,299,299],
+      otherPay:     [1231,1296,2185,1310,1806,949,933,377,693,1235,805,805],
+      funding:      [0,0,0,0,0,0,0,0,0,15000,0,0]
+    }
   },
   reportData: {
     '2601': { okr:[{s:'完了',k:'KR1',t:'黒字化可能な第二期会員設計'},{s:'完了',k:'KR3',t:'ヒーロー人材4名の輩出'},{s:'完了',k:'KR8',t:'商工中金1,500万円着金'},{s:'進行中',k:'KR5',t:'圧倒的な経営人材の採用実施'}], priority:[{n:'項目① 人事',c:'採用・育成計画を作成し応募開始',r:'組織のスピード向上と新規経営人材の確保が急務'},{n:'項目② コミュニティ',c:'ヒーロー創出のためのプロジェクト支援・ブートキャンプ実施',r:'PJT20個組成・ヒーロー候補8名選出済みで最終仕上げ'},{n:'項目③ 商品企画',c:'プレイフル研修事業・NEOカリキュラムの最終化',r:'会社の価値の根幹である研修の商品価値を明確化する'}], good:['NEOアワード集客1.5倍達成','PJT20個組成・ヒーロー候補8名選出','商工中金 融資1,500万円決定'], more:['研修事業の企画・営業の遅延','人材育成（増田・面川）の遅れ','製作物の遅延と予算超過'], pl:{budget:{収支:-1320,売上:215,支出:1535},actual:{収支:-1130,売上:82,支出:1212}}, cf:{budget:{収支:-1396,入金:88,出金:1484},actual:{収支:-1069,入金:88,出金:1156}} },
@@ -818,7 +891,7 @@ const MONTH_LABELS = {
 };
 
 // DB (will be loaded from storage)
-let DB = { '2025': JSON.parse(JSON.stringify(DEFAULT_2025)), '2026': { months: MONTHS_2026, pl:{ budget:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]}, actual:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]} }, cf:{ budget:{open:[],cfIn:[]}, actual:{open:[],cfIn:[],cfClose:[]} }, reportData:{} } };
+let DB = { '2025': JSON.parse(JSON.stringify(DEFAULT_2025)), '2026': { months: MONTHS_2026, pl:{ budget:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]}, actual:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]} }, cf:{ budget:{open:[],cfIn:[],laborPay:[],outsourcePay:[],advPay:[],rentPay:[],gaichuPay:[],otherPay:[],funding:[]}, actual:{open:[],cfIn:[],cfClose:[],laborPay:[],outsourcePay:[],advPay:[],rentPay:[],gaichuPay:[],otherPay:[],funding:[]} }, reportData:{} } };
 
 // ═══════════════════════════════════════════
 //  NAV / TABS
@@ -1017,6 +1090,86 @@ function chartOpts(tickFmt) {
 function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
 
 // ═══════════════════════════════════════════
+//  インライン編集ヘルパー（月次PL/CF）
+// ═══════════════════════════════════════════
+let _plCfDirty = false;
+
+function showPlCfSaveBar() {
+  _plCfDirty = true;
+  const bar = document.getElementById('pl-cf-save-bar');
+  if (bar) bar.classList.add('visible');
+}
+
+async function savePlCfChanges() {
+  await saveDB();
+  _plCfDirty = false;
+  const bar = document.getElementById('pl-cf-save-bar');
+  if (bar) bar.classList.remove('visible');
+  updateWeeklyKPIs();
+}
+
+// PL セルクリック（d はその時点の DB[currentYear] への参照）
+function plCellClick(td, d) {
+  if (td.classList.contains('cell-editing')) return;
+  const key  = td.dataset.key;
+  const kind = td.dataset.kind; // 'budget' | 'actual'
+  const idx  = Number(td.dataset.idx);
+  const cur  = td.textContent.replace(/[^0-9\-]/g, '') || '';
+
+  td.classList.add('cell-editing');
+  td.innerHTML = `<input class="cell-input" type="number" value="${cur}" placeholder="0">`;
+  const inp = td.querySelector('input');
+  inp.focus(); inp.select();
+
+  function commit() {
+    const val = inp.value === '' ? '' : (Number(inp.value) || 0);
+    const target = kind === 'budget' ? d.pl.budget : d.pl.actual;
+    if (!target[key]) target[key] = Array(d.months.length).fill('');
+    target[key][idx] = val;
+    DB[currentYear] = d;
+    showPlCfSaveBar();
+    renderPLView(d);
+  }
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') inp.blur();
+    if (e.key === 'Tab') { e.preventDefault(); inp.blur(); }
+    if (e.key === 'Escape') { td.classList.remove('cell-editing'); renderPLView(d); }
+  });
+}
+
+// CF セルクリック
+function cfCellClick(td, d) {
+  if (td.classList.contains('cell-editing')) return;
+  const cfKey = td.dataset.cfkey; // e.g. 'actual.cfIn'
+  const idx   = Number(td.dataset.idx);
+  const cur   = td.textContent.replace(/[^0-9\-]/g, '') || '';
+  if (!cfKey) return;
+
+  const [section, field] = cfKey.split('.');
+  td.classList.add('cell-editing');
+  td.innerHTML = `<input class="cell-input" type="number" value="${cur}" placeholder="0">`;
+  const inp = td.querySelector('input');
+  inp.focus(); inp.select();
+
+  function commit() {
+    const val = inp.value === '' ? '' : (Number(inp.value) || 0);
+    if (!d.cf[section]) d.cf[section] = {};
+    if (!d.cf[section][field]) d.cf[section][field] = Array(d.months.length).fill('');
+    d.cf[section][field][idx] = val;
+    DB[currentYear] = d;
+    showPlCfSaveBar();
+    renderCFView(d);
+  }
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') inp.blur();
+    if (e.key === 'Tab') { e.preventDefault(); inp.blur(); }
+    if (e.key === 'Escape') { td.classList.remove('cell-editing'); renderCFView(d); }
+  });
+}
+
+// ═══════════════════════════════════════════
 //  PL / CF 予実
 // ═══════════════════════════════════════════
 function renderPLCF() {
@@ -1036,6 +1189,30 @@ function renderPLView(d) {
     return v > 0 ? v : null;
   });
   const profA = revA.map((r, i) => r !== null ? (r - (opexA[i] || 0)) : null);
+
+  // インライン編集ヘルパー
+  function editCell(tdEl, key, kind, idx) {
+    if (tdEl.classList.contains('cell-editing')) return;
+    tdEl.classList.add('cell-editing');
+    const cur = tdEl.textContent.replace(/[^0-9\-]/g,'') || '';
+    tdEl.innerHTML = `<input class="cell-input" type="number" value="${cur}" placeholder="0" autofocus>`;
+    const inp = tdEl.querySelector('input');
+    inp.select();
+    function commit() {
+      const val = inp.value === '' ? '' : Number(inp.value) || 0;
+      const arr = kind === 'budget' ? d.pl.budget[key] : d.pl.actual[key];
+      if (!arr) { kind === 'budget' ? (d.pl.budget[key] = []) : (d.pl.actual[key] = []); }
+      (kind === 'budget' ? d.pl.budget[key] : d.pl.actual[key])[idx] = val;
+      DB[currentYear] = d;
+      showPlCfSaveBar();
+      renderPLView(d); // 再描画
+    }
+    inp.addEventListener('blur', commit);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { inp.blur(); }
+      if (e.key === 'Escape') { tdEl.classList.remove('cell-editing'); renderPLView(d); }
+    });
+  }
 
   destroyChart('pl-chart');
   charts['pl-chart'] = new Chart(document.getElementById('pl-chart'), {
@@ -1079,12 +1256,12 @@ function renderPLView(d) {
     // budget row
     const bSum = (row.b || []).reduce((s, v) => s + (Number(v) || 0), 0);
     html += `<tr><td class="l${row.indent ? '" style="padding-left:14px;font-size:10px;color:var(--text3)' : ''}">${row.label}</td><td class="l" style="font-size:9px;color:var(--text3)">予算</td>`;
-    (row.b || Array(d.months.length).fill('')).forEach(v => { html += `<td class="budget">${v !== '' && v !== undefined ? Number(v).toLocaleString() : '—'}</td>`; });
+    (row.b || Array(d.months.length).fill('')).forEach((v, i) => { html += `<td class="budget editable-cell" data-key="${row.key}" data-kind="budget" data-idx="${i}" onclick="plCellClick(this,window._plCFd)">${v !== '' && v !== undefined ? Number(v).toLocaleString() : '—'}</td>`; });
     html += `<td class="budget">${bSum.toLocaleString()}</td></tr>`;
     // actual row
     const aSum = (row.a || []).reduce((s, v) => s + (Number(v) || 0), 0);
     html += `<tr><td class="l${row.indent ? '" style="padding-left:14px;font-size:10px;color:var(--text3)' : ''}"></td><td class="l" style="font-size:9px;font-weight:700;color:var(--text)">実績</td>`;
-    (row.a || Array(d.months.length).fill('')).forEach(v => { html += `<td class="actual">${v !== '' && v !== undefined && v !== null ? Number(v).toLocaleString() : '—'}</td>`; });
+    (row.a || Array(d.months.length).fill('')).forEach((v, i) => { html += `<td class="actual editable-cell" data-key="${row.key}" data-kind="actual" data-idx="${i}" onclick="plCellClick(this,window._plCFd)">${v !== '' && v !== undefined && v !== null ? Number(v).toLocaleString() : '—'}</td>`; });
     html += `<td class="actual">${aSum ? aSum.toLocaleString() : '—'}</td></tr>`;
     // diff row
     html += `<tr><td class="l${row.indent ? '" style="padding-left:14px;font-size:10px;color:var(--text3)' : ''}"></td><td class="l" style="font-size:9px;color:var(--text3)">差異</td>`;
@@ -1119,64 +1296,235 @@ function renderPLView(d) {
   });
   html += `<td class="actual ${aOpSum >= 0 ? 'diff-pos' : 'diff-neg'}">${aOpSum >= 0 ? '' : '▲'}${Math.abs(Math.round(aOpSum)).toLocaleString()}</td></tr>`;
   html += '</tbody></table>';
+  window._plCFd = d;
   document.getElementById('pl-table-wrap').innerHTML = html;
 }
 
 function renderCFView(d) {
   document.getElementById('cf-year-label').textContent = currentYear + '年度';
+  const N = d.months.length;
   const months = d.months.map(m => MONTH_LABELS[m] || m);
-  const balA = d.cf.actual.cfClose || [];
-  const inA = d.cf.actual.cfIn || [];
-  const balB = d.months.map((_, i) => {
-    if (!d.cf.budget.cfIn[i]) return null;
-    let bal = Number(d.cf.budget.open[0]) || 0;
-    for (let j = 0; j <= i; j++) bal += (Number(d.cf.budget.cfIn[j]) || 0) - 10000;
-    return Math.round(bal);
-  });
 
+  // ── ヘルパー：CF配列を取得（千円単位） ──
+  const cfArr = (section, key) => (d.cf[section] && d.cf[section][key]) || Array(N).fill(0);
+  const getN = (arr, i) => Number(arr[i]) || 0;
+
+  // ── 実績計算 ──
+  const aOpen    = cfArr('actual','open');
+  const aIn      = cfArr('actual','cfIn');
+  const aClose   = cfArr('actual','cfClose');
+  const aLabor   = cfArr('actual','laborPay');
+  const aOut     = cfArr('actual','outsourcePay');
+  const aAdv     = cfArr('actual','advPay');
+  const aRent    = cfArr('actual','rentPay');
+  const aGaichu  = cfArr('actual','gaichuPay');
+  const aOther   = cfArr('actual','otherPay');
+  const aFunding = cfArr('actual','funding');
+
+  // 月次合計出金（千円）
+  const aTotalOut = Array.from({length:N}, (_,i) =>
+    getN(aLabor,i)+getN(aOut,i)+getN(aAdv,i)+getN(aRent,i)+getN(aGaichu,i)+getN(aOther,i)
+  );
+  // 営業CF = 売上入金 − 出金合計
+  const aOpCF = Array.from({length:N}, (_,i) => getN(aIn,i) - aTotalOut[i]);
+  // 財務CF = 融資・調達
+  const aFinCF = aFunding;
+  // 月次純CF = 営業CF + 財務CF
+  const aNetCF = Array.from({length:N}, (_,i) => aOpCF[i] + getN(aFinCF,i));
+  // 月末残高（実績入力がなければ月初+純CF で計算）
+  const aCloseCalc = Array.from({length:N}, (_,i) =>
+    getN(aClose,i) || (getN(aOpen,i) + aNetCF[i])
+  );
+
+  // ── 予算計算 ──
+  const bOpen    = cfArr('budget','open');
+  const bIn      = cfArr('budget','cfIn');
+  const bLabor   = cfArr('budget','laborPay');
+  const bOut     = cfArr('budget','outsourcePay');
+  const bAdv     = cfArr('budget','advPay');
+  const bRent    = cfArr('budget','rentPay');
+  const bGaichu  = cfArr('budget','gaichuPay');
+  const bOther   = cfArr('budget','otherPay');
+  const bFunding = cfArr('budget','funding');
+  const bTotalOut = Array.from({length:N}, (_,i) =>
+    getN(bLabor,i)+getN(bOut,i)+getN(bAdv,i)+getN(bRent,i)+getN(bGaichu,i)+getN(bOther,i)
+  );
+  const bOpCF  = Array.from({length:N}, (_,i) => getN(bIn,i) - bTotalOut[i]);
+  const bFinCF = bFunding;
+  const bNetCF = Array.from({length:N}, (_,i) => bOpCF[i] + getN(bFinCF,i));
+  let bBal = getN(bOpen, 0);
+  const bCloseCalc = Array.from({length:N}, (_,i) => { bBal += bNetCF[i]; return Math.round(bBal); });
+
+  // ── グラフ ──
   destroyChart('cf-chart-main');
   charts['cf-chart-main'] = new Chart(document.getElementById('cf-chart-main'), {
     type: 'bar',
     data: {
       labels: months,
       datasets: [
-        { type: 'bar', label: '入金', data: inA.map(v => Number(v) || null), backgroundColor: 'rgba(59,109,17,0.3)', borderRadius: 3, yAxisID: 'y' },
-        { type: 'line', label: '残高（実績）', data: balA.map(v => Number(v) || null), borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.1)', fill: true, tension: 0.3, pointRadius: 3, yAxisID: 'y2' },
-        { type: 'line', label: '残高（予算）', data: balB, borderColor: '#378ADD', borderDash: [4, 3], tension: 0.3, pointRadius: 2, yAxisID: 'y2' }
+        // ── 入金（積み上げ正方向）──
+        { type:'bar', label:'売上入金',     data: aIn.map(v=>Number(v)||0),            backgroundColor:'rgba(55,138,221,0.7)', borderRadius:3, stack:'in',  yAxisID:'y' },
+        { type:'bar', label:'融資・調達',   data: aFunding.map(v=>Number(v)||0),       backgroundColor:'rgba(83,74,183,0.7)', borderRadius:3, stack:'in',  yAxisID:'y' },
+        // ── 出金（積み上げ負方向）──
+        { type:'bar', label:'人件費',       data: aLabor.map(v=>v?-v:0),              backgroundColor:'rgba(226,75,74,0.75)', stack:'out', yAxisID:'y' },
+        { type:'bar', label:'業務委託費',   data: aOut.map(v=>v?-v:0),               backgroundColor:'rgba(216,90,48,0.7)',  stack:'out', yAxisID:'y' },
+        { type:'bar', label:'広告・イベント',data: aAdv.map(v=>v?-v:0),              backgroundColor:'rgba(239,159,39,0.7)', stack:'out', yAxisID:'y' },
+        { type:'bar', label:'外注費',       data: aGaichu.map(v=>v?-v:0),            backgroundColor:'rgba(139,90,43,0.7)',  stack:'out', yAxisID:'y' },
+        { type:'bar', label:'賃料',         data: aRent.map(v=>v?-v:0),              backgroundColor:'rgba(136,135,128,0.7)',stack:'out', yAxisID:'y' },
+        { type:'bar', label:'その他支出',   data: aOther.map(v=>v?-v:0),             backgroundColor:'rgba(100,100,100,0.5)',stack:'out', yAxisID:'y' },
+        // ── 残高ライン ──
+        { type:'line', label:'残高（実績）', data: aCloseCalc.map(v=>Number(v)||null),
+          borderColor:'#378ADD', backgroundColor:'rgba(55,138,221,0.06)', fill:false,
+          tension:0.3, pointRadius:4, pointBackgroundColor: aCloseCalc.map(v=>Number(v)<0?'#E24B4A':'#378ADD'),
+          borderWidth:2.5, yAxisID:'y2' },
+        { type:'line', label:'残高（予算）', data: bCloseCalc,
+          borderColor:'rgba(55,138,221,0.5)', borderDash:[4,3], tension:0.3, pointRadius:2, borderWidth:1.5, yAxisID:'y2' },
+        // ── 営業CF折れ線 ──
+        { type:'line', label:'営業CF（実績）', data: aOpCF.map(v=>v||null),
+          borderColor:'#27ae60', borderDash:[5,2], tension:0.2, pointRadius:3, borderWidth:1.5, yAxisID:'y' }
       ]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { font: { size: 10 }, color: tc, boxWidth: 10, padding: 8 } } },
-      scales: {
-        x: { ticks: { color: tc, font: { size: 10 } }, grid: { color: gc } },
-        y: { position: 'left', ticks: { color: tc, font: { size: 9 } }, grid: { display: false } },
-        y2: { position: 'right', ticks: { color: tc, font: { size: 9 }, callback: v => (v / 10000).toFixed(0) + '万' }, grid: { color: gc } }
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ labels:{ font:{size:10}, color:tc, boxWidth:10, padding:8 } },
+        tooltip:{
+          callbacks:{
+            label: ctx => {
+              const v = ctx.parsed.y;
+              if (v===null||v===undefined||v===0) return null;
+              const a = Math.abs(Math.round(v));
+              return ` ${ctx.dataset.label}：${v<0?'▲':''}${a.toLocaleString()}千円`;
+            }
+          }
+        }
+      },
+      scales:{
+        x:{ ticks:{color:tc,font:{size:10}}, grid:{color:gc} },
+        y:{ position:'left', stacked:true,
+            ticks:{color:tc,font:{size:9},callback:v=>{
+              const a=Math.abs(v);
+              return (v<0?'▲':'')+(a>=10000?(a/10000).toFixed(0)+'億':a>=1000?(a/1000).toFixed(0)+'千万':a.toLocaleString());
+            }},
+            grid:{color:gc}, title:{display:true,text:'入出金（千円）',color:tc,font:{size:9}} },
+        y2:{ position:'right',
+             ticks:{color:tc,font:{size:9},callback:v=>{
+               const a=Math.abs(v);
+               return (v<0?'▲':'')+(a>=10000?(a/10000).toFixed(0)+'億':a>=1000?(a/1000).toFixed(0)+'千万':a.toLocaleString()+'千');
+             }},
+             grid:{display:false}, title:{display:true,text:'月末残高（千円）',color:tc,font:{size:9}} }
       }
     }
   });
 
-  // CF table
-  let html = `<table class="dt" style="min-width:${80 + d.months.length * 80}px"><thead><tr><th class="l" style="min-width:100px">科目</th><th class="l">区分</th>`;
-  d.months.forEach(m => { html += `<th>${MONTH_LABELS[m]}</th>`; });
-  html += '<th>合計</th></tr></thead><tbody>';
+  // ── テーブル組み立て ──
+  // セルレンダラー
+  const fmtV = v => v !== null && v !== undefined && v !== '' && Number(v) !== 0 ? Math.round(Number(v)).toLocaleString() : '—';
+  const diffCell = (a, b, invert=false) => {
+    if (!a && a !== 0) return '<td class="diff-zero">—</td>';
+    const d2 = invert ? (Number(b)||0) - (Number(a)||0) : (Number(a)||0) - (Number(b)||0);
+    return `<td class="${d2>0?'diff-pos':d2<0?'diff-neg':'diff-zero'}">${d2>0?'+':''}${d2!==0?Math.round(d2).toLocaleString():'—'}</td>`;
+  };
 
-  const cfRows = [
-    { label: '月初残高', bArr: d.cf.budget.open, aArr: d.cf.actual.open, noSum: true },
-    { label: '売上入金（千円）', bArr: d.cf.budget.cfIn, aArr: d.cf.actual.cfIn },
-    { label: '月末残高（千円）', bArr: balB, aArr: d.cf.actual.cfClose, noSum: true },
+  // 行定義（label, bArr, aArr, isOut, edBKey, edAKey, noSum, isSub, isSection, isTot, noDiff）
+  const rows = [
+    // ── 残高 ──
+    { label:'月初残高',         bArr:bOpen,      aArr:aOpen,      noSum:true,  edBKey:'budget.open',   edAKey:'actual.open' },
+    // ── 収入 ──
+    { label:'── 収入',         section:true },
+    { label:'売上入金',         bArr:bIn,        aArr:aIn,        isSub:true,  edBKey:'budget.cfIn',   edAKey:'actual.cfIn' },
+    { label:'融資・調達',       bArr:bFunding,   aArr:aFunding,   isSub:true,  edBKey:'budget.funding',edAKey:'actual.funding' },
+    // ── 出金 ──
+    { label:'── 出金',         section:true },
+    { label:'人件費',           bArr:bLabor,     aArr:aLabor,     isSub:true, isOut:true, edBKey:'budget.laborPay',    edAKey:'actual.laborPay' },
+    { label:'業務委託費',       bArr:bOut,       aArr:aOut,       isSub:true, isOut:true, edBKey:'budget.outsourcePay',edAKey:'actual.outsourcePay' },
+    { label:'広告・イベント',   bArr:bAdv,       aArr:aAdv,       isSub:true, isOut:true, edBKey:'budget.advPay',      edAKey:'actual.advPay' },
+    { label:'外注費',           bArr:bGaichu,    aArr:aGaichu,    isSub:true, isOut:true, edBKey:'budget.gaichuPay',   edAKey:'actual.gaichuPay' },
+    { label:'賃料',             bArr:bRent,      aArr:aRent,      isSub:true, isOut:true, edBKey:'budget.rentPay',     edAKey:'actual.rentPay' },
+    { label:'その他支出',       bArr:bOther,     aArr:aOther,     isSub:true, isOut:true, edBKey:'budget.otherPay',    edAKey:'actual.otherPay' },
+    { label:'出金合計',         bArr:bTotalOut,  aArr:aTotalOut,  isTot:true,  isOut:true, noSum:false, noDiff:true },
+    // ── CF区分 ──
+    { label:'── CF区分',       section:true },
+    { label:'営業CF',           bArr:bOpCF,      aArr:aOpCF,      isTot:true, noDiff:true },
+    { label:'財務CF（融資等）', bArr:bFinCF,     aArr:aFinCF,     isTot:true, noDiff:true },
+    { label:'月次純CF',         bArr:bNetCF,     aArr:aNetCF,     isTot:true, noDiff:true },
+    // ── 残高 ──
+    { label:'月末残高',         bArr:bCloseCalc, aArr:aCloseCalc, noSum:true,  edAKey:'actual.cfClose', isTot:true },
   ];
-  cfRows.forEach(row => {
-    const bSum = (row.bArr || []).reduce((s, v) => s + (Number(v) || 0), 0);
-    const aSum = (row.aArr || []).reduce((s, v) => s + (Number(v) || 0), 0);
-    html += `<tr><td class="l">${row.label}</td><td class="l" style="font-size:9px;color:var(--text3)">予算</td>`;
-    (row.bArr || Array(d.months.length).fill(null)).forEach(v => { html += `<td class="budget">${v !== null && v !== undefined ? Math.round(Number(v)).toLocaleString() : '—'}</td>`; });
-    html += `<td class="budget">${row.noSum ? '—' : bSum.toLocaleString()}</td></tr>`;
-    html += `<tr><td class="l"></td><td class="l" style="font-size:9px;font-weight:700;color:var(--text)">実績</td>`;
-    (row.aArr || Array(d.months.length).fill(null)).forEach(v => { html += `<td class="actual">${v !== null && v !== undefined ? Math.round(Number(v)).toLocaleString() : '—'}</td>`; });
-    html += `<td class="actual">${row.noSum ? '—' : (aSum ? aSum.toLocaleString() : '—')}</td></tr>`;
+
+  const minW = 100 + d.months.length * 82;
+  let html = `<table class="dt" style="min-width:${minW}px;width:100%">
+    <thead><tr>
+      <th class="l" style="min-width:130px">科目</th>
+      <th class="l" style="min-width:36px">区分</th>
+      ${months.map(m=>`<th style="min-width:72px">${m}</th>`).join('')}
+      <th>合計</th>
+    </tr></thead><tbody>`;
+
+  rows.forEach(row => {
+    if (row.section) {
+      html += `<tr><td colspan="${N+3}" style="background:var(--bg3);font-size:10px;font-weight:700;color:var(--text3);padding:5px 8px;letter-spacing:.3px">${row.label}</td></tr>`;
+      return;
+    }
+    const isOut = row.isOut;
+    const isTot = row.isTot;
+    const isSub = row.isSub;
+    const rowStyle = isTot ? 'background:var(--bg3);font-weight:700;' : '';
+    const labelStyle = `font-size:${isSub?'10px':'11px'};${isSub?'padding-left:16px;color:var(--text3);':''}`;
+
+    // 予算行
+    const bSum = (row.bArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
+    html += `<tr style="${rowStyle}">
+      <td class="l" style="${labelStyle}">${row.label}</td>
+      <td class="l" style="font-size:9px;color:var(--text3)">予算</td>`;
+    (row.bArr||Array(N).fill(null)).forEach((v,i) => {
+      const val = v !== null && v !== undefined ? Math.round(Number(v)) : null;
+      const dispVal = val !== null ? val.toLocaleString() : '—';
+      const colorCls = isOut && val ? 'color:var(--tc-red)' : (val > 0 && !isOut && row.label.includes('CF')) ? 'color:var(--tc-green)' : (val < 0 && row.label.includes('CF')) ? 'color:var(--tc-red)' : '';
+      if (row.edBKey && !isTot) {
+        html += `<td class="budget editable-cell" style="${colorCls}" data-cfkey="${row.edBKey}" data-kind="budget" data-idx="${i}" onclick="cfCellClick(this,window._plCFd)">${dispVal}</td>`;
+      } else {
+        html += `<td class="budget" style="${colorCls}">${dispVal}</td>`;
+      }
+    });
+    html += `<td class="budget">${row.noSum ? '—' : (bSum?bSum.toLocaleString():'—')}</td></tr>`;
+
+    // 実績行
+    const aSum = (row.aArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
+    html += `<tr style="${rowStyle}">
+      <td class="l" style="${labelStyle}"></td>
+      <td class="l" style="font-size:9px;font-weight:700;color:var(--text)">実績</td>`;
+    (row.aArr||Array(N).fill(null)).forEach((v,i) => {
+      const val = v !== null && v !== undefined ? Math.round(Number(v)) : null;
+      const dispVal = val !== null ? val.toLocaleString() : '—';
+      const colorCls = isOut && val > 0 ? 'color:var(--tc-red)' : (val > 0 && row.label.includes('CF') && !isOut) ? 'color:var(--tc-green)' : (val < 0 && row.label.includes('CF')) ? 'color:var(--tc-red)' : '';
+      if (row.edAKey && !isTot) {
+        html += `<td class="actual editable-cell" style="${colorCls}" data-cfkey="${row.edAKey}" data-kind="actual" data-idx="${i}" onclick="cfCellClick(this,window._plCFd)">${dispVal}</td>`;
+      } else {
+        html += `<td class="actual" style="${colorCls}">${dispVal}</td>`;
+      }
+    });
+    html += `<td class="actual">${row.noSum ? '—' : (aSum?aSum.toLocaleString():'—')}</td></tr>`;
+
+    // 差異行（noDiff でないもの）
+    if (!row.noDiff && !row.noSum) {
+      html += `<tr><td class="l" style="${labelStyle}"></td><td class="l" style="font-size:9px;color:var(--text3)">差異</td>`;
+      (row.bArr||Array(N).fill(null)).forEach((bv,i) => {
+        const av = (row.aArr||[])[i];
+        if ((bv===null||bv===undefined||bv===''||bv===0) && (av===null||av===undefined||av===''||av===0)) { html+='<td class="diff-zero">—</td>'; return; }
+        const diff = (isOut?-1:1)*((Number(av)||0)-(Number(bv)||0));
+        html += `<td class="${diff>0?'diff-pos':diff<0?'diff-neg':'diff-zero'}">${diff>0?'+':'▲'}${diff!==0?Math.abs(Math.round(diff)).toLocaleString():'—'}</td>`;
+      });
+      const bTot = (row.bArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
+      const aTot = (row.aArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
+      const dTot = (isOut?-1:1)*(aTot-bTot);
+      html += `<td class="${dTot>0?'diff-pos':dTot<0?'diff-neg':'diff-zero'}">${dTot>0?'+':'▲'}${dTot!==0?Math.abs(Math.round(dTot)).toLocaleString():'—'}</td></tr>`;
+    }
   });
+
   html += '</tbody></table>';
+  window._plCFd = d;
   document.getElementById('cf-table-wrap').innerHTML = html;
 }
 
