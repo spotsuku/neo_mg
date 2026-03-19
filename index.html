@@ -879,8 +879,8 @@ const DEFAULT_2025 = {
     },
     actual: {
       open:         [15863,7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706],
-      cfIn:         [3322,13791,16656,9901,6650,13212,8479,504,877,3539,48674,39164],
-      cfClose:      [7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706,76195],
+      cfIn:         [3322,13791,16656,9901,6650,13212,8479,504,877,3539,48674,0],
+      cfClose:      [7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706,0],
       laborPay:     [1523,1289,1788,5007,1551,1651,1412,1431,2593,2880,3185,3185],
       outsourcePay: [5164,2186,8024,7003,6069,5333,5175,5122,4977,3916,4036,4036],
       advPay:       [101,367,0,1004,335,0,2437,3304,911,4026,873,6165],
@@ -1338,15 +1338,23 @@ function renderCFView(d) {
   const aTotalOut = Array.from({length:N}, (_,i) =>
     getN(aLabor,i)+getN(aOut,i)+getN(aAdv,i)+getN(aRent,i)+getN(aGaichu,i)+getN(aOther,i)
   );
-  // 営業CF = 売上入金 − 出金合計
-  const aOpCF = Array.from({length:N}, (_,i) => getN(aIn,i) - aTotalOut[i]);
+  // 実績月末残高の入力有無チェック（千円単位なので0は「未入力」扱い）
+  const hasActualClose = (i) => {
+    const v = aClose[i];
+    return v !== null && v !== undefined && v !== '' && Number(v) !== 0;
+  };
+  // 実績入金・出金どちらかに値があれば「入力あり」
+  const hasActualData = (i) => getN(aIn,i) !== 0 || aTotalOut[i] !== 0 || hasActualClose(i);
+  const aOpCF = Array.from({length:N}, (_,i) =>
+    hasActualData(i) ? getN(aIn,i) - aTotalOut[i] : null
+  );
   // 財務CF = 融資・調達
   const aFinCF = aFunding;
   // 月次純CF = 営業CF + 財務CF
-  const aNetCF = Array.from({length:N}, (_,i) => aOpCF[i] + getN(aFinCF,i));
+  const aNetCF = Array.from({length:N}, (_,i) => aOpCF[i] === null ? null : aOpCF[i] + getN(aFinCF,i));
   // 月末残高（実績入力がなければ月初+純CF で計算）
   const aCloseCalc = Array.from({length:N}, (_,i) =>
-    getN(aClose,i) || (getN(aOpen,i) + aNetCF[i])
+    hasActualClose(i) ? getN(aClose,i) : null
   );
 
   // ── 予算計算 ──
