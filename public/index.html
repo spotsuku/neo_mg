@@ -2688,7 +2688,7 @@ async function commitBankResult() {
   const month = document.getElementById('bank-month').value.trim();
   if (!month || !_bankRows.length) return;
 
-  const yearKey = month.startsWith('27') ? '2026' : (parseInt(month.slice(2,4)) >= 4 ? '2025' : '2026');
+  const yearKey = getYearKey(month);
   const d = DB[yearKey];
   const idx = d.months.indexOf(month);
   if (idx === -1) { alert(`月 ${month} はデータセットに存在しません`); return; }
@@ -2881,6 +2881,13 @@ function buildMonthCheckboxes() {
     </div>`);
 }
 
+// 年度キーを返すヘルパー
+function getYearKey(month) {
+  const yy = parseInt(month.slice(0,2));
+  const mm = parseInt(month.slice(2,4));
+  return (yy === 25 && mm >= 4) || (yy === 26 && mm <= 3) ? '2025' : '2026';
+}
+
 // 選択された月リストを取得（共通関数）
 function getSelectedMonths() {
   if (_csvMonthMode === 'single') {
@@ -2985,7 +2992,6 @@ ${csvFull}
         "retained": 利益剰余金（繰越利益）
       }
     }
-    /* 他の月も同じ構造で続く */
   },
   "summary": "取込内容の1〜2行要約",
   "warnings": []
@@ -2998,8 +3004,12 @@ ${csvFull}
 4. JSONのみ返す（前後の説明・コメント不要）`;
 
   try {
-    const raw = await callAI(prompt, 3000);
-    const clean = (typeof raw === 'string' ? raw : JSON.stringify(raw)).replace(/```json|```/g, '').trim();
+    const raw = await callAI(prompt, 4000);
+    const clean = (typeof raw === 'string' ? raw : JSON.stringify(raw))
+      .replace(/```json|```/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')   // /* コメント */ を除去
+      .replace(/\/\/.*$/gm, '')              // // 行コメントを除去
+      .trim();
     const parsed = JSON.parse(clean);
 
     if (parsed.summary) log.innerHTML += `<span class="log-info">📊 ${parsed.summary}</span>\n`;
@@ -3203,7 +3213,7 @@ async function commitCSVResult() {
     const pd = parsed.months?.[month];
     if (!pd) continue;
 
-    const yearKey = month.startsWith('27') ? '2026' : (parseInt(month.slice(2,4)) >= 4 ? '2025' : '2026');
+    const yearKey = getYearKey(month);
     const d = DB[yearKey];
     const idx = d.months.indexOf(month);
     if (idx === -1) continue;
@@ -3222,6 +3232,8 @@ async function commitCSVResult() {
     // CF書き込み（詳細科目すべて）
     const cf_sec = pd.cf || {};
     const cf_target = kind === 'actual' ? d.cf.actual : d.cf.budget;
+    // cfOpen（旧形式）→ open にマッピング
+    if (cf_sec.cfOpen && !cf_sec.open) cf_sec.open = cf_sec.cfOpen;
     const CF_KEYS = [
       'open','cfIn','cfClose','cfInFee','cfInTraining','cfInEvent','cfInOther',
       'salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
@@ -3419,7 +3431,7 @@ async function saveManual() {
   const kind = document.getElementById('mi-type').value;
   if (!month) { alert('対象月を入力してください'); return; }
 
-  const yr = month.startsWith('27') ? '2026' : (parseInt(month.slice(2,4)) >= 4 ? '2025' : '2026');
+  const yr = getYearKey(month);
   const d = DB[yr];
   const idx = d.months.indexOf(month);
   if (idx === -1) { alert(`月 ${month} はデータセットにありません`); return; }
