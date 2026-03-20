@@ -613,6 +613,7 @@ td.actual.editable-cell {
           <div class="uz-icon">📄</div>
           <div class="uz-title">CSVファイルをドロップ または クリックして選択</div>
           <div class="uz-sub">マネーフォワード クラウド会計の月次PL/BS CSVに対応</div>
+          <div id="csv-encoding-info" style="font-size:10px;color:var(--tc-blue);margin-top:4px"></div>
         </div>
         <div class="section-lbl" style="margin-top:.875rem">取込設定</div>
         <div class="fg">
@@ -2720,13 +2721,42 @@ function onFileSelect(e) {
 }
 
 function handleFile(file) {
-  const reader = new FileReader();
-  reader.onload = ev => {
-    csvRawText = ev.target.result;
-    parseAndPreviewCSV(csvRawText);
-    document.getElementById('csv-analyze-btn').removeAttribute('disabled');
+  // まずバイナリで読み込んでエンコーディングを自動判定
+  const binReader = new FileReader();
+  binReader.onload = ev => {
+    const arr = new Uint8Array(ev.target.result);
+
+    // BOM チェック
+    const isUtf8Bom  = arr[0]===0xEF && arr[1]===0xBB && arr[2]===0xBF;
+    const isUtf16LEBom = arr[0]===0xFF && arr[1]===0xFE;
+
+    // Shift-JIS 判定：0x81-0x9F または 0xE0-0xFC のバイトがあればSJIS
+    let looksLikeSjis = false;
+    if (!isUtf8Bom && !isUtf16LEBom) {
+      for (let i = 0; i < Math.min(arr.length, 4096); i++) {
+        const b = arr[i];
+        if ((b >= 0x81 && b <= 0x9F) || (b >= 0xE0 && b <= 0xFC)) {
+          looksLikeSjis = true;
+          break;
+        }
+      }
+    }
+
+    const encoding = isUtf8Bom ? 'UTF-8' : isUtf16LEBom ? 'UTF-16LE' : looksLikeSjis ? 'Shift_JIS' : 'UTF-8';
+
+    const textReader = new FileReader();
+    textReader.onload = ev2 => {
+      csvRawText = ev2.target.result;
+      parseAndPreviewCSV(csvRawText);
+      document.getElementById('csv-analyze-btn').removeAttribute('disabled');
+
+      // エンコーディングをUIに表示
+      const encInfo = document.getElementById('csv-encoding-info');
+      if (encInfo) encInfo.textContent = `📄 文字コード: ${encoding}`;
+    };
+    textReader.readAsText(file, encoding);
   };
-  reader.readAsText(file, 'UTF-8');
+  binReader.readAsArrayBuffer(file);
 }
 
 function parseAndPreviewCSV(text) {
@@ -4434,16 +4464,48 @@ async function saveReportData(month) {
 const LOCAL_API_KEY = '';  // ← ここに sk-ant-... を貼るとローカルでも動作します
 
 async function callAI(prompt, maxTokens = 1200) {
-  const res = await fetch('/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
-  });
-  const data = await res.json();
-  if (!res.ok || data.error) {
-    throw new Error(data.error?.message || data.error || `HTTP ${res.status}`);
+  const isLocal = window.location.protocol === 'file:' || window.location.hostname === '';
+  const hasLocalKey = LOCAL_API_KEY && LOCAL_API_KEY.startsWith('sk-ant-');
+
+  // ── ① ローカルファイル + APIキーあり → 直接Anthropic API ──
+  if (isLocal && hasLocalKey) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': LOCAL_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    return data.content?.find(b => b.type === 'text')?.text || 'エラーが発生しました';
   }
-  return data.content?.find(b => b.type === 'text')?.text || '';
+
+  // ── ② Vercel環境 → /api/chat プロキシ経由 ──
+  if (!isLocal) {
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return data.content?.find(b => b.type === 'text')?.text || 'エラーが発生しました';
+    } catch(e) {
+      throw new Error('サーバーエラー: ' + e.message);
+    }
+  }
+
+  // ── ③ ローカル + APIキーなし → 案内メッセージ ──
+  throw new Error('LOCAL_API_KEY が未設定です。HTMLファイル内の LOCAL_API_KEY にAPIキーを貼り付けてください。');
 }
 
 
