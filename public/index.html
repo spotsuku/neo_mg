@@ -210,6 +210,71 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 
 .save-ok{font-size:11px;color:var(--tc-green);font-weight:700;display:none}
 
+/* ── インライン編集セル ── */
+.editable-cell {
+  cursor: pointer;
+  position: relative;
+  transition: background .15s, box-shadow .15s;
+  /* 平常時：薄い黄色がかった背景で「入力できる」と示す */
+  background: rgba(239,159,39,0.10) !important;
+}
+/* 予算セルは薄い青系 */
+td.budget.editable-cell {
+  background: rgba(55,138,221,0.10) !important;
+}
+/* 実績セルは薄い緑系 */
+td.actual.editable-cell {
+  background: rgba(39,174,96,0.10) !important;
+}
+.editable-cell:hover {
+  background: rgba(55,138,221,0.22) !important;
+  box-shadow: inset 0 0 0 1.5px rgba(55,138,221,0.5);
+}
+.editable-cell:hover::after {
+  content: '✏';
+  font-size: 8px;
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  color: var(--tc-blue);
+  opacity: .7;
+}
+.cell-editing {
+  background: rgba(55,138,221,0.18) !important;
+  box-shadow: inset 0 0 0 2px var(--tc-blue) !important;
+  padding: 0 !important;
+}
+.cell-input {
+  width: 100%;
+  height: 100%;
+  min-height: 24px;
+  padding: 4px 6px;
+  border: none;
+  background: transparent;
+  color: var(--tc-blue);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+  font-family: inherit;
+  outline: none;
+  display: block;
+}
+.pl-cf-save-bar {
+  display: none;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-green);
+  color: var(--tc-green);
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--r);
+  margin-top: 8px;
+  align-items: center;
+  gap: 10px;
+}
+.pl-cf-save-bar.visible { display: flex; }
+
 /* ── MODAL ── */
 #budget-modal-overlay{align-items:center;justify-content:center}
 #budget-modal-overlay.open{display:flex!important}
@@ -385,80 +450,134 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
      CSV 取込
 ══════════════════════════════════════ -->
 <div class="sec" id="sec-import">
-  <div class="g2">
-    <div class="card">
-      <div class="ct">マネーフォワード CSV取込</div>
-      <div class="upload-zone" id="drop-zone" ondragover="onDrag(event,true)" ondragleave="onDrag(event,false)" ondrop="onDrop(event)">
-        <input type="file" accept=".csv" onchange="onFileSelect(event)">
-        <div class="uz-icon">📄</div>
-        <div class="uz-title">CSVファイルをドロップ または クリックして選択</div>
-        <div class="uz-sub">マネーフォワード クラウド会計の月次PL/BS CSVに対応</div>
-      </div>
-      <div class="section-lbl" style="margin-top:.875rem">取込設定</div>
-      <div class="fg">
-        <div class="fl"><label>対象月（YYMM）</label><input type="text" id="csv-month" placeholder="例: 2604"></div>
-        <div class="fl"><label>CSVタイプ</label>
-          <select id="csv-type">
-            <option value="pl">PL（損益計算書）</option>
-            <option value="bs">BS（貸借対照表）</option>
-            <option value="cf">CF（資金繰り）</option>
-          </select>
+
+  <!-- ══ タブ切り替え ══ -->
+  <div class="pa-toggle" style="margin-bottom:1rem">
+    <button class="pa-btn active" onclick="setImportTab('bank',this)">🏦 通帳明細AI仕分け</button>
+    <button class="pa-btn" onclick="setImportTab('csv',this)">📄 マネーフォワードCSV</button>
+  </div>
+
+  <!-- ══ 通帳明細AI仕分け ══ -->
+  <div id="import-bank">
+    <div class="g2">
+      <div class="card" style="grid-column:1/-1">
+        <div class="ct">通帳明細をペースト → AIが自動仕分け</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:.75rem">
+          ネットバンクの入出金明細をコピーしてそのまま貼り付けてください。<br>
+          日付・摘要・金額の形式であれば自動認識します（CSV・テキスト・表どちらでも可）。
         </div>
-        <div class="fl"><label>区分</label>
-          <select id="csv-kind">
-            <option value="actual">実績</option>
-            <option value="budget">予算</option>
-          </select>
+        <div class="fg fg2" style="margin-bottom:.75rem">
+          <div class="fl"><label>対象月（YYMM）</label><input type="text" id="bank-month" placeholder="例: 2604"></div>
+          <div class="fl"><label>口座名（任意）</label><input type="text" id="bank-account" placeholder="例: 三井住友銀行 普通"></div>
         </div>
+        <div class="fl" style="margin-bottom:.75rem">
+          <label>入出金明細（コピペ）</label>
+          <textarea id="bank-text" rows="10" placeholder="例：&#10;2026/04/01　NEO福岡会費入金　　　　　　1,200,000&#10;2026/04/02　給与支払　　　　　　　　　　△350,000&#10;2026/04/05　業務委託費　株式会社〇〇　　△400,000&#10;2026/04/10　家賃　ビルオーナー　　　　　△90,000&#10;..." style="font-size:12px;line-height:1.7;font-family:monospace"></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-p" id="bank-analyze-btn" onclick="analyzeBankStatement()">🤖 AIで仕分け・分類</button>
+          <button class="btn" onclick="document.getElementById('bank-text').value='';document.getElementById('bank-result-wrap').style.display='none'">🗑 クリア</button>
+        </div>
+        <div id="bank-log" class="import-log" style="display:none"></div>
       </div>
-      <div class="btn-row">
-        <button class="btn btn-p" id="csv-analyze-btn" onclick="analyzeCSV()" disabled>🤖 AIで解析・取込</button>
-        <button class="btn" onclick="clearCSV()">🗑 クリア</button>
-      </div>
-      <div id="import-log" class="import-log" style="display:none"></div>
     </div>
 
-    <div class="card">
-      <div class="ct">CSVプレビュー</div>
-      <div id="csv-preview-wrap" style="color:var(--text3);font-size:11px">CSVを選択するとプレビューが表示されます</div>
+    <!-- 仕分け結果プレビュー -->
+    <div id="bank-result-wrap" style="display:none">
+      <div class="card">
+        <div class="ct" style="display:flex;align-items:center;justify-content:space-between">
+          <span>仕分け結果プレビュー — 確認して「反映する」を押してください</span>
+          <div class="btn-row" style="margin-bottom:0;gap:6px">
+            <button class="btn btn-g" style="font-weight:700" onclick="commitBankResult()">✓ CF・PLに反映する</button>
+            <button class="btn" onclick="document.getElementById('bank-result-wrap').style.display='none'">✕ キャンセル</button>
+          </div>
+        </div>
+        <div id="bank-result-table" class="scroll-x" style="margin-top:.5rem"></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">※ 各行の「科目」セルをクリックして修正できます。修正後に「CF・PLに反映する」を押してください。</div>
+      </div>
+      <!-- 集計サマリー -->
+      <div class="card">
+        <div class="ct">仕分け集計サマリー</div>
+        <div id="bank-summary" style="font-size:11px"></div>
+      </div>
     </div>
   </div>
 
-  <div class="card">
-    <div class="ct">取込済みデータ一覧</div>
-    <div id="imported-list" style="font-size:11px;color:var(--text3)">取込済みデータはありません</div>
+  <!-- ══ マネーフォワードCSV ══ -->
+  <div id="import-csv" style="display:none">
+    <div class="g2">
+      <div class="card">
+        <div class="ct">マネーフォワード CSV取込</div>
+        <div class="upload-zone" id="drop-zone" ondragover="onDrag(event,true)" ondragleave="onDrag(event,false)" ondrop="onDrop(event)">
+          <input type="file" accept=".csv" onchange="onFileSelect(event)">
+          <div class="uz-icon">📄</div>
+          <div class="uz-title">CSVファイルをドロップ または クリックして選択</div>
+          <div class="uz-sub">マネーフォワード クラウド会計の月次PL/BS CSVに対応</div>
+        </div>
+        <div class="section-lbl" style="margin-top:.875rem">取込設定</div>
+        <div class="fg">
+          <div class="fl"><label>対象月（YYMM）</label><input type="text" id="csv-month" placeholder="例: 2604"></div>
+          <div class="fl"><label>CSVタイプ</label>
+            <select id="csv-type">
+              <option value="pl">PL（損益計算書）</option>
+              <option value="bs">BS（貸借対照表）</option>
+              <option value="cf">CF（資金繰り）</option>
+            </select>
+          </div>
+          <div class="fl"><label>区分</label>
+            <select id="csv-kind">
+              <option value="actual">実績</option>
+              <option value="budget">予算</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-p" id="csv-analyze-btn" onclick="analyzeCSV()" disabled>🤖 AIで解析・取込</button>
+          <button class="btn" onclick="clearCSV()">🗑 クリア</button>
+        </div>
+        <div id="import-log" class="import-log" style="display:none"></div>
+      </div>
+      <div class="card">
+        <div class="ct">CSVプレビュー</div>
+        <div id="csv-preview-wrap" style="color:var(--text3);font-size:11px">CSVを選択するとプレビューが表示されます</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ct">取込済みデータ一覧</div>
+      <div id="imported-list" style="font-size:11px;color:var(--text3)">取込済みデータはありません</div>
+    </div>
   </div>
 
-  <!-- 科目マッピングガイド -->
-  <div class="card">
-    <div class="ct">マネーフォワード 科目マッピング（自動対応）</div>
-    <div class="g2" style="margin-bottom:0">
-      <div>
-        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">売上科目</div>
-        <table class="dt">
-          <thead><tr><th class="l">マネフォ科目</th><th class="l">→ PL分類</th></tr></thead>
-          <tbody>
-            <tr><td>売上高 / 会費：人材育成</td><td>NEO会費</td></tr>
-            <tr><td>NEOイベント関連</td><td>NEOイベント</td></tr>
-            <tr><td>NEO研修</td><td>NEO研修</td></tr>
-            <tr><td>その他売上</td><td>その他収入</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div>
-        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">費用科目</div>
-        <table class="dt">
-          <thead><tr><th class="l">マネフォ科目</th><th class="l">→ PL分類</th></tr></thead>
-          <tbody>
-            <tr><td>役員報酬 / 給料賃金 / 賞与 / 法定福利費</td><td>人件費（社保込）</td></tr>
-            <tr><td>業務委託料 / 支払報酬</td><td>業務委託費</td></tr>
-            <tr><td>外注費 / 荷造運賃</td><td>外注費</td></tr>
-            <tr><td>広告宣伝費 / イベント費</td><td>広告販促費</td></tr>
-            <tr><td>旅費交通費</td><td>旅費交通費</td></tr>
-            <tr><td>地代家賃</td><td>賃料</td></tr>
-            <tr><td>通信費 / 接待交際費 / 会議費 / 消耗品費</td><td>その他販管費</td></tr>
-          </tbody>
-        </table>
+  <!-- 科目マッピングガイド（共通） -->
+  <div class="card" style="margin-top:.5rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+      <div class="ct" style="margin-bottom:0">📋 科目マッピングガイド（クリックで開閉）</div>
+      <span style="font-size:10px;color:var(--text3)">NEO福岡の勘定科目対応表</span>
+    </div>
+    <div style="display:none;margin-top:.75rem">
+      <div class="g2" style="margin-bottom:.5rem">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--tc-green);margin-bottom:6px">収入科目</div>
+          <table class="dt"><thead><tr><th class="l">摘要キーワード</th><th class="l">→ CF/PL分類</th></tr></thead><tbody>
+            <tr><td>会費 / NEO / 入会金</td><td>売上入金 → NEO会費</td></tr>
+            <tr><td>研修 / トレーニング / セミナー受講料</td><td>売上入金 → 研修売上</td></tr>
+            <tr><td>イベント / スポンサー / 協賛</td><td>売上入金 → イベント・その他</td></tr>
+            <tr><td>借入 / 融資 / 借入金</td><td>財務CF → 融資・調達</td></tr>
+          </tbody></table>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--tc-red);margin-bottom:6px">支出科目</div>
+          <table class="dt"><thead><tr><th class="l">摘要キーワード</th><th class="l">→ CF/PL分類</th></tr></thead><tbody>
+            <tr><td>給与 / 役員報酬 / 賞与 / 社会保険 / 厚生</td><td>人件費支払（laborPay）</td></tr>
+            <tr><td>業務委託 / 外注 / 委託料 / フリーランス</td><td>業務委託支払（outsourcePay）</td></tr>
+            <tr><td>広告 / 宣伝 / 媒体 / PR / 協賛費</td><td>広告宣伝費（advPay）</td></tr>
+            <tr><td>イベント運営 / 会場 / 設営 / 音響</td><td>外注費イベント（eventPay）</td></tr>
+            <tr><td>家賃 / 賃料 / 地代</td><td>賃料（rentPay）</td></tr>
+            <tr><td>外注費 / 制作 / 開発外注 / 専門家</td><td>外注費（gaichuPay）</td></tr>
+            <tr><td>借入返済 / 返済 / ローン</td><td>財務CF（返済）→ その他支出</td></tr>
+            <tr><td>その他</td><td>その他支出（otherPay）</td></tr>
+          </tbody></table>
+        </div>
       </div>
     </div>
   </div>
@@ -469,96 +588,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 ══════════════════════════════════════ -->
 <div class="sec" id="sec-sim">
 
-  <!-- ══ クイックシミュレーター ══ -->
-  <div class="card" style="margin-bottom:1rem">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem;flex-wrap:wrap;gap:8px">
-      <div class="ct" style="margin-bottom:0">⚡ クイックシミュレーター — スライダーで動かすと即座にグラフ反映</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:10px;color:var(--text3)">月次平均値で素早く試算</span>
-        <button class="btn btn-p" style="font-size:11px;padding:5px 12px" onclick="applyQuickToDetail()">↓ 詳細テーブルに転記</button>
-      </div>
-    </div>
-
-    <!-- スライダー群 -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px 20px;margin-bottom:1rem">
-      <!-- 売上 -->
-      <div>
-        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">NEO会費（万円/月）</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="range" min="0" max="2000" step="50" value="700" id="qs-fee" oninput="onQS()" style="flex:1;accent-color:#378ADD">
-          <input type="number" id="qsn-fee" value="700" min="0" max="9999" oninput="onQSNum('fee')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
-        </div>
-      </div>
-      <div>
-        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">研修売上（万円/月）</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="range" min="0" max="1000" step="10" value="150" id="qs-training" oninput="onQS()" style="flex:1;accent-color:#378ADD">
-          <input type="number" id="qsn-training" value="150" min="0" max="9999" oninput="onQSNum('training')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
-        </div>
-      </div>
-      <div>
-        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">その他売上（万円/月）</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="range" min="0" max="500" step="10" value="30" id="qs-other-rev" oninput="onQS()" style="flex:1;accent-color:#378ADD">
-          <input type="number" id="qsn-other-rev" value="30" min="0" max="9999" oninput="onQSNum('other-rev')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
-        </div>
-      </div>
-      <div>
-        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">人件費（万円/月）</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="range" min="0" max="800" step="10" value="320" id="qs-labor" oninput="onQS()" style="flex:1;accent-color:#E24B4A">
-          <input type="number" id="qsn-labor" value="320" min="0" max="9999" oninput="onQSNum('labor')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
-        </div>
-      </div>
-      <div>
-        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">業務委託費（万円/月）</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="range" min="0" max="800" step="10" value="400" id="qs-outsource" oninput="onQS()" style="flex:1;accent-color:#E24B4A">
-          <input type="number" id="qsn-outsource" value="400" min="0" max="9999" oninput="onQSNum('outsource')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
-        </div>
-      </div>
-      <div>
-        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">広告販促費（万円/月）</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="range" min="0" max="500" step="10" value="100" id="qs-adv" oninput="onQS()" style="flex:1;accent-color:#EF9F27">
-          <input type="number" id="qsn-adv" value="100" min="0" max="9999" oninput="onQSNum('adv')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
-        </div>
-      </div>
-      <div>
-        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">外注費（万円/月）</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="range" min="0" max="400" step="10" value="80" id="qs-gaichu" oninput="onQS()" style="flex:1;accent-color:#D85A30">
-          <input type="number" id="qsn-gaichu" value="80" min="0" max="9999" oninput="onQSNum('gaichu')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
-        </div>
-      </div>
-      <div>
-        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">賃料（万円/月）</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="range" min="0" max="300" step="5" value="90" id="qs-rent" oninput="onQS()" style="flex:1;accent-color:#888780">
-          <input type="number" id="qsn-rent" value="90" min="0" max="9999" oninput="onQSNum('rent')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
-        </div>
-      </div>
-      <div>
-        <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">その他費用（万円/月）</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="range" min="0" max="300" step="10" value="80" id="qs-other-cost" oninput="onQS()" style="flex:1;accent-color:#888780">
-          <input type="number" id="qsn-other-cost" value="80" min="0" max="9999" oninput="onQSNum('other-cost')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
-        </div>
-      </div>
-    </div>
-
-    <!-- KPIサマリー行 -->
-    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:1rem">
-      <div class="mc"><div class="mc-l">月次売上</div><div class="mc-v" id="qs-rev-mo">—</div></div>
-      <div class="mc"><div class="mc-l">月次費用</div><div class="mc-v" id="qs-cost-mo">—</div></div>
-      <div class="mc"><div class="mc-l">月次損益</div><div class="mc-v" id="qs-profit-mo">—</div></div>
-      <div class="mc"><div class="mc-l">年間損益（試算）</div><div class="mc-v" id="qs-annual-profit">—</div></div>
-      <div class="mc"><div class="mc-l">黒字化</div><div class="mc-v" id="qs-breakeven">—</div></div>
-    </div>
-
-    <!-- クイックシムグラフ -->
-    <div class="ch" style="height:280px"><canvas id="qs-chart"></canvas></div>
-  </div>
 
   <!-- ヘッダー操作バー -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem;flex-wrap:wrap;gap:8px">
@@ -632,8 +661,104 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
       <div class="scroll-x">
         <table id="sim-pl-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%"></table>
       </div>
+      <div id="sim-pl-add-area"></div>
     </div>
 
+
+    <!-- ══ クイックシミュレーター（折りたたみ） ══ -->
+    <div class="card" id="qs-card" style="margin-bottom:1rem">
+      <!-- ヘッダー（クリックで開閉） -->
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleQS()">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="qs-toggle-icon" style="font-size:14px;transition:transform .2s">▶</span>
+          <span style="font-size:11px;font-weight:700;color:var(--text2)">⚡ クイックシミュレーター</span>
+          <span style="font-size:10px;color:var(--text3)">— スライダーで月次平均を素早く試算</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center" onclick="event.stopPropagation()">
+          <button class="btn btn-p" style="font-size:11px;padding:4px 11px" onclick="applyQuickToDetail()">↓ 詳細テーブルに転記</button>
+        </div>
+      </div>
+
+      <!-- 折りたたみコンテンツ -->
+      <div id="qs-body" style="display:none;margin-top:1rem">
+        <!-- スライダー群 -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px 20px;margin-bottom:1rem">
+          <div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">NEO会費（万円/月）</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="range" min="0" max="2000" step="50" value="700" id="qs-fee" oninput="onQS()" style="flex:1;accent-color:#378ADD">
+              <input type="number" id="qsn-fee" value="700" min="0" max="9999" oninput="onQSNum('fee')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">研修売上（万円/月）</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="range" min="0" max="1000" step="10" value="150" id="qs-training" oninput="onQS()" style="flex:1;accent-color:#378ADD">
+              <input type="number" id="qsn-training" value="150" min="0" max="9999" oninput="onQSNum('training')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">その他売上（万円/月）</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="range" min="0" max="500" step="10" value="30" id="qs-other-rev" oninput="onQS()" style="flex:1;accent-color:#378ADD">
+              <input type="number" id="qsn-other-rev" value="30" min="0" max="9999" oninput="onQSNum('other-rev')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">人件費（万円/月）</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="range" min="0" max="800" step="10" value="320" id="qs-labor" oninput="onQS()" style="flex:1;accent-color:#E24B4A">
+              <input type="number" id="qsn-labor" value="320" min="0" max="9999" oninput="onQSNum('labor')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">業務委託費（万円/月）</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="range" min="0" max="800" step="10" value="400" id="qs-outsource" oninput="onQS()" style="flex:1;accent-color:#E24B4A">
+              <input type="number" id="qsn-outsource" value="400" min="0" max="9999" oninput="onQSNum('outsource')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">広告販促費（万円/月）</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="range" min="0" max="500" step="10" value="100" id="qs-adv" oninput="onQS()" style="flex:1;accent-color:#EF9F27">
+              <input type="number" id="qsn-adv" value="100" min="0" max="9999" oninput="onQSNum('adv')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">外注費（万円/月）</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="range" min="0" max="400" step="10" value="80" id="qs-gaichu" oninput="onQS()" style="flex:1;accent-color:#D85A30">
+              <input type="number" id="qsn-gaichu" value="80" min="0" max="9999" oninput="onQSNum('gaichu')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">賃料（万円/月）</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="range" min="0" max="300" step="5" value="90" id="qs-rent" oninput="onQS()" style="flex:1;accent-color:#888780">
+              <input type="number" id="qsn-rent" value="90" min="0" max="9999" oninput="onQSNum('rent')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">その他費用（万円/月）</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="range" min="0" max="300" step="10" value="80" id="qs-other-cost" oninput="onQS()" style="flex:1;accent-color:#888780">
+              <input type="number" id="qsn-other-cost" value="80" min="0" max="9999" oninput="onQSNum('other-cost')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
+            </div>
+          </div>
+        </div>
+        <!-- KPIサマリー -->
+        <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:1rem">
+          <div class="mc"><div class="mc-l">月次売上</div><div class="mc-v" id="qs-rev-mo">—</div></div>
+          <div class="mc"><div class="mc-l">月次費用</div><div class="mc-v" id="qs-cost-mo">—</div></div>
+          <div class="mc"><div class="mc-l">月次損益</div><div class="mc-v" id="qs-profit-mo">—</div></div>
+          <div class="mc"><div class="mc-l">年間損益（試算）</div><div class="mc-v" id="qs-annual-profit">—</div></div>
+          <div class="mc"><div class="mc-l">黒字化</div><div class="mc-v" id="qs-breakeven">—</div></div>
+        </div>
+        <!-- グラフ -->
+        <div class="ch" style="height:260px"><canvas id="qs-chart"></canvas></div>
+      </div>
+    </div>
     <!-- AI分析 -->
     <div class="card">
       <div class="ct">AI分析</div>
@@ -766,6 +891,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
+// ── Storage polyfill (works in Claude artifacts AND local HTML) ──
+if (typeof window.storage === 'undefined') {
+  const _localStore = {};
+  window.storage = {
+    set: async (k, v) => { _localStore[k] = v; return {key:k,value:v}; },
+    get: async (k) => { return k in _localStore ? {key:k,value:_localStore[k]} : null; },
+    delete: async (k) => { delete _localStore[k]; return {key:k,deleted:true}; },
+    list: async (prefix='') => { return {keys: Object.keys(_localStore).filter(k=>k.startsWith(prefix))}; }
+  };
+}
+
 // ═══════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════
@@ -790,8 +926,31 @@ const DEFAULT_2025 = {
     actual: { rev:[1203,1257,3015,1,605,3,771,29,82,322,450,0], labor:[141,141,140,498,153,138,183,263,263,308,302,0], outsource:[156,767,450,475,391,512,414,349,502,160,87,0], adv:[116,71,194,63,51,17,220,27,216,248,365,0], gaichu:[110,192,175,359,228,629,343,517,366,134,214,0], other:[110,192,174,359,227,628,342,516,366,133,214,0] }
   },
   cf: {
-    budget: { open:[15863,7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706], cfIn:[3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000] },
-    actual: { open:[15863,7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706], cfIn:[3322,13791,16656,9901,6650,13212,8479,504,877,3539,48674,39164], cfClose:[7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706,76195] }
+    budget: {
+      open:         [15863,7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706],
+      cfIn:         [6250,13750,16625,9875,6625,13200,8500,500,875,3500,16500,10000],
+      laborPay:     [2500,2500,2500,2500,2500,2500,2500,2500,2500,2500,2500,2500],
+      outsourcePay: [4000,4000,4000,4000,4000,4000,4000,4000,4000,4000,4000,4000],
+      advPay:       [835,835,835,835,835,835,835,835,835,835,835,835],
+      eventPay:     [835,835,835,835,835,835,835,835,835,835,835,835],
+      rentPay:      [900,900,900,900,900,900,900,900,900,900,900,900],
+      gaichuPay:    [167,167,167,167,167,167,167,167,167,167,167,167],
+      otherPay:     [800,800,800,800,800,800,800,800,800,800,800,800],
+      funding:      [0,0,0,0,0,0,0,0,0,15000,0,0]
+    },
+    actual: {
+      open:         [15863,7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706],
+      cfIn:         [3322,13791,16656,9901,6650,13212,8479,504,877,3539,48674,0],
+      cfClose:      [7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706,0],
+      laborPay:     [1523,1289,1788,5007,1551,1651,1412,1431,2593,2880,3185,3185],
+      outsourcePay: [5164,2186,8024,7003,6069,5333,5175,5122,4977,3916,4036,4036],
+      advPay:       [101,200,0,500,200,0,800,1000,500,2000,500,3000],
+      eventPay:     [0,167,0,504,135,0,1637,2304,411,2026,373,3165],
+      rentPay:      [249,249,887,249,1380,904,1627,1165,1409,1132,883,883],
+      gaichuPay:    [22,22,330,95,48,62,543,52,22,207,299,299],
+      otherPay:     [1231,1296,2185,1310,1806,949,933,377,693,1235,805,805],
+      funding:      [0,0,0,0,0,0,0,0,0,15000,0,0]
+    }
   },
   reportData: {
     '2601': { okr:[{s:'完了',k:'KR1',t:'黒字化可能な第二期会員設計'},{s:'完了',k:'KR3',t:'ヒーロー人材4名の輩出'},{s:'完了',k:'KR8',t:'商工中金1,500万円着金'},{s:'進行中',k:'KR5',t:'圧倒的な経営人材の採用実施'}], priority:[{n:'項目① 人事',c:'採用・育成計画を作成し応募開始',r:'組織のスピード向上と新規経営人材の確保が急務'},{n:'項目② コミュニティ',c:'ヒーロー創出のためのプロジェクト支援・ブートキャンプ実施',r:'PJT20個組成・ヒーロー候補8名選出済みで最終仕上げ'},{n:'項目③ 商品企画',c:'プレイフル研修事業・NEOカリキュラムの最終化',r:'会社の価値の根幹である研修の商品価値を明確化する'}], good:['NEOアワード集客1.5倍達成','PJT20個組成・ヒーロー候補8名選出','商工中金 融資1,500万円決定'], more:['研修事業の企画・営業の遅延','人材育成（増田・面川）の遅れ','製作物の遅延と予算超過'], pl:{budget:{収支:-1320,売上:215,支出:1535},actual:{収支:-1130,売上:82,支出:1212}}, cf:{budget:{収支:-1396,入金:88,出金:1484},actual:{収支:-1069,入金:88,出金:1156}} },
@@ -807,7 +966,7 @@ const MONTH_LABELS = {
 };
 
 // DB (will be loaded from storage)
-let DB = { '2025': JSON.parse(JSON.stringify(DEFAULT_2025)), '2026': { months: MONTHS_2026, pl:{ budget:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]}, actual:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]} }, cf:{ budget:{open:[],cfIn:[]}, actual:{open:[],cfIn:[],cfClose:[]} }, reportData:{} } };
+let DB = { '2025': JSON.parse(JSON.stringify(DEFAULT_2025)), '2026': { months: MONTHS_2026, pl:{ budget:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]}, actual:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]} }, cf:{ budget:{open:[],cfIn:[],laborPay:[],outsourcePay:[],advPay:[],eventPay:[],rentPay:[],gaichuPay:[],otherPay:[],funding:[]}, actual:{open:[],cfIn:[],cfClose:[],laborPay:[],outsourcePay:[],advPay:[],eventPay:[],rentPay:[],gaichuPay:[],otherPay:[],funding:[]} }, reportData:{} } };
 
 // ═══════════════════════════════════════════
 //  NAV / TABS
@@ -818,7 +977,7 @@ function sw(id, el) {
   document.getElementById('sec-' + id).classList.add('on');
   if (el) el.classList.add('active');
   if (id === 'pl-cf') renderPLCF();
-  if (id === 'sim') { setTimeout(() => { buildSimPLTable(); buildSimCFTable(); drawQSChart(); }, 50); }
+  if (id === 'sim') { setTimeout(() => { buildSimPLTable(); buildSimCFTable(); if (_qsOpen) drawQSChart(); }, 50); }
   if (id === 'report') renderReportTabs();
   if (id === 'weekly') updateWeeklyKPIs();
 }
@@ -850,7 +1009,7 @@ function setSimView(v, el) {
   document.getElementById('sim-pl').style.display = v === 'pl' ? '' : 'none';
   document.getElementById('sim-cf').style.display = v === 'cf' ? '' : 'none';
   setTimeout(() => {
-    drawQSChart();
+    if (_qsOpen) drawQSChart();
     if (v === 'pl' && window._simPlDirty) recalcSimPL();
     if (v === 'cf' && window._simCfDirty) recalcSimCF();
   }, 50);
@@ -865,11 +1024,21 @@ function updateWeeklyKPIs() {
   const cf = d.cf;
   const n = d.months.length;
 
-  // find last month with actual data
+  // 最新実績月の判定：rev > 0 の最後の月（0や空は未入力扱い）
   let lastActualIdx = -1;
   for (let i = n - 1; i >= 0; i--) {
-    if (pl.actual.rev[i] !== undefined && pl.actual.rev[i] !== null && pl.actual.rev[i] !== '') {
+    const rv = pl.actual.rev[i];
+    if (rv !== undefined && rv !== null && rv !== '' && Number(rv) > 0) {
       lastActualIdx = i; break;
+    }
+  }
+  // revが全て0でもcfCloseに値があればそちらで判定
+  if (lastActualIdx === -1 && cf.actual.cfClose) {
+    for (let i = n - 1; i >= 0; i--) {
+      const cv = cf.actual.cfClose[i];
+      if (cv !== undefined && cv !== null && cv !== '' && Number(cv) > 0) {
+        lastActualIdx = i; break;
+      }
     }
   }
 
@@ -888,7 +1057,20 @@ function updateWeeklyKPIs() {
   const budOpex = [...(pl.budget.labor||[]), ...(pl.budget.outsource||[]), ...(pl.budget.adv||[]), ...(pl.budget.gaichu||[]), ...(pl.budget.other||[])].reduce((s, v) => s + (Number(v) || 0), 0) / 4;
 
   // cash
-  const lastCash = cf.actual.cfClose ? cf.actual.cfClose[lastActualIdx] : null;
+  // 現金残高：lastActualIdx月のcfClose、なければcfCloseの最新非ゼロ値を使用
+  let lastCash = null;
+  if (cf.actual.cfClose) {
+    const cv = cf.actual.cfClose[lastActualIdx];
+    if (cv && Number(cv) > 0) {
+      lastCash = Number(cv);
+    } else {
+      // cfCloseの後ろから最新の非ゼロ値を検索
+      for (let i = n - 1; i >= 0; i--) {
+        const v = cf.actual.cfClose[i];
+        if (v && Number(v) > 0) { lastCash = Number(v); break; }
+      }
+    }
+  }
   const months12Labor = pl.actual.labor.slice(Math.max(0, lastActualIdx - 2), lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
   const countMonths = Math.min(lastActualIdx + 1, 3);
   const burnrate = countMonths > 0 ? Math.round((cumOpex / (lastActualIdx + 1))) : 1022;
@@ -1006,6 +1188,86 @@ function chartOpts(tickFmt) {
 function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
 
 // ═══════════════════════════════════════════
+//  インライン編集ヘルパー（月次PL/CF）
+// ═══════════════════════════════════════════
+let _plCfDirty = false;
+
+function showPlCfSaveBar() {
+  _plCfDirty = true;
+  const bar = document.getElementById('pl-cf-save-bar');
+  if (bar) bar.classList.add('visible');
+}
+
+async function savePlCfChanges() {
+  await saveDB();
+  _plCfDirty = false;
+  const bar = document.getElementById('pl-cf-save-bar');
+  if (bar) bar.classList.remove('visible');
+  updateWeeklyKPIs();
+}
+
+// PL セルクリック（d はその時点の DB[currentYear] への参照）
+function plCellClick(td, d) {
+  if (td.classList.contains('cell-editing')) return;
+  const key  = td.dataset.key;
+  const kind = td.dataset.kind; // 'budget' | 'actual'
+  const idx  = Number(td.dataset.idx);
+  const cur  = td.textContent.replace(/[^0-9\-]/g, '') || '';
+
+  td.classList.add('cell-editing');
+  td.innerHTML = `<input class="cell-input" type="number" value="${cur}" placeholder="0">`;
+  const inp = td.querySelector('input');
+  inp.focus(); inp.select();
+
+  function commit() {
+    const val = inp.value === '' ? '' : (Number(inp.value) || 0);
+    const target = kind === 'budget' ? d.pl.budget : d.pl.actual;
+    if (!target[key]) target[key] = Array(d.months.length).fill('');
+    target[key][idx] = val;
+    DB[currentYear] = d;
+    showPlCfSaveBar();
+    renderPLView(d);
+  }
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') inp.blur();
+    if (e.key === 'Tab') { e.preventDefault(); inp.blur(); }
+    if (e.key === 'Escape') { td.classList.remove('cell-editing'); renderPLView(d); }
+  });
+}
+
+// CF セルクリック
+function cfCellClick(td, d) {
+  if (td.classList.contains('cell-editing')) return;
+  const cfKey = td.dataset.cfkey; // e.g. 'actual.cfIn'
+  const idx   = Number(td.dataset.idx);
+  const cur   = td.textContent.replace(/[^0-9\-]/g, '') || '';
+  if (!cfKey) return;
+
+  const [section, field] = cfKey.split('.');
+  td.classList.add('cell-editing');
+  td.innerHTML = `<input class="cell-input" type="number" value="${cur}" placeholder="0">`;
+  const inp = td.querySelector('input');
+  inp.focus(); inp.select();
+
+  function commit() {
+    const val = inp.value === '' ? '' : (Number(inp.value) || 0);
+    if (!d.cf[section]) d.cf[section] = {};
+    if (!d.cf[section][field]) d.cf[section][field] = Array(d.months.length).fill('');
+    d.cf[section][field][idx] = val;
+    DB[currentYear] = d;
+    showPlCfSaveBar();
+    renderCFView(d);
+  }
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') inp.blur();
+    if (e.key === 'Tab') { e.preventDefault(); inp.blur(); }
+    if (e.key === 'Escape') { td.classList.remove('cell-editing'); renderCFView(d); }
+  });
+}
+
+// ═══════════════════════════════════════════
 //  PL / CF 予実
 // ═══════════════════════════════════════════
 function renderPLCF() {
@@ -1025,6 +1287,30 @@ function renderPLView(d) {
     return v > 0 ? v : null;
   });
   const profA = revA.map((r, i) => r !== null ? (r - (opexA[i] || 0)) : null);
+
+  // インライン編集ヘルパー
+  function editCell(tdEl, key, kind, idx) {
+    if (tdEl.classList.contains('cell-editing')) return;
+    tdEl.classList.add('cell-editing');
+    const cur = tdEl.textContent.replace(/[^0-9\-]/g,'') || '';
+    tdEl.innerHTML = `<input class="cell-input" type="number" value="${cur}" placeholder="0" autofocus>`;
+    const inp = tdEl.querySelector('input');
+    inp.select();
+    function commit() {
+      const val = inp.value === '' ? '' : Number(inp.value) || 0;
+      const arr = kind === 'budget' ? d.pl.budget[key] : d.pl.actual[key];
+      if (!arr) { kind === 'budget' ? (d.pl.budget[key] = []) : (d.pl.actual[key] = []); }
+      (kind === 'budget' ? d.pl.budget[key] : d.pl.actual[key])[idx] = val;
+      DB[currentYear] = d;
+      showPlCfSaveBar();
+      renderPLView(d); // 再描画
+    }
+    inp.addEventListener('blur', commit);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { inp.blur(); }
+      if (e.key === 'Escape') { tdEl.classList.remove('cell-editing'); renderPLView(d); }
+    });
+  }
 
   destroyChart('pl-chart');
   charts['pl-chart'] = new Chart(document.getElementById('pl-chart'), {
@@ -1068,12 +1354,12 @@ function renderPLView(d) {
     // budget row
     const bSum = (row.b || []).reduce((s, v) => s + (Number(v) || 0), 0);
     html += `<tr><td class="l${row.indent ? '" style="padding-left:14px;font-size:10px;color:var(--text3)' : ''}">${row.label}</td><td class="l" style="font-size:9px;color:var(--text3)">予算</td>`;
-    (row.b || Array(d.months.length).fill('')).forEach(v => { html += `<td class="budget">${v !== '' && v !== undefined ? Number(v).toLocaleString() : '—'}</td>`; });
+    (row.b || Array(d.months.length).fill('')).forEach((v, i) => { html += `<td class="budget editable-cell" data-key="${row.key}" data-kind="budget" data-idx="${i}" onclick="plCellClick(this,window._plCFd)">${v !== '' && v !== undefined ? Number(v).toLocaleString() : '—'}</td>`; });
     html += `<td class="budget">${bSum.toLocaleString()}</td></tr>`;
     // actual row
     const aSum = (row.a || []).reduce((s, v) => s + (Number(v) || 0), 0);
     html += `<tr><td class="l${row.indent ? '" style="padding-left:14px;font-size:10px;color:var(--text3)' : ''}"></td><td class="l" style="font-size:9px;font-weight:700;color:var(--text)">実績</td>`;
-    (row.a || Array(d.months.length).fill('')).forEach(v => { html += `<td class="actual">${v !== '' && v !== undefined && v !== null ? Number(v).toLocaleString() : '—'}</td>`; });
+    (row.a || Array(d.months.length).fill('')).forEach((v, i) => { html += `<td class="actual editable-cell" data-key="${row.key}" data-kind="actual" data-idx="${i}" onclick="plCellClick(this,window._plCFd)">${v !== '' && v !== undefined && v !== null ? Number(v).toLocaleString() : '—'}</td>`; });
     html += `<td class="actual">${aSum ? aSum.toLocaleString() : '—'}</td></tr>`;
     // diff row
     html += `<tr><td class="l${row.indent ? '" style="padding-left:14px;font-size:10px;color:var(--text3)' : ''}"></td><td class="l" style="font-size:9px;color:var(--text3)">差異</td>`;
@@ -1108,65 +1394,489 @@ function renderPLView(d) {
   });
   html += `<td class="actual ${aOpSum >= 0 ? 'diff-pos' : 'diff-neg'}">${aOpSum >= 0 ? '' : '▲'}${Math.abs(Math.round(aOpSum)).toLocaleString()}</td></tr>`;
   html += '</tbody></table>';
+  window._plCFd = d;
   document.getElementById('pl-table-wrap').innerHTML = html;
 }
 
 function renderCFView(d) {
   document.getElementById('cf-year-label').textContent = currentYear + '年度';
+  const N = d.months.length;
   const months = d.months.map(m => MONTH_LABELS[m] || m);
-  const balA = d.cf.actual.cfClose || [];
-  const inA = d.cf.actual.cfIn || [];
-  const balB = d.months.map((_, i) => {
-    if (!d.cf.budget.cfIn[i]) return null;
-    let bal = Number(d.cf.budget.open[0]) || 0;
-    for (let j = 0; j <= i; j++) bal += (Number(d.cf.budget.cfIn[j]) || 0) - 10000;
-    return Math.round(bal);
-  });
 
+  // ── ヘルパー：CF配列を取得（千円単位） ──
+  const cfArr = (section, key) => (d.cf[section] && d.cf[section][key]) || Array(N).fill(0);
+  const getN = (arr, i) => Number(arr[i]) || 0;
+
+  // ── 実績計算 ──
+  const aOpen    = cfArr('actual','open');
+  const aIn      = cfArr('actual','cfIn');
+  const aClose   = cfArr('actual','cfClose');
+  const aLabor   = cfArr('actual','laborPay');
+  const aOut     = cfArr('actual','outsourcePay');
+  const aAdv     = cfArr('actual','advPay');
+  const aEvent   = cfArr('actual','eventPay');
+  const aRent    = cfArr('actual','rentPay');
+  const aGaichu  = cfArr('actual','gaichuPay');
+  const aOther   = cfArr('actual','otherPay');
+  const aFunding = cfArr('actual','funding');
+
+  // 月次合計出金（千円）
+  const aTotalOut = Array.from({length:N}, (_,i) =>
+    getN(aLabor,i)+getN(aOut,i)+getN(aAdv,i)+getN(aEvent,i)+getN(aRent,i)+getN(aGaichu,i)+getN(aOther,i)
+  );
+  // 実績月末残高の入力有無チェック（千円単位なので0は「未入力」扱い）
+  const hasActualClose = (i) => {
+    const v = aClose[i];
+    return v !== null && v !== undefined && v !== '' && Number(v) !== 0;
+  };
+  // 実績入金・出金どちらかに値があれば「入力あり」
+  const hasActualData = (i) => getN(aIn,i) !== 0 || aTotalOut[i] !== 0 || hasActualClose(i);
+  const aOpCF = Array.from({length:N}, (_,i) =>
+    hasActualData(i) ? getN(aIn,i) - aTotalOut[i] : null
+  );
+  // 財務CF = 融資・調達
+  const aFinCF = aFunding;
+  // 月次純CF = 営業CF + 財務CF
+  const aNetCF = Array.from({length:N}, (_,i) => aOpCF[i] === null ? null : aOpCF[i] + getN(aFinCF,i));
+  // 月末残高（実績入力がなければ月初+純CF で計算）
+  const aCloseCalc = Array.from({length:N}, (_,i) =>
+    hasActualClose(i) ? getN(aClose,i) : null
+  );
+
+  // ── 予算計算 ──
+  const bOpen    = cfArr('budget','open');
+  const bIn      = cfArr('budget','cfIn');
+  const bLabor   = cfArr('budget','laborPay');
+  const bOut     = cfArr('budget','outsourcePay');
+  const bAdv     = cfArr('budget','advPay');
+  const bEvent   = cfArr('budget','eventPay');
+  const bRent    = cfArr('budget','rentPay');
+  const bGaichu  = cfArr('budget','gaichuPay');
+  const bOther   = cfArr('budget','otherPay');
+  const bFunding = cfArr('budget','funding');
+  const bTotalOut = Array.from({length:N}, (_,i) =>
+    getN(bLabor,i)+getN(bOut,i)+getN(bAdv,i)+getN(bEvent,i)+getN(bRent,i)+getN(bGaichu,i)+getN(bOther,i)
+  );
+  const bOpCF  = Array.from({length:N}, (_,i) => getN(bIn,i) - bTotalOut[i]);
+  const bFinCF = bFunding;
+  const bNetCF = Array.from({length:N}, (_,i) => bOpCF[i] + getN(bFinCF,i));
+  let bBal = getN(bOpen, 0);
+  const bCloseCalc = Array.from({length:N}, (_,i) => { bBal += bNetCF[i]; return Math.round(bBal); });
+
+  // ── グラフ ──
   destroyChart('cf-chart-main');
   charts['cf-chart-main'] = new Chart(document.getElementById('cf-chart-main'), {
     type: 'bar',
     data: {
       labels: months,
       datasets: [
-        { type: 'bar', label: '入金', data: inA.map(v => Number(v) || null), backgroundColor: 'rgba(59,109,17,0.3)', borderRadius: 3, yAxisID: 'y' },
-        { type: 'line', label: '残高（実績）', data: balA.map(v => Number(v) || null), borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.1)', fill: true, tension: 0.3, pointRadius: 3, yAxisID: 'y2' },
-        { type: 'line', label: '残高（予算）', data: balB, borderColor: '#378ADD', borderDash: [4, 3], tension: 0.3, pointRadius: 2, yAxisID: 'y2' }
+        // ── 入金（積み上げ正方向）──
+        { type:'bar', label:'売上入金',     data: aIn.map(v=>Number(v)||0),            backgroundColor:'rgba(55,138,221,0.7)', borderRadius:3, stack:'in',  yAxisID:'y' },
+        { type:'bar', label:'融資・調達',   data: aFunding.map(v=>Number(v)||0),       backgroundColor:'rgba(83,74,183,0.7)', borderRadius:3, stack:'in',  yAxisID:'y' },
+        // ── 出金（積み上げ負方向）──
+        { type:'bar', label:'人件費',       data: aLabor.map(v=>v?-v:0),              backgroundColor:'rgba(226,75,74,0.75)', stack:'out', yAxisID:'y' },
+        { type:'bar', label:'業務委託費',   data: aOut.map(v=>v?-v:0),               backgroundColor:'rgba(216,90,48,0.7)',  stack:'out', yAxisID:'y' },
+        { type:'bar', label:'広告宣伝費',    data: aAdv.map(v=>v?-v:0),   backgroundColor:'rgba(239,159,39,0.8)', stack:'out', yAxisID:'y' },
+        { type:'bar', label:'外注費(イベント)', data: aEvent.map(v=>v?-v:0), backgroundColor:'rgba(239,120,39,0.7)', stack:'out', yAxisID:'y' },
+        { type:'bar', label:'外注費',       data: aGaichu.map(v=>v?-v:0),            backgroundColor:'rgba(139,90,43,0.7)',  stack:'out', yAxisID:'y' },
+        { type:'bar', label:'賃料',         data: aRent.map(v=>v?-v:0),              backgroundColor:'rgba(136,135,128,0.7)',stack:'out', yAxisID:'y' },
+        { type:'bar', label:'その他支出',   data: aOther.map(v=>v?-v:0),             backgroundColor:'rgba(100,100,100,0.5)',stack:'out', yAxisID:'y' },
+        // ── 残高ライン ──
+        { type:'line', label:'残高（実績）', data: aCloseCalc.map(v=>Number(v)||null),
+          borderColor:'#378ADD', backgroundColor:'rgba(55,138,221,0.06)', fill:false,
+          tension:0.3, pointRadius:4, pointBackgroundColor: aCloseCalc.map(v=>Number(v)<0?'#E24B4A':'#378ADD'),
+          borderWidth:2.5, yAxisID:'y2' },
+        { type:'line', label:'残高（予算）', data: bCloseCalc,
+          borderColor:'rgba(55,138,221,0.5)', borderDash:[4,3], tension:0.3, pointRadius:2, borderWidth:1.5, yAxisID:'y2' },
+        // ── 営業CF折れ線 ──
+        { type:'line', label:'営業CF（実績）', data: aOpCF.map(v=>v||null),
+          borderColor:'#27ae60', borderDash:[5,2], tension:0.2, pointRadius:3, borderWidth:1.5, yAxisID:'y' }
       ]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { font: { size: 10 }, color: tc, boxWidth: 10, padding: 8 } } },
-      scales: {
-        x: { ticks: { color: tc, font: { size: 10 } }, grid: { color: gc } },
-        y: { position: 'left', ticks: { color: tc, font: { size: 9 } }, grid: { display: false } },
-        y2: { position: 'right', ticks: { color: tc, font: { size: 9 }, callback: v => (v / 10000).toFixed(0) + '万' }, grid: { color: gc } }
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ labels:{ font:{size:10}, color:tc, boxWidth:10, padding:8 } },
+        tooltip:{
+          callbacks:{
+            label: ctx => {
+              const v = ctx.parsed.y;
+              if (v===null||v===undefined||v===0) return null;
+              const a = Math.abs(Math.round(v));
+              return ` ${ctx.dataset.label}：${v<0?'▲':''}${a.toLocaleString()}千円`;
+            }
+          }
+        }
+      },
+      scales:{
+        x:{ ticks:{color:tc,font:{size:10}}, grid:{color:gc} },
+        y:{ position:'left', stacked:true,
+            ticks:{color:tc,font:{size:9},callback:v=>{
+              const a=Math.abs(v);
+              return (v<0?'▲':'')+(a>=10000?(a/10000).toFixed(0)+'億':a>=1000?(a/1000).toFixed(0)+'千万':a.toLocaleString());
+            }},
+            grid:{color:gc}, title:{display:true,text:'入出金（千円）',color:tc,font:{size:9}} },
+        y2:{ position:'right',
+             ticks:{color:tc,font:{size:9},callback:v=>{
+               const a=Math.abs(v);
+               return (v<0?'▲':'')+(a>=10000?(a/10000).toFixed(0)+'億':a>=1000?(a/1000).toFixed(0)+'千万':a.toLocaleString()+'千');
+             }},
+             grid:{display:false}, title:{display:true,text:'月末残高（千円）',color:tc,font:{size:9}} }
       }
     }
   });
 
-  // CF table
-  let html = `<table class="dt" style="min-width:${80 + d.months.length * 80}px"><thead><tr><th class="l" style="min-width:100px">科目</th><th class="l">区分</th>`;
-  d.months.forEach(m => { html += `<th>${MONTH_LABELS[m]}</th>`; });
-  html += '<th>合計</th></tr></thead><tbody>';
+  // ── テーブル組み立て ──
+  // セルレンダラー
+  const fmtV = v => v !== null && v !== undefined && v !== '' && Number(v) !== 0 ? Math.round(Number(v)).toLocaleString() : '—';
+  const diffCell = (a, b, invert=false) => {
+    if (!a && a !== 0) return '<td class="diff-zero">—</td>';
+    const d2 = invert ? (Number(b)||0) - (Number(a)||0) : (Number(a)||0) - (Number(b)||0);
+    return `<td class="${d2>0?'diff-pos':d2<0?'diff-neg':'diff-zero'}">${d2>0?'+':''}${d2!==0?Math.round(d2).toLocaleString():'—'}</td>`;
+  };
 
-  const cfRows = [
-    { label: '月初残高', bArr: d.cf.budget.open, aArr: d.cf.actual.open, noSum: true },
-    { label: '売上入金（千円）', bArr: d.cf.budget.cfIn, aArr: d.cf.actual.cfIn },
-    { label: '月末残高（千円）', bArr: balB, aArr: d.cf.actual.cfClose, noSum: true },
+  // 行定義（label, bArr, aArr, isOut, edBKey, edAKey, noSum, isSub, isSection, isTot, noDiff）
+  const rows = [
+    // ── 残高 ──
+    { label:'月初残高',         bArr:bOpen,      aArr:aOpen,      noSum:true,  edBKey:'budget.open',   edAKey:'actual.open' },
+    // ── 収入 ──
+    { label:'── 収入',         section:true },
+    { label:'売上入金',         bArr:bIn,        aArr:aIn,        isSub:true,  edBKey:'budget.cfIn',   edAKey:'actual.cfIn' },
+    { label:'融資・調達',       bArr:bFunding,   aArr:aFunding,   isSub:true,  edBKey:'budget.funding',edAKey:'actual.funding' },
+    // ── 出金 ──
+    { label:'── 出金',         section:true },
+    { label:'人件費',           bArr:bLabor,     aArr:aLabor,     isSub:true, isOut:true, edBKey:'budget.laborPay',    edAKey:'actual.laborPay' },
+    { label:'業務委託費',       bArr:bOut,       aArr:aOut,       isSub:true, isOut:true, edBKey:'budget.outsourcePay',edAKey:'actual.outsourcePay' },
+    { label:'広告宣伝費',       bArr:bAdv,       aArr:aAdv,       isSub:true, isOut:true, edBKey:'budget.advPay',      edAKey:'actual.advPay' },
+    { label:'外注費(イベント運営等)', bArr:bEvent,   aArr:aEvent,     isSub:true, isOut:true, edBKey:'budget.eventPay',    edAKey:'actual.eventPay' },
+    { label:'外注費',           bArr:bGaichu,    aArr:aGaichu,    isSub:true, isOut:true, edBKey:'budget.gaichuPay',   edAKey:'actual.gaichuPay' },
+    { label:'賃料',             bArr:bRent,      aArr:aRent,      isSub:true, isOut:true, edBKey:'budget.rentPay',     edAKey:'actual.rentPay' },
+    { label:'その他支出',       bArr:bOther,     aArr:aOther,     isSub:true, isOut:true, edBKey:'budget.otherPay',    edAKey:'actual.otherPay' },
+    { label:'出金合計',         bArr:bTotalOut,  aArr:aTotalOut,  isTot:true,  isOut:true, noSum:false, noDiff:true },
+    // ── CF区分 ──
+    { label:'── CF区分',       section:true },
+    { label:'営業CF',           bArr:bOpCF,      aArr:aOpCF,      isTot:true, noDiff:true },
+    { label:'財務CF（融資等）', bArr:bFinCF,     aArr:aFinCF,     isTot:true, noDiff:true },
+    { label:'月次純CF',         bArr:bNetCF,     aArr:aNetCF,     isTot:true, noDiff:true },
+    // ── 残高 ──
+    { label:'月末残高',         bArr:bCloseCalc, aArr:aCloseCalc, noSum:true,  edAKey:'actual.cfClose', isTot:true },
   ];
-  cfRows.forEach(row => {
-    const bSum = (row.bArr || []).reduce((s, v) => s + (Number(v) || 0), 0);
-    const aSum = (row.aArr || []).reduce((s, v) => s + (Number(v) || 0), 0);
-    html += `<tr><td class="l">${row.label}</td><td class="l" style="font-size:9px;color:var(--text3)">予算</td>`;
-    (row.bArr || Array(d.months.length).fill(null)).forEach(v => { html += `<td class="budget">${v !== null && v !== undefined ? Math.round(Number(v)).toLocaleString() : '—'}</td>`; });
-    html += `<td class="budget">${row.noSum ? '—' : bSum.toLocaleString()}</td></tr>`;
-    html += `<tr><td class="l"></td><td class="l" style="font-size:9px;font-weight:700;color:var(--text)">実績</td>`;
-    (row.aArr || Array(d.months.length).fill(null)).forEach(v => { html += `<td class="actual">${v !== null && v !== undefined ? Math.round(Number(v)).toLocaleString() : '—'}</td>`; });
-    html += `<td class="actual">${row.noSum ? '—' : (aSum ? aSum.toLocaleString() : '—')}</td></tr>`;
+
+  const minW = 100 + d.months.length * 82;
+  let html = `<table class="dt" style="min-width:${minW}px;width:100%">
+    <thead><tr>
+      <th class="l" style="min-width:130px">科目</th>
+      <th class="l" style="min-width:36px">区分</th>
+      ${months.map(m=>`<th style="min-width:72px">${m}</th>`).join('')}
+      <th>合計</th>
+    </tr></thead><tbody>`;
+
+  rows.forEach(row => {
+    if (row.section) {
+      html += `<tr><td colspan="${N+3}" style="background:var(--bg3);font-size:10px;font-weight:700;color:var(--text3);padding:5px 8px;letter-spacing:.3px">${row.label}</td></tr>`;
+      return;
+    }
+    const isOut = row.isOut;
+    const isTot = row.isTot;
+    const isSub = row.isSub;
+    const rowStyle = isTot ? 'background:var(--bg3);font-weight:700;' : '';
+    const labelStyle = `font-size:${isSub?'10px':'11px'};${isSub?'padding-left:16px;color:var(--text3);':''}`;
+
+    // 予算行
+    const bSum = (row.bArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
+    html += `<tr style="${rowStyle}">
+      <td class="l" style="${labelStyle}">${row.label}</td>
+      <td class="l" style="font-size:9px;color:var(--text3)">予算</td>`;
+    (row.bArr||Array(N).fill(null)).forEach((v,i) => {
+      const val = v !== null && v !== undefined ? Math.round(Number(v)) : null;
+      const dispVal = val !== null ? val.toLocaleString() : '—';
+      const colorCls = isOut && val ? 'color:var(--tc-red)' : (val > 0 && !isOut && row.label.includes('CF')) ? 'color:var(--tc-green)' : (val < 0 && row.label.includes('CF')) ? 'color:var(--tc-red)' : '';
+      if (row.edBKey && !isTot) {
+        html += `<td class="budget editable-cell" style="${colorCls}" data-cfkey="${row.edBKey}" data-kind="budget" data-idx="${i}" onclick="cfCellClick(this,window._plCFd)">${dispVal}</td>`;
+      } else {
+        html += `<td class="budget" style="${colorCls}">${dispVal}</td>`;
+      }
+    });
+    html += `<td class="budget">${row.noSum ? '—' : (bSum?bSum.toLocaleString():'—')}</td></tr>`;
+
+    // 実績行
+    const aSum = (row.aArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
+    html += `<tr style="${rowStyle}">
+      <td class="l" style="${labelStyle}"></td>
+      <td class="l" style="font-size:9px;font-weight:700;color:var(--text)">実績</td>`;
+    (row.aArr||Array(N).fill(null)).forEach((v,i) => {
+      const val = v !== null && v !== undefined ? Math.round(Number(v)) : null;
+      const dispVal = val !== null ? val.toLocaleString() : '—';
+      const colorCls = isOut && val > 0 ? 'color:var(--tc-red)' : (val > 0 && row.label.includes('CF') && !isOut) ? 'color:var(--tc-green)' : (val < 0 && row.label.includes('CF')) ? 'color:var(--tc-red)' : '';
+      if (row.edAKey && !isTot) {
+        html += `<td class="actual editable-cell" style="${colorCls}" data-cfkey="${row.edAKey}" data-kind="actual" data-idx="${i}" onclick="cfCellClick(this,window._plCFd)">${dispVal}</td>`;
+      } else {
+        html += `<td class="actual" style="${colorCls}">${dispVal}</td>`;
+      }
+    });
+    html += `<td class="actual">${row.noSum ? '—' : (aSum?aSum.toLocaleString():'—')}</td></tr>`;
+
+    // 差異行（noDiff でないもの）
+    if (!row.noDiff && !row.noSum) {
+      html += `<tr><td class="l" style="${labelStyle}"></td><td class="l" style="font-size:9px;color:var(--text3)">差異</td>`;
+      (row.bArr||Array(N).fill(null)).forEach((bv,i) => {
+        const av = (row.aArr||[])[i];
+        if ((bv===null||bv===undefined||bv===''||bv===0) && (av===null||av===undefined||av===''||av===0)) { html+='<td class="diff-zero">—</td>'; return; }
+        const diff = (isOut?-1:1)*((Number(av)||0)-(Number(bv)||0));
+        html += `<td class="${diff>0?'diff-pos':diff<0?'diff-neg':'diff-zero'}">${diff>0?'+':'▲'}${diff!==0?Math.abs(Math.round(diff)).toLocaleString():'—'}</td>`;
+      });
+      const bTot = (row.bArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
+      const aTot = (row.aArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
+      const dTot = (isOut?-1:1)*(aTot-bTot);
+      html += `<td class="${dTot>0?'diff-pos':dTot<0?'diff-neg':'diff-zero'}">${dTot>0?'+':'▲'}${dTot!==0?Math.abs(Math.round(dTot)).toLocaleString():'—'}</td></tr>`;
+    }
   });
+
   html += '</tbody></table>';
+  window._plCFd = d;
   document.getElementById('cf-table-wrap').innerHTML = html;
+}
+
+
+// ═══════════════════════════════════════════
+//  IMPORT TAB TOGGLE
+// ═══════════════════════════════════════════
+function setImportTab(tab, el) {
+  document.querySelectorAll('#sec-import .pa-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('import-bank').style.display = tab === 'bank' ? '' : 'none';
+  document.getElementById('import-csv').style.display  = tab === 'csv'  ? '' : 'none';
+}
+
+// ═══════════════════════════════════════════
+//  通帳明細 AI 仕分け
+// ═══════════════════════════════════════════
+let _bankRows = []; // 仕分け結果
+
+// CF/PL科目の定義（仕分け先として使う）
+const BANK_CATEGORIES = {
+  // 収入
+  cfIn:         { label: '売上入金',             pl: 'rev',       cf: 'cfIn',         sign: 1  },
+  funding:      { label: '融資・調達',            pl: null,        cf: 'funding',      sign: 1  },
+  // 支出
+  laborPay:     { label: '人件費',               pl: 'labor',     cf: 'laborPay',     sign: -1 },
+  outsourcePay: { label: '業務委託費',            pl: 'outsource', cf: 'outsourcePay', sign: -1 },
+  advPay:       { label: '広告宣伝費',            pl: 'adv',       cf: 'advPay',       sign: -1 },
+  eventPay:     { label: '外注費(イベント運営)',   pl: 'gaichu',    cf: 'eventPay',     sign: -1 },
+  rentPay:      { label: '賃料',                 pl: 'other',     cf: 'rentPay',      sign: -1 },
+  gaichuPay:    { label: '外注費',               pl: 'gaichu',    cf: 'gaichuPay',    sign: -1 },
+  otherPay:     { label: 'その他支出',            pl: 'other',     cf: 'otherPay',     sign: -1 },
+  skip:         { label: '対象外（無視）',         pl: null,        cf: null,           sign: 0  },
+};
+
+async function analyzeBankStatement() {
+  const text = document.getElementById('bank-text').value.trim();
+  const month = document.getElementById('bank-month').value.trim();
+  const account = document.getElementById('bank-account').value.trim();
+
+  if (!text) { alert('通帳明細を貼り付けてください'); return; }
+  if (!month) { alert('対象月を入力してください（例: 2604）'); return; }
+
+  const log = document.getElementById('bank-log');
+  log.style.display = 'block';
+  log.innerHTML = '<span class="log-info">🤖 AIが通帳明細を仕分け中...</span>\n';
+
+  const btn = document.getElementById('bank-analyze-btn');
+  btn.disabled = true; btn.textContent = '仕分け中...';
+
+  const categoryList = Object.entries(BANK_CATEGORIES)
+    .filter(([k]) => k !== 'skip')
+    .map(([k, v]) => `  ${k}: ${v.label}`)
+    .join('\n');;
+
+  const prompt = `あなたはNEO福岡（福岡市の経営者コミュニティ）の経理担当です。
+以下の通帳明細を1行ずつ解析し、各取引をNEO福岡の科目に仕分けしてください。
+
+【口座】${account || '不明'}
+【対象月】${month}
+【通帳明細】
+${text}
+
+【仕分け科目（必ずこの中から選ぶ）】
+${categoryList}
+  skip: 対象外（残高・繰越・手数料など無視すべき行）
+
+以下のJSON配列のみ返してください（他の説明不要）：
+[
+  {
+    "date": "日付（MM/DD形式）",
+    "description": "摘要（原文のまま）",
+    "amount": 金額（千円単位・整数。入金は正、出金は正の値で絶対値。符号はcategoryで判定）,
+    "direction": "in" または "out",
+    "category": "科目キー（上記リストから選択）",
+    "reason": "仕分け理由（15字以内）"
+  }
+]
+
+注意：
+- 金額はカンマ・円マーク・△・マイナスを除いた数値（千円単位に変換）
+- 残高欄・合計欄・ヘッダー行はskipにする
+- 融資・借入は funding、給与・役員報酬は laborPay
+- JSONのみ返す`;
+
+  try {
+    const raw = await callAI(prompt, 2000);
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const rows = JSON.parse(clean);
+    _bankRows = rows.filter(r => r.category !== 'skip');
+
+    log.innerHTML += `<span class="log-ok">✓ ${rows.length}件を解析（有効${_bankRows.length}件・対象外${rows.length - _bankRows.length}件）</span>
+`;
+    renderBankResult(_bankRows, month);
+    document.getElementById('bank-result-wrap').style.display = '';
+
+  } catch(e) {
+    log.innerHTML += `<span class="log-err">✗ エラー: ${e.message}</span>
+`;
+  }
+
+  btn.disabled = false; btn.textContent = '🤖 AIで仕分け・分類';
+}
+
+function renderBankResult(rows, month) {
+  const catOptions = Object.entries(BANK_CATEGORIES)
+    .map(([k, v]) => `<option value="${k}">${v.label}</option>`)
+    .join('');
+
+  let html = `<table class="dt" style="min-width:700px">
+    <thead><tr>
+      <th class="l" style="min-width:60px">日付</th>
+      <th class="l" style="min-width:200px">摘要</th>
+      <th style="min-width:80px">金額（千円）</th>
+      <th style="min-width:60px">入出金</th>
+      <th class="l" style="min-width:160px">科目</th>
+      <th class="l" style="min-width:120px">仕分け理由</th>
+    </tr></thead><tbody>`;
+
+  rows.forEach((row, idx) => {
+    const cat = BANK_CATEGORIES[row.category] || BANK_CATEGORIES.otherPay;
+    const dirColor = row.direction === 'in' ? 'color:var(--tc-green)' : 'color:var(--tc-red)';
+    html += `<tr>
+      <td class="l" style="font-size:10px;color:var(--text3)">${row.date||'—'}</td>
+      <td class="l" style="font-size:11px">${row.description||'—'}</td>
+      <td style="${dirColor};font-weight:600">${(row.amount||0).toLocaleString()}</td>
+      <td style="${dirColor};font-size:10px">${row.direction==='in'?'↑入金':'↓出金'}</td>
+      <td>
+        <select data-idx="${idx}" onchange="updateBankRowCat(${idx},this.value)"
+          style="width:100%;padding:3px 5px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:11px;font-family:inherit">
+          ${Object.entries(BANK_CATEGORIES).map(([k,v]) =>
+            `<option value="${k}" ${k===row.category?'selected':''}>${v.label}</option>`
+          ).join('')}
+        </select>
+      </td>
+      <td style="font-size:10px;color:var(--text3)">${row.reason||'—'}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('bank-result-table').innerHTML = html;
+
+  // サマリー
+  renderBankSummary(rows);
+}
+
+function updateBankRowCat(idx, newCat) {
+  _bankRows[idx].category = newCat;
+  renderBankSummary(_bankRows);
+}
+
+function renderBankSummary(rows) {
+  const totals = {};
+  rows.forEach(row => {
+    const cat = row.category;
+    if (!totals[cat]) totals[cat] = 0;
+    totals[cat] += Number(row.amount) || 0;
+  });
+
+  let html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">';
+  Object.entries(totals).forEach(([cat, amt]) => {
+    const info = BANK_CATEGORIES[cat];
+    if (!info || cat === 'skip') return;
+    const isIn = info.sign > 0;
+    html += `<div style="background:${isIn?'var(--bg-green)':'var(--bg-red)'};border-radius:var(--r);padding:8px 10px">
+      <div style="font-size:10px;font-weight:700;color:${isIn?'var(--tc-green)':'var(--tc-red)'}">${info.label}</div>
+      <div style="font-size:14px;font-weight:700;color:${isIn?'var(--tc-green)':'var(--tc-red)'}">${amt.toLocaleString()}千円</div>
+    </div>`;
+  });
+  html += '</div>';
+  document.getElementById('bank-summary').innerHTML = html;
+}
+
+async function commitBankResult() {
+  const month = document.getElementById('bank-month').value.trim();
+  if (!month || !_bankRows.length) return;
+
+  const yearKey = month.startsWith('27') ? '2026' : (parseInt(month.slice(2,4)) >= 4 ? '2025' : '2026');
+  const d = DB[yearKey];
+  const idx = d.months.indexOf(month);
+  if (idx === -1) { alert(`月 ${month} はデータセットに存在しません`); return; }
+
+  // 科目ごとに集計
+  const cfTotals = {}, plTotals = {};
+  _bankRows.forEach(row => {
+    const cat = BANK_CATEGORIES[row.category];
+    if (!cat || row.category === 'skip') return;
+    const amt = Number(row.amount) || 0;
+    if (cat.cf) {
+      cfTotals[cat.cf] = (cfTotals[cat.cf] || 0) + amt;
+    }
+    if (cat.pl) {
+      // PLはPL予算・実績の万円換算（通帳は千円単位）
+      plTotals[cat.pl] = (plTotals[cat.pl] || 0) + Math.round(amt / 10);
+    }
+  });
+
+  // CF actualに書き込み
+  Object.entries(cfTotals).forEach(([key, val]) => {
+    if (!d.cf.actual[key]) d.cf.actual[key] = Array(12).fill(0);
+    d.cf.actual[key][idx] = val;
+  });
+
+  // PL actualに書き込み（売上・費用それぞれ）
+  Object.entries(plTotals).forEach(([key, val]) => {
+    if (key === 'rev') {
+      if (!d.pl.actual.rev) d.pl.actual.rev = [];
+      d.pl.actual.rev[idx] = (d.pl.actual.rev[idx] || 0) + val;
+    } else {
+      if (!d.pl.actual[key]) d.pl.actual[key] = [];
+      d.pl.actual[key][idx] = val;
+    }
+  });
+
+  DB[yearKey] = d;
+  await saveDB();
+
+  // 成功通知
+  const log = document.getElementById('bank-log');
+  log.innerHTML += `<span class="log-ok">✓ ${month}月のCF・PLに${_bankRows.length}件を反映しました</span>\n`;
+  Object.entries(cfTotals).forEach(([k, v]) => {
+    log.innerHTML += `<span class="log-info">  CF.${k}: ${v.toLocaleString()}千円</span>\n`;
+  });
+
+  document.getElementById('bank-result-wrap').style.display = 'none';
+  _bankRows = [];
+  updateWeeklyKPIs();
+  renderPLCF();
+  loadImportedList();
+
+  // トースト
+  showBudgetToast && showBudgetToast();
+  let t = document.getElementById('bank-commit-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'bank-commit-toast';
+    t.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--bg-green);color:var(--tc-green);border:1px solid var(--tc-green);border-radius:var(--rl);padding:12px 20px;font-size:13px;font-weight:700;z-index:9999;transition:opacity .4s';
+    document.body.appendChild(t);
+  }
+  t.textContent = `✓ ${month}月の明細 ${_bankRows.length || Object.keys(cfTotals).length}件をCF・PLに反映しました`;
+  t.style.opacity = '1';
+  setTimeout(() => t.style.opacity = '0', 3000);
 }
 
 // ═══════════════════════════════════════════
@@ -1276,14 +1986,9 @@ ${csvPreview}
 数値が見つからない場合は0。JSONのみを返してください。`;
 
   try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ max_tokens: 1500, messages: [{ role: 'user', content: prompt }] })
-    });
-    const resp = await res.json();
-    const raw = resp.content?.find(b => b.type === 'text')?.text || '{}';
-    const clean = raw.replace(/```json|```/g, '').trim();
+    // callAI を使って統一的にAPI呼び出し
+    const raw = await callAI(prompt, 1500);
+    const clean = (typeof raw === 'string' ? raw : JSON.stringify(raw)).replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
 
     log.innerHTML += `<span class="log-ok">✓ AI解析完了</span>\n`;
@@ -1325,7 +2030,6 @@ ${csvPreview}
     }
   } catch (e) {
     log.innerHTML += `<span class="log-err">✗ エラー: ${e.message}</span>\n`;
-    log.innerHTML += `<span class="log-warn">⚠ VercelのEnvironment VariablesにANTHROPIC_API_KEYが設定されているか確認してください</span>\n`;
   }
 
   btn.disabled = false;
@@ -1412,25 +2116,112 @@ const SIM_MONTHS = {
 };
 
 // PL行定義
-const PL_ROWS = [
+// ── 固定行（変更不可）──
+const PL_ROWS_BASE = [
   { key: 'rev',        label: '売上合計',         color: '#378ADD', isRev: true },
-  { key: 'fee',        label: '└ NEO会費',         color: '#378ADD', indent: true, isRev: true },
-  { key: 'training',   label: '└ 研修売上',         color: '#378ADD', indent: true, isRev: true },
-  { key: 'event',      label: '└ イベント・その他',  color: '#378ADD', indent: true, isRev: true },
+  { key: 'fee',        label: 'NEO会費',           color: '#378ADD', indent: true, isRev: true },
+  { key: 'training',   label: '研修売上',           color: '#378ADD', indent: true, isRev: true },
+  { key: 'event',      label: 'イベント・その他',   color: '#378ADD', indent: true, isRev: true },
   { key: 'labor',      label: '人件費（社保込）',   color: '#E24B4A', isCost: true },
   { key: 'outsource',  label: '業務委託費',         color: '#D85A30', isCost: true },
   { key: 'adv',        label: '広告販促費',         color: '#EF9F27', isCost: true },
   { key: 'rent',       label: '賃料',              color: '#888780', isCost: true },
-  { key: 'gaichu',     label: '外注費',              color: '#D85A30', isCost: true },
+  { key: 'gaichu',     label: '外注費',             color: '#D85A30', isCost: true },
   { key: 'other',      label: 'その他費用',         color: '#B4B2A9', isCost: true },
 ];
+
+// ── ユーザーが追加した行（年度別・永続保存）──
+// SIM_DATA[year].customRows = [ {key, label, isRev, isCost}, ... ]
+function getCustomRows(year) {
+  return (SIM_DATA[year] && SIM_DATA[year].customRows) || [];
+}
+
+// 親行として選択できる行の定義
+const PARENT_OPTIONS_REV  = ['fee','training','event'];  // 売上の親候補
+const PARENT_OPTIONS_COST = ['labor','outsource','adv','rent','gaichu','other']; // 費用の親候補
+
+// 全行（固定 + カスタム）を parentKey に従って正しい位置に挿入して返す
+function getPLRows() {
+  const customRows = getCustomRows(currentSimYear);
+  const base = [...PL_ROWS_BASE];
+
+  // カスタム行を parentKey の親行の直後に挿入
+  // 後ろから処理することで複数挿入時のインデックスズレを防ぐ
+  const inserted = new Set();
+  customRows.slice().reverse().forEach(r => {
+    const row = {
+      key: r.key, label: r.label,
+      color: r.isRev ? '#60ADEE' : '#CC8888',
+      indent: true, isRev: r.isRev, isCost: r.isCost,
+      isCustom: true, parentKey: r.parentKey || null,
+      depth: 2  // 子要素は深めのインデント
+    };
+    if (r.parentKey) {
+      // 同じ parentKey を持つ既存カスタム行の最後の後ろ、なければ親行の直後
+      let insertIdx = -1;
+      for (let i = base.length - 1; i >= 0; i--) {
+        if (base[i].parentKey === r.parentKey && base[i].isCustom) {
+          insertIdx = i + 1; break;
+        }
+      }
+      if (insertIdx === -1) {
+        insertIdx = base.findIndex(b => b.key === r.parentKey);
+        if (insertIdx >= 0) insertIdx += 1;
+      }
+      if (insertIdx >= 0) {
+        base.splice(insertIdx, 0, row);
+        inserted.add(r.key);
+        return;
+      }
+    }
+    // 親なし: 売上なら費用の前、費用なら末尾
+    if (!inserted.has(r.key)) {
+      if (r.isRev) {
+        const costIdx = base.findIndex(b => b.key === 'labor');
+        base.splice(costIdx, 0, row);
+      } else {
+        base.push(row);
+      }
+    }
+  });
+  return base;
+}
+
+// カスタム行を追加（parentKey 付き）
+function addSimRow(isRev, parentKey) {
+  const parentLabel = parentKey ? PL_ROWS_BASE.concat(getCustomRows(currentSimYear)).find(r => r.key === parentKey)?.label : null;
+  const msg = parentLabel
+    ? `「${parentLabel}」の明細項目名を入力してください（例：研修商品A、コンサルティング）`
+    : isRev ? '売上項目名を入力してください（例：新規売上、コンサルティング）'
+            : '費用項目名を入力してください（例：システム費、採用費）';
+  const label = prompt(msg);
+  if (!label || !label.trim()) return;
+  const key = 'custom_' + Date.now();
+  if (!SIM_DATA[currentSimYear].customRows) SIM_DATA[currentSimYear].customRows = [];
+  SIM_DATA[currentSimYear].customRows.push({
+    key, label: label.trim(), isRev, isCost: !isRev,
+    parentKey: parentKey || null
+  });
+  buildSimPLTable();
+}
+
+// カスタム行を削除
+function removeSimRow(key) {
+  if (!SIM_DATA[currentSimYear].customRows) return;
+  SIM_DATA[currentSimYear].customRows = SIM_DATA[currentSimYear].customRows.filter(r => r.key !== key);
+  buildSimPLTable();
+}
+
+// 後方互換のために PL_ROWS も alias
+let PL_ROWS = PL_ROWS_BASE;
 
 // CF行定義
 const CF_ROWS = [
   { key: 'cfIn',       label: '売上入金',          color: '#378ADD' },
   { key: 'laborPay',   label: '人件費支払',         color: '#E24B4A', isOut: true },
   { key: 'outsourcePay',label: '業務委託支払',      color: '#D85A30', isOut: true },
-  { key: 'advPay',     label: '広告・イベント支払',  color: '#EF9F27', isOut: true },
+  { key: 'advPay',     label: '広告宣伝費',          color: '#EF9F27', isOut: true },
+  { key: 'eventPay',   label: '外注費(イベント運営等)',  color: '#D87D27', isOut: true },
   { key: 'rentPay',    label: '賃料',              color: '#888780', isOut: true },
   { key: 'gaichuPay',  label: '外注費支払',          color: '#D85A30', isOut: true },
   { key: 'otherPay',   label: 'その他支出',         color: '#B4B2A9', isOut: true },
@@ -1457,6 +2248,7 @@ let SIM_DATA = {
       laborPay:    [310,310,310,310,310,310,360,360,360,360,360,360],
       outsourcePay:[380,380,380,380,380,380,380,380,380,380,380,380],
       advPay:      [80,80,150,80,80,250,80,80,350,80,80,150],
+      eventPay:    [50,50,100,50,50,150,50,50,200,50,50,100],
       rentPay:     [90,90,90,90,90,90,90,90,90,90,90,90],
       gaichuPay:   [80,80,80,80,80,80,80,80,80,80,80,80],
       otherPay:    [50,50,50,50,50,50,50,50,50,50,50,50]
@@ -1480,6 +2272,7 @@ let SIM_DATA = {
       laborPay:    [400,400,400,400,400,400,450,450,450,450,450,450],
       outsourcePay:[400,400,400,400,400,400,400,400,400,400,400,400],
       advPay:      [100,100,200,100,100,300,100,100,400,100,100,200],
+      eventPay:    [50,50,100,50,50,150,50,50,200,50,50,100],
       rentPay:     [90,90,90,90,90,90,90,90,90,90,90,90],
       gaichuPay:   [100,100,100,100,100,100,100,100,100,100,100,100],
       otherPay:    [60,60,60,60,60,60,60,60,60,60,60,60]
@@ -1525,11 +2318,18 @@ function buildSimPLTable() {
   labels.forEach(l => { html += `<th style="${thStyle}">${l}</th>`; });
   html += `<th style="${thStyle}">合計</th></tr></thead><tbody>`;
 
-  PL_ROWS.forEach(row => {
+  const PL_ROWS_CUR = getPLRows();
+  PL_ROWS_CUR.forEach(row => {
     const isCalc = row.key === 'rev'; // 売上合計は計算行
     const rowBg = isCalc ? 'background:var(--bg3);font-weight:700;' : '';
     html += `<tr>`;
-    html += `<td style="${labelStyle}${rowBg}${row.indent ? 'padding-left:18px;color:var(--text3);' : ''}">${row.label}</td>`;
+    const deleteBtn = row.isCustom
+      ? `<span onclick="removeSimRow('${row.key}')" style="cursor:pointer;color:var(--tc-red);font-size:9px;margin-left:4px;opacity:.7" title="この項目を削除">✕</span>`
+      : '';
+    // 深さに応じたインデント（depth=2は子要素）
+    const indentPx = row.depth === 2 ? '30px' : row.indent ? '18px' : '8px';
+    const indentStyle = row.indent || row.depth === 2 ? `padding-left:${indentPx};color:var(--text3);font-size:${row.depth===2?'10px':'11px'};` : '';
+    html += `<td style="${labelStyle}${rowBg}${indentStyle}">${row.label}${deleteBtn}</td>`;
     months.forEach((m, i) => {
       if (isCalc) {
         // 売上合計は fee + training + event の自動計算
@@ -1562,6 +2362,35 @@ function buildSimPLTable() {
 
   html += '</tbody>';
   tbl.innerHTML = html;
+
+  // ── 項目追加ボタンをテーブルの下に追加 ──
+  const addArea = document.getElementById('sim-pl-add-area');
+  if (addArea) {
+    const revParents  = PL_ROWS_BASE.filter(r => r.isRev && r.key !== 'rev');
+    const costParents = PL_ROWS_BASE.filter(r => r.isCost);
+    const revBtns  = revParents.map(r =>
+      `<button class="btn btn-g" style="font-size:10px;padding:3px 9px" onclick="addSimRow(true,'${r.key}')">＋ ${r.label}に追加</button>`
+    ).join('');
+    const costBtns = costParents.map(r =>
+      `<button class="btn" style="font-size:10px;padding:3px 9px" onclick="addSimRow(false,'${r.key}')">＋ ${r.label}に追加</button>`
+    ).join('');
+    const hint = getCustomRows(currentSimYear).length > 0
+      ? '<span style="font-size:10px;color:var(--text3);margin-left:4px">追加済み項目は行の × で削除</span>' : '';
+    addArea.innerHTML = `
+      <div style="margin-top:10px;padding:10px 12px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border)">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px">📌 明細項目を追加</div>
+        <div style="margin-bottom:6px">
+          <span style="font-size:10px;color:var(--tc-green);font-weight:700;margin-right:6px">売上</span>${revBtns}
+          <button class="btn btn-g" style="font-size:10px;padding:3px 9px;margin-left:8px;opacity:.7" onclick="addSimRow(true,null)">＋ 売上（独立）</button>
+        </div>
+        <div>
+          <span style="font-size:10px;color:var(--tc-red);font-weight:700;margin-right:6px">費用</span>${costBtns}
+          <button class="btn" style="font-size:10px;padding:3px 9px;margin-left:8px;opacity:.7" onclick="addSimRow(false,null)">＋ 費用（独立）</button>
+        </div>
+        ${hint}
+      </div>`;
+  }
+
   recalcSimPL();
 }
 
@@ -1624,14 +2453,15 @@ function recalcSimPL() {
   const months = getSimMonths();
   const N = months.length;
 
-  // 売上合計 = fee + training + event
+  // 売上合計 = 固定売上行 + カスタム売上行
+  const plRowsCur = getPLRows();
+  const revKeys  = plRowsCur.filter(r => r.isRev  && r.key !== 'rev').map(r => r.key);
+  const costKeys = plRowsCur.filter(r => r.isCost).map(r => r.key);
   const revArr = Array.from({length: N}, (_, i) =>
-    getSimVal('pl','fee',i) + getSimVal('pl','training',i) + getSimVal('pl','event',i)
+    revKeys.reduce((sum, key) => sum + getSimVal('pl', key, i), 0)
   );
-  // 費用合計
   const costArr = Array.from({length: N}, (_, i) =>
-    getSimVal('pl','labor',i) + getSimVal('pl','outsource',i) + getSimVal('pl','adv',i) +
-    getSimVal('pl','rent',i) + getSimVal('pl','gaichu',i) + getSimVal('pl','other',i)
+    costKeys.reduce((sum, key) => sum + getSimVal('pl', key, i), 0)
   );
   // 月次損益
   const profitArr = revArr.map((r, i) => r - costArr[i]);
@@ -1662,7 +2492,8 @@ function recalcSimPL() {
   });
 
   // 合計列
-  PL_ROWS.forEach(row => {
+  const PL_ROWS_CUR = getPLRows();
+  PL_ROWS_CUR.forEach(row => {
     const el = document.getElementById(`spl-sum-${row.key}`);
     if (!el) return;
     if (row.key === 'rev') {
@@ -1877,8 +2708,9 @@ function recalcSimCF() {
     const funding  = getSimVal('cf','funding', i);
 
     const totalInMo  = cfIn + funding;
+    const eventPay  = getSimVal('cf','eventPay', i);
     const gaichuPay = getSimVal('cf','gaichuPay', i);
-    const totalOutMo = laborPay + outPay + advPay + rentPay + gaichuPay + otherPay;
+    const totalOutMo = laborPay + outPay + advPay + eventPay + rentPay + gaichuPay + otherPay;
     const net = totalInMo - totalOutMo;
     totalIn  += totalInMo;
     totalOut += totalOutMo;
@@ -1946,7 +2778,7 @@ function drawSimCFChart(months, netArr, balArr) {
   const inArr  = months.map((_, i) => getSimVal('cf','cfIn',i) + getSimVal('cf','funding',i));
   const outArr = months.map((_, i) => -(
     getSimVal('cf','laborPay',i) + getSimVal('cf','outsourcePay',i) +
-    getSimVal('cf','advPay',i)   + getSimVal('cf','rentPay',i)     + getSimVal('cf','gaichuPay',i) + getSimVal('cf','otherPay',i)
+    getSimVal('cf','advPay',i)   + getSimVal('cf','eventPay',i)    + getSimVal('cf','rentPay',i)   + getSimVal('cf','gaichuPay',i) + getSimVal('cf','otherPay',i)
   ));
 
   // Good: 入金+20%・出金-10% / Bad: 入金-20%・出金+10%
@@ -2121,7 +2953,7 @@ function commitBarEdit() {
   const { key, idx } = barEditCtx;
   const val = Number(document.getElementById('bar-edit-input').value) || 0;
   // determine pl or cf by key
-  const cfKeys = ['cfIn','laborPay','outsourcePay','advPay','rentPay','otherPay','funding'];
+  const cfKeys = ['cfIn','laborPay','outsourcePay','advPay','eventPay','rentPay','otherPay','funding'];
   if (cfKeys.includes(key)) setSimVal('cf', key, idx, val);
   else setSimVal('pl', key, idx, val);
   closeBarEdit();
@@ -2149,7 +2981,7 @@ function syncInputTableFromData() {
       }
     });
   });
-  const cfKeys2 = ['cfIn','laborPay','outsourcePay','advPay','rentPay','otherPay','funding'];
+  const cfKeys2 = ['cfIn','laborPay','outsourcePay','advPay','eventPay','rentPay','otherPay','funding'];
   cfKeys2.forEach(key => {
     months.forEach((_, i) => {
       const cell = document.querySelector(`#sim-cf-input-table input[data-key="${key}"][data-idx="${i}"]`);
@@ -2168,17 +3000,17 @@ const PRESETS = {
   conservative: {
     label: '保守的プリセット',
     pl: { fee:[500,500,500,500,500,500,500,500,500,500,500,500], training:[0,0,0,50,50,50,100,100,100,100,100,100], event:[0,0,20,0,0,20,0,0,100,0,0,20], labor:[280,280,280,280,280,280,320,320,320,320,320,320], outsource:[350,350,350,350,350,350,350,350,350,350,350,350], adv:[50,50,80,50,50,150,50,50,200,50,50,100], rent:[90,90,90,90,90,90,90,90,90,90,90,90], gaichu:[60,60,60,60,60,60,60,60,60,60,60,60], other:[40,40,40,40,40,40,40,40,40,40,40,40] },
-    cf: { cfOpenFirst:5371, cfIn:[500,500,500,500,500,500,500,500,500,500,500,500], laborPay:[280,280,280,280,280,280,320,320,320,320,320,320], outsourcePay:[350,350,350,350,350,350,350,350,350,350,350,350], advPay:[50,50,80,50,50,150,50,50,200,50,50,100], rentPay:[90,90,90,90,90,90,90,90,90,90,90,90], gaichuPay:[60,60,60,60,60,60,60,60,60,60,60,60], otherPay:[40,40,40,40,40,40,40,40,40,40,40,40] }
+    cf: { cfOpenFirst:5371, cfIn:[500,500,500,500,500,500,500,500,500,500,500,500], laborPay:[280,280,280,280,280,280,320,320,320,320,320,320], outsourcePay:[350,350,350,350,350,350,350,350,350,350,350,350], advPay:[50,50,80,50,50,150,50,50,200,50,50,100], eventPay:[30,30,50,30,30,100,30,30,150,30,30,80], rentPay:[90,90,90,90,90,90,90,90,90,90,90,90], gaichuPay:[60,60,60,60,60,60,60,60,60,60,60,60], otherPay:[40,40,40,40,40,40,40,40,40,40,40,40] }
   },
   moderate: {
     label: '中程度プリセット',
     pl: { fee:[700,700,700,700,700,700,750,750,750,750,750,750], training:[0,0,100,100,100,200,200,200,200,300,300,300], event:[0,0,50,0,0,50,0,0,200,0,0,50], labor:[310,310,310,310,310,310,360,360,360,360,360,360], outsource:[380,380,380,380,380,380,380,380,380,380,380,380], adv:[80,80,150,80,80,250,80,80,350,80,80,150], rent:[90,90,90,90,90,90,90,90,90,90,90,90], gaichu:[80,80,80,80,80,80,80,80,80,80,80,80], other:[50,50,50,50,50,50,50,50,50,50,50,50] },
-    cf: { cfOpenFirst:5371, cfIn:[700,700,700,700,700,700,750,750,750,750,750,750], laborPay:[310,310,310,310,310,310,360,360,360,360,360,360], outsourcePay:[380,380,380,380,380,380,380,380,380,380,380,380], advPay:[80,80,150,80,80,250,80,80,350,80,80,150], rentPay:[90,90,90,90,90,90,90,90,90,90,90,90], gaichuPay:[80,80,80,80,80,80,80,80,80,80,80,80], otherPay:[50,50,50,50,50,50,50,50,50,50,50,50] }
+    cf: { cfOpenFirst:5371, cfIn:[700,700,700,700,700,700,750,750,750,750,750,750], laborPay:[310,310,310,310,310,310,360,360,360,360,360,360], outsourcePay:[380,380,380,380,380,380,380,380,380,380,380,380], advPay:[80,80,150,80,80,250,80,80,350,80,80,150], eventPay:[50,50,100,50,50,150,50,50,200,50,50,100], rentPay:[90,90,90,90,90,90,90,90,90,90,90,90], gaichuPay:[80,80,80,80,80,80,80,80,80,80,80,80], otherPay:[50,50,50,50,50,50,50,50,50,50,50,50] }
   },
   aggressive: {
     label: '積極的プリセット',
     pl: { fee:[900,900,900,1000,1000,1000,1100,1100,1100,1200,1200,1200], training:[100,100,200,200,300,300,400,400,500,500,500,500], event:[0,50,100,0,50,100,0,50,300,50,50,100], labor:[350,350,380,380,380,380,430,430,430,430,430,430], outsource:[400,400,420,420,420,420,440,440,440,440,440,440], adv:[100,150,250,100,150,400,100,150,500,100,150,250], rent:[90,90,90,90,90,90,120,120,120,120,120,120], gaichu:[100,100,100,100,100,100,100,100,100,100,100,100], other:[60,60,60,60,60,60,60,60,60,60,60,60] },
-    cf: { cfOpenFirst:5371, cfIn:[900,900,900,1000,1000,1000,1100,1100,1100,1200,1200,1200], laborPay:[350,350,380,380,380,380,430,430,430,430,430,430], outsourcePay:[400,400,420,420,420,420,440,440,440,440,440,440], advPay:[100,150,250,100,150,400,100,150,500,100,150,250], rentPay:[90,90,90,90,90,90,120,120,120,120,120,120], gaichuPay:[100,100,100,100,100,100,100,100,100,100,100,100], otherPay:[60,60,60,60,60,60,60,60,60,60,60,60] }
+    cf: { cfOpenFirst:5371, cfIn:[900,900,900,1000,1000,1000,1100,1100,1100,1200,1200,1200], laborPay:[350,350,380,380,380,380,430,430,430,430,430,430], outsourcePay:[400,400,420,420,420,420,440,440,440,440,440,440], advPay:[100,150,250,100,150,400,100,150,500,100,150,250], eventPay:[50,80,150,50,80,200,50,80,300,50,80,150], rentPay:[90,90,90,90,90,90,120,120,120,120,120,120], gaichuPay:[100,100,100,100,100,100,100,100,100,100,100,100], otherPay:[60,60,60,60,60,60,60,60,60,60,60,60] }
   }
 };
 
@@ -2190,7 +3022,7 @@ function applyPreset(name) {
     arr.forEach((v, i) => { if (i < months.length) setSimVal('pl', key, i, v); });
   });
   SIM_DATA[currentSimYear].cf.cfOpenFirst = p.cf.cfOpenFirst;
-  const cfKeys = ['cfIn','laborPay','outsourcePay','advPay','rentPay','gaichuPay','otherPay'];
+  const cfKeys = ['cfIn','laborPay','outsourcePay','advPay','eventPay','rentPay','gaichuPay','otherPay'];
   cfKeys.forEach(key => {
     (p.cf[key]||[]).forEach((v, i) => { if (i < months.length) setSimVal('cf', key, i, v); });
   });
@@ -2269,13 +3101,14 @@ async function commitBudget() {
     }
   };
 
+  let history = [];
   try {
-    await apiDB('add_history', {
-      fiscal_year: currentYear,
-      author: entry.author,
-      reason: entry.reason,
-      snapshot: entry.snapshot
-    });
+    const r = await window.storage.get('neo_budget_history');
+    if (r) history = JSON.parse(r.value);
+  } catch(e){}
+  history.unshift(entry);
+  try {
+    await window.storage.set('neo_budget_history', JSON.stringify(history));
     await saveDB();
     closeBudgetModal();
     showBudgetToast();
@@ -2303,13 +3136,12 @@ async function renderBudgetHistory() {
   if (!el) return;
   let history = [];
   try {
-    const r = await apiDB('load_history');
-    if (r.ok && r.data) history = r.data;
-  } catch(e) { console.warn('load_history failed:', e); }
+    const r = await window.storage.get('neo_budget_history');
+    if (r) history = JSON.parse(r.value);
+  } catch(e){}
   if (!history.length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3)">変更履歴はまだありません</div>'; return; }
   el.innerHTML = history.slice(0, 20).map(h => {
-    const ts = h.created_at || h.ts || '';
-    const dt = ts ? new Date(ts).toLocaleString('ja-JP', {year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+    const dt = new Date(h.ts).toLocaleString('ja-JP', {year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
     const annualRev = (h.snapshot?.rev||[]).reduce((a,b)=>a+b,0);
     const annualCost = (h.snapshot?.cost||[]).reduce((a,b)=>a+b,0);
     const profit = annualRev - annualCost;
@@ -2317,7 +3149,7 @@ async function renderBudgetHistory() {
       <div style="font-size:10px;color:var(--text3);white-space:nowrap;padding-top:2px">${dt}</div>
       <div>
         <div style="font-size:12px;font-weight:600;margin-bottom:3px">${h.reason}</div>
-        <div style="font-size:10px;color:var(--text3)">変更者：${h.author||'—'} ｜ ${h.fiscal_year||h.year||'—'}年度</div>
+        <div style="font-size:10px;color:var(--text3)">変更者：${h.author} ｜ ${h.year}年度</div>
       </div>
       <div style="text-align:right;white-space:nowrap">
         <div style="font-size:10px;color:var(--text3)">年間売上</div>
@@ -2332,9 +3164,8 @@ async function renderBudgetHistory() {
 // ── 保存・ロード ──
 async function saveSimData() {
   try {
-    for (const yr of ['2025', '2026']) {
-      await apiDB('save_sim', { fiscal_year: yr, data: SIM_DATA[yr] });
-    }
+    await window.storage.set('neo_sim_2025', JSON.stringify(SIM_DATA['2025']));
+    await window.storage.set('neo_sim_2026', JSON.stringify(SIM_DATA['2026']));
     const ok = document.getElementById('sim-save-ok');
     ok.style.display = 'inline';
     setTimeout(() => ok.style.display = 'none', 2500);
@@ -2343,13 +3174,11 @@ async function saveSimData() {
 
 async function loadSimData() {
   try {
-    const r = await apiDB('load_sim');
-    if (r.ok && r.data) {
-      for (const yr of ['2025', '2026']) {
-        if (r.data[yr]) SIM_DATA[yr] = r.data[yr];
-      }
-    }
-  } catch (e) { console.warn('loadSimData failed:', e); }
+    const r25 = await window.storage.get('neo_sim_2025');
+    if (r25) SIM_DATA['2025'] = JSON.parse(r25.value);
+    const r26 = await window.storage.get('neo_sim_2026');
+    if (r26) SIM_DATA['2026'] = JSON.parse(r26.value);
+  } catch (e) {}
 }
 
 function resetSimData() {
@@ -2395,6 +3224,27 @@ function onQS() {
     if (sl && nm && document.activeElement !== nm) nm.value = sl.value;
   });
   drawQSChart();
+}
+
+// ═══════════════════════════════════════════
+//  QUICK SIMULATOR TOGGLE
+// ═══════════════════════════════════════════
+let _qsOpen = false;
+
+function toggleQS() {
+  _qsOpen = !_qsOpen;
+  const body = document.getElementById('qs-body');
+  const icon = document.getElementById('qs-toggle-icon');
+  if (!body) return;
+  if (_qsOpen) {
+    body.style.display = 'block';
+    icon.style.transform = 'rotate(90deg)';
+    // 開いたときにグラフを描画（非表示中はcanvasが0サイズ）
+    setTimeout(drawQSChart, 60);
+  } else {
+    body.style.display = 'none';
+    icon.style.transform = 'rotate(0deg)';
+  }
 }
 
 function drawQSChart() {
@@ -2740,19 +3590,57 @@ async function saveReportData(month) {
 // ═══════════════════════════════════════════
 //  AI GENERATION
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+//  AI CALL（環境自動判定）
+// ═══════════════════════════════════════════
+// ローカルテスト用：以下にAPIキーを貼り付け（Vercel本番では空のまま）
+const LOCAL_API_KEY = '';  // ← ここに sk-ant-... を貼るとローカルでも動作します
+
 async function callAI(prompt, maxTokens = 1200) {
-  const res = await fetch('/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
-  });
-  const data = await res.json();
-  if (!res.ok || data.error) {
-    const msg = data.error?.message || data.error || `HTTP ${res.status}`;
-    throw new Error(msg);
+  const isLocal = window.location.protocol === 'file:' || window.location.hostname === '';
+  const hasLocalKey = LOCAL_API_KEY && LOCAL_API_KEY.startsWith('sk-ant-');
+
+  // ── ① ローカルファイル + APIキーあり → 直接Anthropic API ──
+  if (isLocal && hasLocalKey) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': LOCAL_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    return data.content?.find(b => b.type === 'text')?.text || 'エラーが発生しました';
   }
-  return data.content?.find(b => b.type === 'text')?.text || '';
+
+  // ── ② Vercel環境 → /api/chat プロキシ経由 ──
+  if (!isLocal) {
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return data.content?.find(b => b.type === 'text')?.text || 'エラーが発生しました';
+    } catch(e) {
+      throw new Error('サーバーエラー: ' + e.message);
+    }
+  }
+
+  // ── ③ ローカル + APIキーなし → 案内メッセージ ──
+  throw new Error('LOCAL_API_KEY が未設定です。HTMLファイル内の LOCAL_API_KEY にAPIキーを貼り付けてください。');
 }
+
 
 async function genAI(type) {
   const d = DB[currentYear];
@@ -2778,7 +3666,7 @@ async function genAI(type) {
       const months = getSimMonths();
       const labels = getSimLabels();
       const inArr = months.map((_, i) => getSimVal('cf','cfIn',i)+getSimVal('cf','funding',i));
-      const outArr = months.map((_, i) => getSimVal('cf','laborPay',i)+getSimVal('cf','outsourcePay',i)+getSimVal('cf','advPay',i)+getSimVal('cf','rentPay',i)+getSimVal('cf','otherPay',i));
+      const outArr = months.map((_, i) => getSimVal('cf','laborPay',i)+getSimVal('cf','outsourcePay',i)+getSimVal('cf','advPay',i)+getSimVal('cf','eventPay',i)+getSimVal('cf','rentPay',i)+getSimVal('cf','otherPay',i));
       let bal = SIM_DATA[currentSimYear].cf.cfOpenFirst || 0;
       const balArr = months.map((_,i) => { bal += inArr[i]-outArr[i]; return bal; });
       const minBal = Math.min(...balArr);
@@ -2796,7 +3684,7 @@ async function genAI(type) {
   else if (boxMap[type]) document.getElementById(boxMap[type]).innerHTML = '<div class="ai-loading"><div class="spinner"></div>AIが生成中です（10〜20秒）...</div>';
 
   try {
-    const text = await callAI(prompts[type] || prompts.weekly, 1200);
+    const text = await callAI(prompts[type] || prompts.weekly);
     if (type === 'pdf') {
       const clean = text.replace(/```json|```/g, '').trim();
       try {
@@ -2810,57 +3698,30 @@ async function genAI(type) {
       document.getElementById(boxMap[type]).innerHTML = `<div class="ai-content">${text}</div>`;
     }
   } catch (e) {
-    const msg = `⚠️ AI接続エラー：${e.message}\n\n【確認事項】\n・VercelのEnvironment Variablesに ANTHROPIC_API_KEY が設定されているか\n・Vercelを再デプロイしたか`;
+    const msg = 'エラーが発生しました。しばらくしてから再試行してください。';
     if (textMap[type]) document.getElementById(textMap[type]).textContent = msg;
-    else if (boxMap[type]) document.getElementById(boxMap[type]).innerHTML = `<div class="ai-content" style="color:var(--tc-red);font-size:11px">${msg.replace(/\n/g,'<br>')}</div>`;
+    else if (boxMap[type]) document.getElementById(boxMap[type]).innerHTML = `<div class="ai-content">${msg}</div>`;
   }
 }
 
 // ═══════════════════════════════════════════
 //  STORAGE
 // ═══════════════════════════════════════════
-// ── DB CRUD via /api/db (Supabase) ──
-async function apiDB(action, body = {}) {
-  const res = await fetch(`/api/db?action=${action}`, {
-    method: body && Object.keys(body).length ? 'POST' : 'GET',
-    headers: { 'Content-Type': 'application/json' },
-    ...(Object.keys(body).length ? { body: JSON.stringify(body) } : {})
-  });
-  return res.json();
-}
-
 async function saveDB() {
   try {
-    for (const yr of ['2025', '2026']) {
-      const d = DB[yr];
-      await apiDB('save_fiscal', {
-        fiscal_year: yr,
-        months: d.months,
-        pl: d.pl,
-        cf: d.cf,
-        reportData: d.reportData || {}
-      });
-    }
-  } catch (e) { console.error('saveDB error:', e); }
+    await window.storage.set('neo_db_2025', JSON.stringify(DB['2025']));
+    await window.storage.set('neo_db_2026', JSON.stringify(DB['2026']));
+  } catch (e) { console.error('Storage save error:', e); }
 }
 
 async function loadDB() {
   try {
-    const r = await apiDB('load_fiscal');
-    if (r.ok && r.data) {
-      for (const yr of ['2025', '2026']) {
-        if (r.data[yr]) {
-          DB[yr] = {
-            months: r.data[yr].months,
-            pl: r.data[yr].pl,
-            cf: r.data[yr].cf,
-            reportData: r.data[yr].reportData || {}
-          };
-        }
-      }
-    }
+    const r25 = await window.storage.get('neo_db_2025');
+    if (r25) DB['2025'] = JSON.parse(r25.value);
+    const r26 = await window.storage.get('neo_db_2026');
+    if (r26) DB['2026'] = JSON.parse(r26.value);
   } catch (e) {
-    console.warn('loadDB failed, using defaults:', e);
+    // storage not available or first run – use defaults
   }
 }
 
@@ -2891,7 +3752,7 @@ window.addEventListener('load', async () => {
   buildSimPLTable();
   buildSimCFTable();
   renderBudgetHistory();
-  drawQSChart();
+  // クイックシムは閉じた状態で開始（toggleQSで開くとdrawQSChartが呼ばれる）
 });
 </script>
 </body>
