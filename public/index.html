@@ -81,6 +81,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .dt tr:last-child td{border-bottom:none}
 .dt .tot td{font-weight:700;background:var(--bg2)}
 .dt .hl td{background:var(--bg2)}
+/* 予算・実績セルは白（デフォルト）、差異のみ色付き */
+td.budget { color: var(--text) !important; }
+td.actual { color: var(--text) !important; }
 .dt .indent td:first-child{padding-left:14px;font-size:10px;color:var(--text3)}
 .scroll-x{overflow-x:auto}
 
@@ -384,6 +387,14 @@ td.actual.editable-cell {
 
   <!-- PL 予実 -->
   <div id="view-pl">
+    <!-- PL サマリーカード -->
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:1rem">
+      <div class="mc"><div class="mc-l">累積売上（実績）</div><div class="mc-v" id="pl-sum-rev-a">—</div><div class="mc-s" id="pl-sum-rev-s"></div></div>
+      <div class="mc"><div class="mc-l">累積売上（予算）</div><div class="mc-v" id="pl-sum-rev-b">—</div></div>
+      <div class="mc"><div class="mc-l">累積販管費（実績）</div><div class="mc-v" id="pl-sum-opex-a">—</div><div class="mc-s" id="pl-sum-opex-s"></div></div>
+      <div class="mc"><div class="mc-l">営業利益（累積実績）</div><div class="mc-v" id="pl-sum-op">—</div></div>
+      <div class="mc"><div class="mc-l">予実達成率</div><div class="mc-v" id="pl-sum-rate">—</div><div class="mc-s" id="pl-sum-rate-s"></div></div>
+    </div>
     <div class="card">
       <div class="ct">月次PL予実 — <span id="pl-year-label">2025年度</span></div>
       <div class="ch" style="height:220px"><canvas id="pl-chart"></canvas></div>
@@ -396,6 +407,14 @@ td.actual.editable-cell {
 
   <!-- CF 予実 -->
   <div id="view-cf" style="display:none">
+    <!-- CF サマリーカード -->
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:1rem">
+      <div class="mc"><div class="mc-l">累積入金（実績）</div><div class="mc-v" id="cf-sum-in-a">—</div><div class="mc-s" id="cf-sum-in-s"></div></div>
+      <div class="mc"><div class="mc-l">累積出金（実績）</div><div class="mc-v" id="cf-sum-out-a">—</div><div class="mc-s" id="cf-sum-out-s"></div></div>
+      <div class="mc"><div class="mc-l">月末現金残高</div><div class="mc-v" id="cf-sum-close">—</div></div>
+      <div class="mc"><div class="mc-l">累積純CF（実績）</div><div class="mc-v" id="cf-sum-net">—</div></div>
+      <div class="mc"><div class="mc-l">入金予実達成率</div><div class="mc-v" id="cf-sum-rate">—</div><div class="mc-s" id="cf-sum-rate-s"></div></div>
+    </div>
     <div class="card">
       <div class="ct">月次CF予実 — <span id="cf-year-label">2025年度</span></div>
       <div class="ch" style="height:220px"><canvas id="cf-chart-main"></canvas></div>
@@ -928,27 +947,70 @@ const DEFAULT_2025 = {
   cf: {
     budget: {
       open:         [15863,7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706],
-      cfIn:         [6250,13750,16625,9875,6625,13200,8500,500,875,3500,16500,10000],
-      laborPay:     [2500,2500,2500,2500,2500,2500,2500,2500,2500,2500,2500,2500],
-      outsourcePay: [4000,4000,4000,4000,4000,4000,4000,4000,4000,4000,4000,4000],
-      advPay:       [835,835,835,835,835,835,835,835,835,835,835,835],
-      eventPay:     [835,835,835,835,835,835,835,835,835,835,835,835],
+      cfIn:         [6250,13750,16625,9875,6625,13200,8500,500,875,3500,16500,10000], // 合計（内訳から自動計算）
+      cfInMembership:[4000,4000,4000,4000,4000,4000,4000,4000,4000,4000,4000,4000],
+      cfInTraining:  [2000,9500,12375,5625,2375,9000,4250,0,0,0,12250,5750],
+      cfInOther:     [250,250,250,250,250,200,250,500,875,3500,250,250],
+      // 販管費固定
+      salaryPay:    [2500,2500,2500,2500,2500,2500,2500,2500,2500,2500,2500,2500],
+      devOutPay:    [0,0,0,0,0,0,0,0,0,0,0,0],
+      bizComPay:    [3500,3500,3500,3500,3500,3500,3500,3500,3500,3500,3500,3500],
+      incentivePay: [500,500,500,500,500,500,500,500,500,500,500,500],
+      expertPay:    [0,0,0,0,0,0,0,0,0,0,0,0],
       rentPay:      [900,900,900,900,900,900,900,900,900,900,900,900],
-      gaichuPay:    [167,167,167,167,167,167,167,167,167,167,167,167],
-      otherPay:     [800,800,800,800,800,800,800,800,800,800,800,800],
+      // 販管費変動
+      expensePay:   [300,300,300,300,300,300,300,300,300,300,300,300],
+      telPay:       [50,50,50,50,50,50,50,50,50,50,50,50],
+      entertainPay: [100,100,100,100,100,100,100,100,100,100,100,100],
+      taxPay:       [0,0,200,0,0,0,0,0,0,100,0,0],
+      toolsPay:     [200,200,200,200,200,200,200,200,200,200,200,200],
+      suppliesPay:  [50,50,50,50,50,50,50,50,50,50,50,50],
+      adSportsPay:  [835,835,835,835,835,835,835,835,835,835,835,835],
+      eventCostPay: [835,835,835,835,835,835,835,835,835,835,835,835],
+      recruitPay:   [0,0,200,0,0,100,0,0,0,0,0,0],
+      annualFeePay: [0,0,0,0,100,0,0,0,0,0,0,0],
+      salesOtherPay:[130,130,130,130,130,130,130,130,130,130,130,130],
+      // 事業投資
+      investPay:    [0,0,0,0,0,0,0,0,0,0,0,0],
+      // 財務収支
+      loanIn:       [0,0,0,0,0,0,0,0,0,15000,0,0],
+      loanOut:      [0,0,0,0,0,0,0,0,0,0,0,0],
+      capitalIn:    [0,0,0,0,0,0,0,0,0,0,0,0],
+      warrantPay:   [0,0,0,0,0,0,0,0,0,0,0,0],
+      finOtherPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
       funding:      [0,0,0,0,0,0,0,0,0,15000,0,0]
     },
     actual: {
       open:         [15863,7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706],
       cfIn:         [3322,13791,16656,9901,6650,13212,8479,504,877,3539,48674,0],
       cfClose:      [7107,14147,15292,8979,4125,25856,36972,25547,13778,16415,53706,0],
-      laborPay:     [1523,1289,1788,5007,1551,1651,1412,1431,2593,2880,3185,3185],
-      outsourcePay: [5164,2186,8024,7003,6069,5333,5175,5122,4977,3916,4036,4036],
-      advPay:       [101,200,0,500,200,0,800,1000,500,2000,500,3000],
-      eventPay:     [0,167,0,504,135,0,1637,2304,411,2026,373,3165],
-      rentPay:      [249,249,887,249,1380,904,1627,1165,1409,1132,883,883],
-      gaichuPay:    [22,22,330,95,48,62,543,52,22,207,299,299],
-      otherPay:     [1231,1296,2185,1310,1806,949,933,377,693,1235,805,805],
+      // 販管費固定
+      salaryPay:    [1523,1289,1788,5007,1551,1651,1412,1431,2593,2880,3185,0],
+      devOutPay:    [0,0,0,0,0,0,0,0,0,0,0,0],
+      bizComPay:    [3500,1500,6000,5000,4500,4000,4000,4000,3500,2800,3000,0],
+      incentivePay: [500,200,500,500,500,500,500,500,500,500,500,0],
+      expertPay:    [0,0,0,0,0,0,0,0,0,0,0,0],
+      rentPay:      [249,249,887,249,1380,904,1627,1165,1409,1132,883,0],
+      // 販管費変動
+      expensePay:   [300,300,500,300,400,200,200,100,200,300,200,0],
+      telPay:       [50,50,50,50,50,50,50,50,50,50,50,0],
+      entertainPay: [100,150,200,100,150,100,100,50,100,150,100,0],
+      taxPay:       [0,0,200,0,100,0,0,0,0,100,0,0],
+      toolsPay:     [200,200,300,200,300,200,200,100,200,300,200,0],
+      suppliesPay:  [50,50,50,50,50,50,50,50,50,50,50,0],
+      adSportsPay:  [101,200,0,500,200,0,800,1000,500,2000,500,0],
+      eventCostPay: [0,167,0,504,135,0,1637,2304,411,2026,373,0],
+      recruitPay:   [0,0,300,0,0,100,0,0,0,0,0,0],
+      annualFeePay: [0,0,0,0,100,0,0,0,0,0,0,0],
+      salesOtherPay:[230,179,585,110,321,249,183,177,143,135,105,0],
+      // 事業投資
+      investPay:    [0,0,0,0,0,0,0,0,0,0,0,0],
+      // 財務収支
+      loanIn:       [0,0,0,0,0,0,0,0,0,15000,0,0],
+      loanOut:      [0,0,0,0,0,0,0,0,0,0,0,0],
+      capitalIn:    [0,0,0,0,0,0,0,0,0,0,0,0],
+      warrantPay:   [0,0,0,0,0,0,0,0,0,0,0,0],
+      finOtherPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
       funding:      [0,0,0,0,0,0,0,0,0,15000,0,0]
     }
   },
@@ -966,7 +1028,7 @@ const MONTH_LABELS = {
 };
 
 // DB (will be loaded from storage)
-let DB = { '2025': JSON.parse(JSON.stringify(DEFAULT_2025)), '2026': { months: MONTHS_2026, pl:{ budget:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]}, actual:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]} }, cf:{ budget:{open:[],cfIn:[],laborPay:[],outsourcePay:[],advPay:[],eventPay:[],rentPay:[],gaichuPay:[],otherPay:[],funding:[]}, actual:{open:[],cfIn:[],cfClose:[],laborPay:[],outsourcePay:[],advPay:[],eventPay:[],rentPay:[],gaichuPay:[],otherPay:[],funding:[]} }, reportData:{} } };
+let DB = { '2025': JSON.parse(JSON.stringify(DEFAULT_2025)), '2026': { months: MONTHS_2026, pl:{ budget:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]}, actual:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]} }, cf:{ budget:{open:[],cfIn:[],cfInMembership:[],cfInTraining:[],cfInOther:[],salaryPay:[],devOutPay:[],bizComPay:[],incentivePay:[],expertPay:[],rentPay:[],expensePay:[],telPay:[],entertainPay:[],taxPay:[],toolsPay:[],suppliesPay:[],adSportsPay:[],eventCostPay:[],recruitPay:[],annualFeePay:[],salesOtherPay:[],investPay:[],loanIn:[],loanOut:[],capitalIn:[],warrantPay:[],finOtherPay:[],funding:[]}, actual:{open:[],cfIn:[],cfClose:[],cfInMembership:[],cfInTraining:[],cfInOther:[],salaryPay:[],devOutPay:[],bizComPay:[],incentivePay:[],expertPay:[],rentPay:[],expensePay:[],telPay:[],entertainPay:[],taxPay:[],toolsPay:[],suppliesPay:[],adSportsPay:[],eventCostPay:[],recruitPay:[],annualFeePay:[],salesOtherPay:[],investPay:[],loanIn:[],loanOut:[],capitalIn:[],warrantPay:[],finOtherPay:[],funding:[]} }, reportData:{} } };
 
 // ═══════════════════════════════════════════
 //  NAV / TABS
@@ -1188,6 +1250,23 @@ function chartOpts(tickFmt) {
 function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
 
 // ═══════════════════════════════════════════
+//  CF セクション折りたたみ管理
+// ═══════════════════════════════════════════
+const _cfSectionOpen = {
+  'cf-sec-revenue': false,  // デフォルト閉じる
+  'cf-sec-opex':    true,
+  'cf-sec-fixed':   false,  // 固定費明細 デフォルト閉じる
+  'cf-sec-var':     false,  // 変動費明細 デフォルト閉じる
+  'cf-sec-invest':  false,  // 事業投資明細 デフォルト閉じる
+  'cf-sec-fin':     false,  // 財務収支明細 デフォルト閉じる
+};
+
+function toggleCFSection(id) {
+  _cfSectionOpen[id] = !_cfSectionOpen[id];
+  renderCFView(DB[currentYear]);
+}
+
+// ═══════════════════════════════════════════
 //  インライン編集ヘルパー（月次PL/CF）
 // ═══════════════════════════════════════════
 let _plCfDirty = false;
@@ -1279,6 +1358,55 @@ function renderPLCF() {
 function renderPLView(d) {
   document.getElementById('pl-year-label').textContent = currentYear + '年度';
   const months = d.months.map(m => MONTH_LABELS[m] || m);
+
+  // ── PLサマリー更新 ──
+  (() => {
+    const N = d.months.length;
+    // 実績最新月を検出
+    let lastIdx = -1;
+    for (let i = N-1; i >= 0; i--) {
+      if (Number(d.pl.actual.rev[i]) > 0) { lastIdx = i; break; }
+    }
+    const slice = (arr) => (arr||[]).slice(0, lastIdx+1).map(v => Number(v)||0);
+    const sumA = (arr) => slice(arr).reduce((a,b) => a+b, 0);
+    const sumB = (arr) => (arr||[]).reduce((a,v) => a+(Number(v)||0), 0);
+
+    const revA  = sumA(d.pl.actual.rev);
+    const revB  = sumB(d.pl.budget.rev);
+    const opexA = ['labor','outsource','adv','gaichu','other'].reduce((t,k) => t + sumA(d.pl.actual[k]||[]), 0);
+    const opexB = ['labor','outsource','adv','gaichu','other'].reduce((t,k) => t + sumB(d.pl.budget[k]||[]), 0);
+    const opA   = revA - opexA;
+    const opB   = revB - opexB;
+    const rateRev  = revB  > 0 ? Math.round(revA  / revB  * 100) : null;
+    const rateOpex = opexB > 0 ? Math.round(opexA / opexB * 100) : null;
+
+    const fmt = (v) => Math.round(v).toLocaleString() + '万円';
+    const fmtP = (v) => v >= 0
+      ? `<span class="g">+${fmt(v)}</span>`
+      : `<span class="r">▲${fmt(Math.abs(v))}</span>`;
+    const rateBadge = (r, inverted=false) => {
+      if (!r) return '';
+      const good = inverted ? r <= 100 : r >= 100;
+      return `<span class="badge ${good?'bg':'br'}">${r}%</span>`;
+    };
+
+    const el = (id) => document.getElementById(id);
+    if (el('pl-sum-rev-a'))   el('pl-sum-rev-a').textContent   = revA  ? fmt(revA)  : '—';
+    if (el('pl-sum-rev-b'))   el('pl-sum-rev-b').textContent   = revB  ? fmt(revB)  : '—';
+    if (el('pl-sum-rev-s'))   el('pl-sum-rev-s').innerHTML     = rateBadge(rateRev);
+    if (el('pl-sum-opex-a'))  el('pl-sum-opex-a').innerHTML    = opexA ? `<span class="r">${fmt(opexA)}</span>` : '—';
+    if (el('pl-sum-opex-s'))  el('pl-sum-opex-s').innerHTML    = rateBadge(rateOpex, true); // 費用は100%以下が良い
+    if (el('pl-sum-op'))      el('pl-sum-op').innerHTML        = fmtP(opA);
+    if (el('pl-sum-rate')) {
+      const rateOp = opB !== 0 ? Math.round(opA / Math.abs(opB) * 100) : null;
+      el('pl-sum-rate').innerHTML = rateRev
+        ? `<span class="${rateRev>=100?'g':'r'}">${rateRev}%</span>`
+        : '—';
+      el('pl-sum-rate-s').innerHTML = rateRev
+        ? `<span style="font-size:10px;color:var(--text3)">売上予算比</span>`
+        : '';
+    }
+  })();
   const revB = d.pl.budget.rev.map(v => Number(v) || 0);
   const revA = d.pl.actual.rev.map(v => Number(v) || null);
   const opexB = d.pl.budget.rev.map((_, i) => (Number(d.pl.budget.labor[i]) || 0) + (Number(d.pl.budget.outsource[i]) || 0) + (Number(d.pl.budget.adv[i]) || 0) + (Number(d.pl.budget.gaichu||[])[i] || 0) + (Number(d.pl.budget.other[i]) || 0));
@@ -1373,7 +1501,40 @@ function renderPLView(d) {
     html += `<td class="${diffSum > 0 ? 'diff-pos' : diffSum < 0 ? 'diff-neg' : 'diff-zero'}">${diffSum > 0 ? '+' : ''}${Math.round(diffSum).toLocaleString()}</td></tr>`;
   });
 
-  // operating profit row
+  // ── 販管費合計行 ──
+  const opexStyle = 'background:var(--bg3);';
+  html += `<tr class="tot" style="${opexStyle}"><td class="l" style="font-weight:700">販管費合計</td><td class="l" style="font-size:9px;color:var(--text3)">予算</td>`;
+  let bOpexSum = 0;
+  d.months.forEach((_, i) => {
+    const bOpex = (Number(d.pl.budget.labor[i]) || 0) + (Number(d.pl.budget.outsource[i]) || 0) + (Number(d.pl.budget.adv[i]) || 0) + (Number((d.pl.budget.gaichu||[])[i]) || 0) + (Number(d.pl.budget.other[i]) || 0);
+    bOpexSum += bOpex;
+    html += `<td class="budget" style="${opexStyle}color:var(--tc-red)">${bOpex ? bOpex.toLocaleString() : '—'}</td>`;
+  });
+  html += `<td class="budget" style="${opexStyle}color:var(--tc-red);font-weight:700">${bOpexSum ? bOpexSum.toLocaleString() : '—'}</td></tr>`;
+
+  html += `<tr class="tot" style="${opexStyle}"><td class="l"></td><td class="l" style="font-size:9px;font-weight:700;color:var(--text)">実績</td>`;
+  let aOpexSum = 0;
+  d.months.forEach((_, i) => {
+    const ae = (Number(d.pl.actual.labor[i]) || 0) + (Number(d.pl.actual.outsource[i]) || 0) + (Number(d.pl.actual.adv[i]) || 0) + (Number((d.pl.actual.gaichu||[])[i]) || 0) + (Number(d.pl.actual.other[i]) || 0);
+    if (!ae) { html += `<td style="${opexStyle}">—</td>`; return; }
+    aOpexSum += ae;
+    html += `<td class="actual" style="${opexStyle}color:var(--tc-red)">${ae.toLocaleString()}</td>`;
+  });
+  html += `<td class="actual" style="${opexStyle}color:var(--tc-red);font-weight:700">${aOpexSum ? aOpexSum.toLocaleString() : '—'}</td></tr>`;
+
+  // 差異行（販管費）
+  html += `<tr style="${opexStyle}"><td class="l"></td><td class="l" style="font-size:9px;color:var(--text3)">差異</td>`;
+  d.months.forEach((_, i) => {
+    const be = (Number(d.pl.budget.labor[i])||0)+(Number(d.pl.budget.outsource[i])||0)+(Number(d.pl.budget.adv[i])||0)+(Number((d.pl.budget.gaichu||[])[i])||0)+(Number(d.pl.budget.other[i])||0);
+    const ae = (Number(d.pl.actual.labor[i])||0)+(Number(d.pl.actual.outsource[i])||0)+(Number(d.pl.actual.adv[i])||0)+(Number((d.pl.actual.gaichu||[])[i])||0)+(Number(d.pl.actual.other[i])||0);
+    if (!be && !ae) { html += `<td class="diff-zero" style="${opexStyle}">—</td>`; return; }
+    const diff = be - ae; // 費用は予算より少ない方が良い（+が良）
+    html += `<td class="${diff > 0 ? 'diff-pos' : diff < 0 ? 'diff-neg' : 'diff-zero'}" style="${opexStyle}">${diff > 0 ? '+' : ''}${diff !== 0 ? Math.round(diff).toLocaleString() : '—'}</td>`;
+  });
+  const opexDiff = bOpexSum - aOpexSum;
+  html += `<td class="${opexDiff > 0 ? 'diff-pos' : opexDiff < 0 ? 'diff-neg' : 'diff-zero'}" style="${opexStyle}font-weight:700">${opexDiff > 0 ? '+' : ''}${opexDiff !== 0 ? Math.round(opexDiff).toLocaleString() : '—'}</td></tr>`;
+
+  // ── 営業損益行 ──
   html += `<tr class="tot"><td class="l">営業損益</td><td class="l" style="font-size:9px">予算</td>`;
   let bOpSum = 0;
   d.months.forEach((_, i) => {
@@ -1403,13 +1564,76 @@ function renderCFView(d) {
   const N = d.months.length;
   const months = d.months.map(m => MONTH_LABELS[m] || m);
 
+  // ── CFサマリー更新 ──
+  (() => {
+    const cfGet = (section, key) => (d.cf[section]&&d.cf[section][key]) || [];
+    const sumArr = (arr) => (arr||[]).reduce((a,v) => a+(Number(v)||0), 0);
+    const opexDetailKeys = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
+      'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
+      'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay','investPay'];
+
+    // 実績入金合計
+    const aInTot  = sumArr(cfGet('actual','cfIn'));
+    const bInTot  = sumArr(cfGet('budget','cfIn'));
+    // 実績出金合計（詳細科目 or 旧科目どちらかから合算）
+    const aOutTot = opexDetailKeys.reduce((t,k) => t + sumArr(cfGet('actual',k)), 0) +
+                    sumArr(cfGet('actual','loanOut'));
+    const bOutTot = opexDetailKeys.reduce((t,k) => t + sumArr(cfGet('budget',k)), 0) +
+                    sumArr(cfGet('budget','loanOut'));
+    // 融資
+    const aFundTot = sumArr(cfGet('actual','loanIn')) + sumArr(cfGet('actual','capitalIn'));
+    // 月末残高（最新非ゼロ）
+    const closeArr = cfGet('actual','cfClose');
+    let lastClose = 0;
+    for (let i = closeArr.length-1; i >= 0; i--) {
+      if (Number(closeArr[i]) > 0) { lastClose = Number(closeArr[i]); break; }
+    }
+    const netCF   = aInTot + aFundTot - aOutTot;
+    const rateIn  = bInTot > 0 ? Math.round(aInTot / bInTot * 100) : null;
+    const rateOut = bOutTot > 0 ? Math.round(aOutTot / bOutTot * 100) : null;
+
+    const fmt千 = (v) => Math.round(v).toLocaleString() + '千円';
+    const fmt万 = (v) => Math.round(v/10).toLocaleString() + '万円';
+    const el = (id) => document.getElementById(id);
+
+    if (el('cf-sum-in-a'))   el('cf-sum-in-a').textContent = aInTot ? fmt千(aInTot) : '—';
+    if (el('cf-sum-in-s'))   el('cf-sum-in-s').innerHTML  = rateIn
+      ? `<span class="badge ${rateIn>=100?'bg':'br'}">${rateIn}% 予算比</span>` : '';
+    if (el('cf-sum-out-a'))  el('cf-sum-out-a').innerHTML = aOutTot
+      ? `<span class="r">${fmt千(aOutTot)}</span>` : '—';
+    if (el('cf-sum-out-s'))  el('cf-sum-out-s').innerHTML = rateOut
+      ? `<span class="badge ${rateOut<=100?'bg':'br'}">${rateOut}% 予算比</span>` : '';
+    if (el('cf-sum-close')) {
+      el('cf-sum-close').innerHTML = lastClose
+        ? `<span class="${lastClose>0?'g':'r'}">${fmt万(lastClose)}</span>` : '—';
+    }
+    if (el('cf-sum-net')) {
+      el('cf-sum-net').innerHTML = netCF >= 0
+        ? `<span class="g">+${fmt千(netCF)}</span>`
+        : `<span class="r">▲${fmt千(Math.abs(netCF))}</span>`;
+    }
+    if (el('cf-sum-rate')) {
+      el('cf-sum-rate').innerHTML = rateIn
+        ? `<span class="${rateIn>=100?'g':'r'}">${rateIn}%</span>` : '—';
+      const rs = el('cf-sum-rate-s');
+      if (rs) rs.innerHTML = '<span style="font-size:10px;color:var(--text3)">入金予算比</span>';
+    }
+  })();
+
   // ── ヘルパー：CF配列を取得（千円単位） ──
   const cfArr = (section, key) => (d.cf[section] && d.cf[section][key]) || Array(N).fill(0);
   const getN = (arr, i) => Number(arr[i]) || 0;
 
   // ── 実績計算 ──
   const aOpen    = cfArr('actual','open');
-  const aIn      = cfArr('actual','cfIn');
+  // 入金：内訳合計 > 0 なら内訳、なければ cfIn直接
+  const aInMemb  = cfArr('actual','cfInMembership');
+  const aInTrain = cfArr('actual','cfInTraining');
+  const aInOther = cfArr('actual','cfInOther');
+  const aIn = Array.from({length:N},(_,i) => {
+    const det = (aInMemb[i]||0)+(aInTrain[i]||0)+(aInOther[i]||0);
+    return det > 0 ? det : (Number(cfArr('actual','cfIn')[i])||0);
+  });
   const aClose   = cfArr('actual','cfClose');
   const aLabor   = cfArr('actual','laborPay');
   const aOut     = cfArr('actual','outsourcePay');
@@ -1421,16 +1645,15 @@ function renderCFView(d) {
   const aFunding = cfArr('actual','funding');
 
   // 月次合計出金（千円）
-  const aTotalOut = Array.from({length:N}, (_,i) =>
-    getN(aLabor,i)+getN(aOut,i)+getN(aAdv,i)+getN(aEvent,i)+getN(aRent,i)+getN(aGaichu,i)+getN(aOther,i)
-  );
+  // aTotalOut は後で sumKeys で再計算するため暫定0（グラフ用は後で上書き）
+  const aTotalOut = Array.from({length:N}, (_,i) => 0);
   // 実績月末残高の入力有無チェック（千円単位なので0は「未入力」扱い）
   const hasActualClose = (i) => {
     const v = aClose[i];
     return v !== null && v !== undefined && v !== '' && Number(v) !== 0;
   };
   // 実績入金・出金どちらかに値があれば「入力あり」
-  const hasActualData = (i) => getN(aIn,i) !== 0 || aTotalOut[i] !== 0 || hasActualClose(i);
+  const hasActualData = (i) => getN(aIn,i) !== 0 || hasActualClose(i); // 出金は後でsumKeys計算
   const aOpCF = Array.from({length:N}, (_,i) =>
     hasActualData(i) ? getN(aIn,i) - aTotalOut[i] : null
   );
@@ -1438,30 +1661,55 @@ function renderCFView(d) {
   const aFinCF = aFunding;
   // 月次純CF = 営業CF + 財務CF
   const aNetCF = Array.from({length:N}, (_,i) => aOpCF[i] === null ? null : aOpCF[i] + getN(aFinCF,i));
+  // ↑ rows 内で aOpCFd/aNetCFd として再計算するので変数名の衝突を避ける
   // 月末残高（実績入力がなければ月初+純CF で計算）
   const aCloseCalc = Array.from({length:N}, (_,i) =>
     hasActualClose(i) ? getN(aClose,i) : null
   );
 
-  // ── 予算計算 ──
+  // ── 予算計算（詳細科目ベース）──
   const bOpen    = cfArr('budget','open');
-  const bIn      = cfArr('budget','cfIn');
-  const bLabor   = cfArr('budget','laborPay');
-  const bOut     = cfArr('budget','outsourcePay');
-  const bAdv     = cfArr('budget','advPay');
-  const bEvent   = cfArr('budget','eventPay');
-  const bRent    = cfArr('budget','rentPay');
-  const bGaichu  = cfArr('budget','gaichuPay');
-  const bOther   = cfArr('budget','otherPay');
+  const bInMemb  = cfArr('budget','cfInMembership');
+  const bInTrain = cfArr('budget','cfInTraining');
+  const bInOther = cfArr('budget','cfInOther');
+  const bInFromDetail = Array.from({length:N},(_,i) => bInMemb[i]+bInTrain[i]+bInOther[i]);
+  const bInRaw   = cfArr('budget','cfIn');
+  const bIn      = Array.from({length:N},(_,i) => bInFromDetail[i] > 0 ? bInFromDetail[i] : bInRaw[i]);
   const bFunding = cfArr('budget','funding');
-  const bTotalOut = Array.from({length:N}, (_,i) =>
-    getN(bLabor,i)+getN(bOut,i)+getN(bAdv,i)+getN(bEvent,i)+getN(bRent,i)+getN(bGaichu,i)+getN(bOther,i)
+  // 出金合計は詳細科目から計算（sumKeysはrows定義の前なので先に計算）
+  const bAllOutKeys = [
+    'salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
+    'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
+    'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay',
+    'investPay','loanOut','warrantPay','finOtherPay'
+  ];
+  const bFinInKeys2 = ['loanIn','capitalIn'];
+  // 旧科目 fallback（新科目が全0なら旧科目の合計を使う）
+  const bOldOut = Array.from({length:N},(_,i) =>
+    (Number((cfArr('budget','laborPay')||[])[i])||0)+
+    (Number((cfArr('budget','outsourcePay')||[])[i])||0)+
+    (Number((cfArr('budget','advPay')||[])[i])||0)+
+    (Number((cfArr('budget','eventPay')||[])[i])||0)+
+    (Number((cfArr('budget','rentPay')||[])[i])||0)+
+    (Number((cfArr('budget','gaichuPay')||[])[i])||0)+
+    (Number((cfArr('budget','otherPay')||[])[i])||0)
+  );
+  const bDetailOut = Array.from({length:N},(_,i) =>
+    bAllOutKeys.reduce((t,k)=> t+(Number((cfArr('budget',k)||[])[i])||0), 0)
+  );
+  // 詳細科目に値があれば詳細を、なければ旧科目合計を使う
+  const bTotalOut = Array.from({length:N},(_,i) => bDetailOut[i] > 0 ? bDetailOut[i] : bOldOut[i]);
+  const bFinInTot = Array.from({length:N},(_,i) =>
+    bFinInKeys2.reduce((t,k)=> t+(Number((cfArr('budget',k)||[])[i])||0), 0)
   );
   const bOpCF  = Array.from({length:N}, (_,i) => getN(bIn,i) - bTotalOut[i]);
-  const bFinCF = bFunding;
-  const bNetCF = Array.from({length:N}, (_,i) => bOpCF[i] + getN(bFinCF,i));
-  let bBal = getN(bOpen, 0);
-  const bCloseCalc = Array.from({length:N}, (_,i) => { bBal += bNetCF[i]; return Math.round(bBal); });
+  const bFinCF = Array.from({length:N}, (_,i) => bFinInTot[i] + getN(bFunding,i));
+  const bNetCF = Array.from({length:N}, (_,i) => bOpCF[i] + bFinCF[i]);
+  // 月末残高 = 各月の月初残高 + 純CF（単月計算）
+  const bCloseCalc = Array.from({length:N}, (_,i) => {
+    const open = getN(bOpen, i);
+    return open > 0 ? Math.round(open + bNetCF[i]) : null;
+  });
 
   // ── グラフ ──
   destroyChart('cf-chart-main');
@@ -1528,6 +1776,10 @@ function renderCFView(d) {
   });
 
   // ── テーブル組み立て ──
+  // 折りたたみ状態（デフォルト：全て開く）
+  if (!window._cfCollapsed) window._cfCollapsed = {};
+  const isOpen = (key) => window._cfCollapsed[key] !== false; // デフォルトtrue
+
   // セルレンダラー
   const fmtV = v => v !== null && v !== undefined && v !== '' && Number(v) !== 0 ? Math.round(Number(v)).toLocaleString() : '—';
   const diffCell = (a, b, invert=false) => {
@@ -1537,30 +1789,125 @@ function renderCFView(d) {
   };
 
   // 行定義（label, bArr, aArr, isOut, edBKey, edAKey, noSum, isSub, isSection, isTot, noDiff）
+  // ── 詳細CF科目 ──
+  const ca = (key) => cfArr('actual', key);
+  const cb = (key) => cfArr('budget', key);
+
+  // 販管費固定 合計
+  const fixedKeys  = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay'];
+  // 販管費変動 合計
+  const varKeys    = ['expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay','adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay'];
+  // 販管費合計
+  const opexKeys   = [...fixedKeys, ...varKeys];
+  // 財務収支
+  const finInKeys  = ['loanIn','capitalIn'];
+  const finOutKeys = ['loanOut','warrantPay','finOtherPay'];
+
+  const sumKeys = (section, keys) => Array.from({length:N},(_,i) => keys.reduce((t,k)=> t+(Number((cfArr(section,k)||[])[i])||0), 0));
+
+  const bFixed   = sumKeys('budget', fixedKeys);
+  const aFixed   = sumKeys('actual', fixedKeys);
+  const bVar     = sumKeys('budget', varKeys);
+  const aVar     = sumKeys('actual', varKeys);
+  const bOpexTot = sumKeys('budget', opexKeys);
+  const aOpexTot = sumKeys('actual', opexKeys);
+  const bFinIn   = sumKeys('budget', finInKeys);
+  const aFinIn   = sumKeys('actual', finInKeys);
+  const bFinOut  = sumKeys('budget', finOutKeys);
+  const aFinOut  = sumKeys('actual', finOutKeys);
+
+  // 出金合計 = 販管費合計 + 投資 + 財務出金
+  const bTotalOutDetail = Array.from({length:N},(_,i) => bOpexTot[i] + getN(cb('investPay'),i) + bFinOut[i]);
+  const aTotalOutDetail = Array.from({length:N},(_,i) => aOpexTot[i] + getN(ca('investPay'),i) + aFinOut[i]);
+
+  // 営業CF = 売上入金 - 販管費合計（詳細科目ベース）
+  const aOpCFd  = Array.from({length:N},(_,i) => hasActualData(i) ? getN(aIn,i) - aOpexTot[i] : null);
+  const bOpCFd  = Array.from({length:N},(_,i) => getN(bIn,i) - bTotalOut[i]);  // bTotalOut = 詳細or旧科目合計
+  // 財務CF = 新規借入 + 資本金 - 返済 等
+  const aFinCFd = Array.from({length:N},(_,i) => aFinIn[i] - aFinOut[i]);
+  const bFinCFd = Array.from({length:N},(_,i) => bFinInTot[i] - Array.from({length:1},()=>
+    ['loanOut','warrantPay','finOtherPay'].reduce((t,k)=> t+(Number((cfArr('budget',k)||[])[i])||0), 0)
+  )[0] + getN(bFunding,i));
+  // 月次純CF
+  const aNetCFd = Array.from({length:N},(_,i) => aOpCFd[i]===null ? null : aOpCFd[i] + aFinCFd[i]);
+  const bNetCFd = bNetCF;  // bCloseCalcと整合させるためbNetCFを使用
+
+  const R = (label, bk, ak, opts={}) => ({
+    label, bArr: typeof bk==='string'?cb(bk):bk, aArr: typeof ak==='string'?ca(ak):ak,
+    edBKey: typeof bk==='string'?`budget.${bk}`:null,
+    edAKey: typeof ak==='string'?`actual.${ak}`:null,
+    ...opts
+  });
+
+  // 売上入金内訳（会費/研修/イベント/その他）を合算してcfInに加算
+  const bCfInFee       = cfArr('budget','cfInFee');
+  const bCfInTraining  = cfArr('budget','cfInTraining');
+  const bCfInEvent     = cfArr('budget','cfInEvent');
+  const bCfInOther     = cfArr('budget','cfInOther');
+  // 内訳合計がある月はそれを使い、なければcfIn単体を使う
+  const bCfInDetail = Array.from({length:N},(_,i) => {
+    const det = getN(bCfInFee,i)+getN(bCfInTraining,i)+getN(bCfInEvent,i)+getN(bCfInOther,i);
+    return det > 0 ? det : getN(cfArr('budget','cfIn'),i);
+  });
+
   const rows = [
-    // ── 残高 ──
-    { label:'月初残高',         bArr:bOpen,      aArr:aOpen,      noSum:true,  edBKey:'budget.open',   edAKey:'actual.open' },
-    // ── 収入 ──
-    { label:'── 収入',         section:true },
-    { label:'売上入金',         bArr:bIn,        aArr:aIn,        isSub:true,  edBKey:'budget.cfIn',   edAKey:'actual.cfIn' },
-    { label:'融資・調達',       bArr:bFunding,   aArr:aFunding,   isSub:true,  edBKey:'budget.funding',edAKey:'actual.funding' },
-    // ── 出金 ──
-    { label:'── 出金',         section:true },
-    { label:'人件費',           bArr:bLabor,     aArr:aLabor,     isSub:true, isOut:true, edBKey:'budget.laborPay',    edAKey:'actual.laborPay' },
-    { label:'業務委託費',       bArr:bOut,       aArr:aOut,       isSub:true, isOut:true, edBKey:'budget.outsourcePay',edAKey:'actual.outsourcePay' },
-    { label:'広告宣伝費',       bArr:bAdv,       aArr:aAdv,       isSub:true, isOut:true, edBKey:'budget.advPay',      edAKey:'actual.advPay' },
-    { label:'外注費(イベント運営等)', bArr:bEvent,   aArr:aEvent,     isSub:true, isOut:true, edBKey:'budget.eventPay',    edAKey:'actual.eventPay' },
-    { label:'外注費',           bArr:bGaichu,    aArr:aGaichu,    isSub:true, isOut:true, edBKey:'budget.gaichuPay',   edAKey:'actual.gaichuPay' },
-    { label:'賃料',             bArr:bRent,      aArr:aRent,      isSub:true, isOut:true, edBKey:'budget.rentPay',     edAKey:'actual.rentPay' },
-    { label:'その他支出',       bArr:bOther,     aArr:aOther,     isSub:true, isOut:true, edBKey:'budget.otherPay',    edAKey:'actual.otherPay' },
-    { label:'出金合計',         bArr:bTotalOut,  aArr:aTotalOut,  isTot:true,  isOut:true, noSum:false, noDiff:true },
-    // ── CF区分 ──
-    { label:'── CF区分',       section:true },
-    { label:'営業CF',           bArr:bOpCF,      aArr:aOpCF,      isTot:true, noDiff:true },
-    { label:'財務CF（融資等）', bArr:bFinCF,     aArr:aFinCF,     isTot:true, noDiff:true },
-    { label:'月次純CF',         bArr:bNetCF,     aArr:aNetCF,     isTot:true, noDiff:true },
-    // ── 残高 ──
-    { label:'月末残高',         bArr:bCloseCalc, aArr:aCloseCalc, noSum:true,  edAKey:'actual.cfClose', isTot:true },
+    // ── CF区分（月初残高の直下）──
+    { label:'月初残高（千円）', bArr:bOpen, aArr:aOpen, noSum:true, edBKey:'budget.open', edAKey:'actual.open' },
+    { label:'── CF区分',   section:true },
+    { label:'営業CF',           bArr:bOpCFd,  aArr:aOpCFd,  isTot:true, noDiff:true },
+    { label:'財務CF（融資等）', bArr:bFinCFd, aArr:aFinCFd, isTot:true, noDiff:true },
+    { label:'月次純CF',         bArr:bNetCFd, aArr:aNetCFd, isTot:true, noDiff:true },
+    { label:'月末残高',         bArr:bCloseCalc, aArr:aCloseCalc, noSum:true, edAKey:'actual.cfClose', isTot:true },
+
+    // ── 収入（折りたたみ）──
+    { label:'── 収入', section:true, sectionStyle:'revenue', colId:'cf-sec-revenue' },
+    R('売上入金（合計）', bCfInDetail, 'cfIn', {isTot:true}),
+    R('　会費入金',     'cfInFee',      'cfInFee',      {isSub:true, colGroup:'cf-sec-revenue'}),
+    R('　研修収入',     'cfInTraining', 'cfInTraining', {isSub:true, colGroup:'cf-sec-revenue'}),
+    R('　イベント収入', 'cfInEvent',    'cfInEvent',    {isSub:true, colGroup:'cf-sec-revenue'}),
+    R('　その他収入',   'cfInOther',    'cfInOther',    {isSub:true, colGroup:'cf-sec-revenue'}),
+
+    // ── 販管費合計 ──
+    { label:'── 販管費合計', section:true, colId:'cf-sec-opex' },
+    // 販管費合計・固定費合計・変動費合計は常時表示
+    { label:'販管費合計',  bArr:bOpexTot, aArr:aOpexTot, isTot:true, isOut:true, noDiff:false },
+    // 固定費合計 + 明細折りたたみ（cf-sec-fixed）
+    { label:'　固定費合計（明細▶）', bArr:bFixed, aArr:aFixed, isTot:true, isOut:true, noDiff:false, subColId:'cf-sec-fixed' },
+    R('　　人件費・税金',         'salaryPay',    'salaryPay',    {isSub:true, isOut:true, colGroup:'cf-sec-fixed'}),
+    R('　　開発外注',             'devOutPay',    'devOutPay',    {isSub:true, isOut:true, colGroup:'cf-sec-fixed'}),
+    R('　　業務委託＋経費',       'bizComPay',    'bizComPay',    {isSub:true, isOut:true, colGroup:'cf-sec-fixed'}),
+    R('　　インセンティブ',       'incentivePay', 'incentivePay', {isSub:true, isOut:true, colGroup:'cf-sec-fixed'}),
+    R('　　専門家外注',           'expertPay',    'expertPay',    {isSub:true, isOut:true, colGroup:'cf-sec-fixed'}),
+    R('　　家賃',                 'rentPay',      'rentPay',      {isSub:true, isOut:true, colGroup:'cf-sec-fixed'}),
+    // 変動費合計 + 明細折りたたみ（cf-sec-var）
+    { label:'　変動費合計（明細▶）', bArr:bVar, aArr:aVar, isTot:true, isOut:true, noDiff:false, subColId:'cf-sec-var' },
+    R('　　経費精算（旅費・ツール）','expensePay',   'expensePay',   {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
+    R('　　通信費',               'telPay',        'telPay',        {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
+    R('　　交際/会議費',          'entertainPay',  'entertainPay',  {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
+    R('　　租税公課',             'taxPay',        'taxPay',        {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
+    R('　　ツール費用',           'toolsPay',      'toolsPay',      {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
+    R('　　消耗品',               'suppliesPay',   'suppliesPay',   {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
+    R('　　広告費・スポーツ協賛', 'adSportsPay',   'adSportsPay',   {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
+    R('　　外注費 イベント運営費','eventCostPay',  'eventCostPay',  {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
+    R('　　採用研修',             'recruitPay',    'recruitPay',    {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
+    R('　　年会費',               'annualFeePay',  'annualFeePay',  {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
+    R('　　その他',               'salesOtherPay', 'salesOtherPay', {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
+
+    // ── 事業投資（合計は常時、明細は折りたたみ）──
+    { label:'── 事業投資', section:true, colId:'cf-sec-invest' },
+    { label:'事業投資合計', bArr:cfArr('budget','investPay'), aArr:cfArr('actual','investPay'), isTot:true, isOut:true, noDiff:false },
+    R('　　事業投資',    'investPay', 'investPay', {isSub:true, isOut:true, colGroup:'cf-sec-invest'}),
+
+    // ── 財務収支（合計は常時、明細は折りたたみ）──
+    { label:'── 財務収支', section:true, colId:'cf-sec-fin' },
+    { label:'財務収支合計', bArr:Array.from({length:N},(_,i)=>bFinInTot[i]-(['loanOut','warrantPay','finOtherPay'].reduce((t,k)=>t+(Number((cfArr('budget',k)||[])[i])||0),0))+getN(bFunding,i)),
+      aArr:Array.from({length:N},(_,i)=>aFinIn[i]-aFinOut[i]+getN(ca('loanIn'),i)),
+      isTot:true, noDiff:false },
+    R('　　新規借入',     'loanIn',     'loanIn',     {isSub:true,             colGroup:'cf-sec-fin'}),
+    R('　　借入返済',     'loanOut',    'loanOut',    {isSub:true, isOut:true,  colGroup:'cf-sec-fin'}),
+    R('　　資本金　増加', 'capitalIn',  'capitalIn',  {isSub:true,             colGroup:'cf-sec-fin'}),
+    R('　　新株予約権',   'warrantPay', 'warrantPay', {isSub:true,             colGroup:'cf-sec-fin'}),
+    R('　　財務その他',   'finOtherPay','finOtherPay',{isSub:true,             colGroup:'cf-sec-fin'}),
   ];
 
   const minW = 100 + d.months.length * 82;
@@ -1569,36 +1916,63 @@ function renderCFView(d) {
       <th class="l" style="min-width:130px">科目</th>
       <th class="l" style="min-width:36px">区分</th>
       ${months.map(m=>`<th style="min-width:72px">${m}</th>`).join('')}
-      <th>合計</th>
+      <th style="background:rgba(55,138,221,0.15);border-left:2px solid rgba(55,138,221,0.3)">合計</th>
     </tr></thead><tbody>`;
 
   rows.forEach(row => {
     if (row.section) {
-      html += `<tr><td colspan="${N+3}" style="background:var(--bg3);font-size:10px;font-weight:700;color:var(--text3);padding:5px 8px;letter-spacing:.3px">${row.label}</td></tr>`;
+      const secBg  = row.sectionStyle === 'revenue' ? 'background:rgba(55,138,221,0.12)' :
+                     row.sectionStyle === 'sub'     ? 'background:var(--bg2)' :
+                                                      'background:var(--bg3)';
+      const indent = row.sectionStyle === 'sub' ? 'padding-left:20px' : 'padding:4px 8px';
+      if (row.colId) {
+        // 折りたたみ可能セクション
+        const isOpen = _cfSectionOpen[row.colId] !== false; // デフォルト開く
+        const icon = isOpen ? '▼' : '▶';
+        html += `<tr style="cursor:pointer;user-select:none" onclick="toggleCFSection('${row.colId}')">
+          <td colspan="${N+3}" style="${secBg};font-size:10px;font-weight:700;color:var(--text3);${indent};letter-spacing:.3px">
+            <span id="icon-${row.colId}" style="margin-right:5px;font-size:9px">${icon}</span>${row.label}
+          </td></tr>`;
+      } else {
+        html += `<tr><td colspan="${N+3}" style="${secBg};font-size:10px;font-weight:700;color:var(--text3);${indent};letter-spacing:.3px">${row.label}</td></tr>`;
+      }
       return;
     }
+    // 折りたたみグループに属する行は開閉状態に従って表示/非表示
+    if (row.colGroup && _cfSectionOpen[row.colGroup] === false) return;
     const isOut = row.isOut;
     const isTot = row.isTot;
     const isSub = row.isSub;
     const rowStyle = isTot ? 'background:var(--bg3);font-weight:700;' : '';
     const labelStyle = `font-size:${isSub?'10px':'11px'};${isSub?'padding-left:16px;color:var(--text3);':''}`;
 
+    // 合計行のラベルにサブ折りたたみボタンを付与
+    let rowLabel = row.label;
+    if (row.subColId) {
+      const subOpen = _cfSectionOpen[row.subColId] !== false;
+      const subIcon = subOpen ? '▼' : '▶';
+      // ラベルの「（明細▶）」を動的なアイコンに置き換え
+      rowLabel = rowLabel.replace('（明細▶）', '') +
+        ` <span onclick="event.stopPropagation();toggleCFSection('${row.subColId}');renderCFView(DB[currentYear])"
+           style="cursor:pointer;font-size:9px;color:var(--tc-blue);margin-left:4px;user-select:none"
+           title="明細を開閉">[${subIcon}明細]</span>`;
+    }
     // 予算行
     const bSum = (row.bArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
     html += `<tr style="${rowStyle}">
-      <td class="l" style="${labelStyle}">${row.label}</td>
+      <td class="l" style="${labelStyle}">${rowLabel}</td>
       <td class="l" style="font-size:9px;color:var(--text3)">予算</td>`;
     (row.bArr||Array(N).fill(null)).forEach((v,i) => {
       const val = v !== null && v !== undefined ? Math.round(Number(v)) : null;
       const dispVal = val !== null ? val.toLocaleString() : '—';
-      const colorCls = isOut && val ? 'color:var(--tc-red)' : (val > 0 && !isOut && row.label.includes('CF')) ? 'color:var(--tc-green)' : (val < 0 && row.label.includes('CF')) ? 'color:var(--tc-red)' : '';
+      const colorCls = ''; // 予算・実績は白（差異のみ色付き）
       if (row.edBKey && !isTot) {
         html += `<td class="budget editable-cell" style="${colorCls}" data-cfkey="${row.edBKey}" data-kind="budget" data-idx="${i}" onclick="cfCellClick(this,window._plCFd)">${dispVal}</td>`;
       } else {
         html += `<td class="budget" style="${colorCls}">${dispVal}</td>`;
       }
     });
-    html += `<td class="budget">${row.noSum ? '—' : (bSum?bSum.toLocaleString():'—')}</td></tr>`;
+    html += `<td class="budget" style="background:rgba(55,138,221,0.12);font-weight:700;border-left:2px solid rgba(55,138,221,0.3)">${row.noSum ? '—' : (bSum?bSum.toLocaleString():'—')}</td></tr>`;
 
     // 実績行
     const aSum = (row.aArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
@@ -1608,14 +1982,14 @@ function renderCFView(d) {
     (row.aArr||Array(N).fill(null)).forEach((v,i) => {
       const val = v !== null && v !== undefined ? Math.round(Number(v)) : null;
       const dispVal = val !== null ? val.toLocaleString() : '—';
-      const colorCls = isOut && val > 0 ? 'color:var(--tc-red)' : (val > 0 && row.label.includes('CF') && !isOut) ? 'color:var(--tc-green)' : (val < 0 && row.label.includes('CF')) ? 'color:var(--tc-red)' : '';
+      const colorCls = ''; // 予算・実績は白（差異のみ色付き）
       if (row.edAKey && !isTot) {
         html += `<td class="actual editable-cell" style="${colorCls}" data-cfkey="${row.edAKey}" data-kind="actual" data-idx="${i}" onclick="cfCellClick(this,window._plCFd)">${dispVal}</td>`;
       } else {
         html += `<td class="actual" style="${colorCls}">${dispVal}</td>`;
       }
     });
-    html += `<td class="actual">${row.noSum ? '—' : (aSum?aSum.toLocaleString():'—')}</td></tr>`;
+    html += `<td class="actual" style="background:rgba(39,174,96,0.10);font-weight:700;border-left:2px solid rgba(39,174,96,0.25)">${row.noSum ? '—' : (aSum?aSum.toLocaleString():'—')}</td></tr>`;
 
     // 差異行（noDiff でないもの）
     if (!row.noDiff && !row.noSum) {
@@ -1629,7 +2003,7 @@ function renderCFView(d) {
       const bTot = (row.bArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
       const aTot = (row.aArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
       const dTot = (isOut?-1:1)*(aTot-bTot);
-      html += `<td class="${dTot>0?'diff-pos':dTot<0?'diff-neg':'diff-zero'}">${dTot>0?'+':'▲'}${dTot!==0?Math.abs(Math.round(dTot)).toLocaleString():'—'}</td></tr>`;
+      html += `<td class="${dTot>0?'diff-pos':dTot<0?'diff-neg':'diff-zero'}" style="font-weight:700;border-left:2px solid rgba(128,128,128,0.2)">${dTot>0?'+':'▲'}${dTot!==0?Math.abs(Math.round(dTot)).toLocaleString():'—'}</td></tr>`;
     }
   });
 
@@ -1655,19 +2029,64 @@ function setImportTab(tab, el) {
 let _bankRows = []; // 仕分け結果
 
 // CF/PL科目の定義（仕分け先として使う）
+// ══════════════════════════════════════════════════════════════
+//  NEO福岡 勘定科目マスタ（通帳明細AI仕分け用）
+//  label: 表示名, group: 大分類, pl: PL科目キー,
+//  cf: CF科目キー, sign: 1=収入/-1=支出
+// ══════════════════════════════════════════════════════════════
 const BANK_CATEGORIES = {
-  // 収入
-  cfIn:         { label: '売上入金',             pl: 'rev',       cf: 'cfIn',         sign: 1  },
-  funding:      { label: '融資・調達',            pl: null,        cf: 'funding',      sign: 1  },
-  // 支出
-  laborPay:     { label: '人件費',               pl: 'labor',     cf: 'laborPay',     sign: -1 },
-  outsourcePay: { label: '業務委託費',            pl: 'outsource', cf: 'outsourcePay', sign: -1 },
-  advPay:       { label: '広告宣伝費',            pl: 'adv',       cf: 'advPay',       sign: -1 },
-  eventPay:     { label: '外注費(イベント運営)',   pl: 'gaichu',    cf: 'eventPay',     sign: -1 },
-  rentPay:      { label: '賃料',                 pl: 'other',     cf: 'rentPay',      sign: -1 },
-  gaichuPay:    { label: '外注費',               pl: 'gaichu',    cf: 'gaichuPay',    sign: -1 },
-  otherPay:     { label: 'その他支出',            pl: 'other',     cf: 'otherPay',     sign: -1 },
-  skip:         { label: '対象外（無視）',         pl: null,        cf: null,           sign: 0  },
+
+  // ── 収入 ──────────────────────────────
+  membership:   { label: '会費収入（NEO会費）',        group: '収入', pl: 'rev',       cf: 'cfIn',         sign: 1 },
+  training_rev: { label: '研修収入',                  group: '収入', pl: 'rev',       cf: 'cfIn',         sign: 1 },
+  consulting:   { label: 'コンサルティング収入',        group: '収入', pl: 'rev',       cf: 'cfIn',         sign: 1 },
+  event_rev:    { label: 'イベント収入',               group: '収入', pl: 'rev',       cf: 'cfIn',         sign: 1 },
+  subsidy:      { label: '補助金・助成金',             group: '収入', pl: 'rev',       cf: 'cfIn',         sign: 1 },
+  other_rev:    { label: 'その他収入',                group: '収入', pl: 'rev',       cf: 'cfIn',         sign: 1 },
+
+  // ── 財務収支 ──────────────────────────
+  loan_in:      { label: '新規借入',                  group: '財務収支', pl: null,    cf: 'funding',      sign: 1 },
+  capital_in:   { label: '資本金増加',                group: '財務収支', pl: null,    cf: 'funding',      sign: 1 },
+  warrant:      { label: '新株予約権増加',             group: '財務収支', pl: null,    cf: 'funding',      sign: 1 },
+  loan_out:     { label: '借入返済',                  group: '財務収支', pl: null,    cf: 'otherPay',     sign: -1 },
+  finance_other:{ label: '財務その他',                group: '財務収支', pl: null,    cf: 'otherPay',     sign: -1 },
+
+  // ── 販管費（固定費）──────────────────
+  salary:       { label: '人件費・税金（給与・社保）', group: '販管費/固定', pl: 'labor',     cf: 'laborPay',     sign: -1 },
+  dev_outsource:{ label: '開発外注',                  group: '販管費/固定', pl: 'outsource', cf: 'outsourcePay', sign: -1 },
+  biz_commission:{ label: '業務委託＋経費',           group: '販管費/固定', pl: 'outsource', cf: 'outsourcePay', sign: -1 },
+  incentive:    { label: 'インセンティブ（獲得）',     group: '販管費/固定', pl: 'outsource', cf: 'outsourcePay', sign: -1 },
+  expert_fee:   { label: '専門家外注',                group: '販管費/固定', pl: 'gaichu',    cf: 'gaichuPay',    sign: -1 },
+  rent:         { label: '家賃',                      group: '販管費/固定', pl: 'other',     cf: 'rentPay',      sign: -1 },
+
+  // ── 販管費（変動費）──────────────────
+  expense:      { label: '経費精算（旅費・ツール・カート）', group: '販管費/変動', pl: 'other', cf: 'otherPay',  sign: -1 },
+  tel_net:      { label: '通信費',                    group: '販管費/変動', pl: 'other',     cf: 'otherPay',     sign: -1 },
+  entertainment:{ label: '交際費・会議費',             group: '販管費/変動', pl: 'other',     cf: 'otherPay',     sign: -1 },
+  tax_dues:     { label: '租税公課',                  group: '販管費/変動', pl: 'other',     cf: 'otherPay',     sign: -1 },
+  tools:        { label: 'ツール費用',                group: '販管費/変動', pl: 'other',     cf: 'otherPay',     sign: -1 },
+  supplies:     { label: '消耗品',                    group: '販管費/変動', pl: 'other',     cf: 'otherPay',     sign: -1 },
+  ad_sports:    { label: '広告費・スポーツ協賛等',     group: '販管費/変動', pl: 'adv',       cf: 'advPay',       sign: -1 },
+  event_cost:   { label: '外注費 イベント運営費',      group: '販管費/変動', pl: 'gaichu',    cf: 'eventPay',     sign: -1 },
+  recruiting:   { label: '採用研修',                  group: '販管費/変動', pl: 'other',     cf: 'otherPay',     sign: -1 },
+  annual_fee:   { label: '年会費',                    group: '販管費/変動', pl: 'other',     cf: 'otherPay',     sign: -1 },
+  sales_other:  { label: '販管費その他',              group: '販管費/変動', pl: 'other',     cf: 'otherPay',     sign: -1 },
+
+  // ── 事業投資 ──────────────────────────
+  investment:   { label: '事業投資',                  group: '事業投資', pl: null,        cf: 'otherPay',     sign: -1 },
+
+  // ── 対象外 ──────────────────────────
+  skip:         { label: '対象外（残高・手数料等）',   group: '対象外', pl: null,        cf: null,           sign: 0  },
+};
+
+// グループ別の色設定
+const CAT_GROUP_COLORS = {
+  '収入':       { bg: 'var(--bg-green)', color: 'var(--tc-green)' },
+  '財務収支':   { bg: 'var(--bg-blue)',  color: 'var(--tc-blue)'  },
+  '販管費/固定':{ bg: 'var(--bg-red)',   color: 'var(--tc-red)'   },
+  '販管費/変動':{ bg: 'var(--bg-amber)', color: 'var(--tc-amber)' },
+  '事業投資':   { bg: 'var(--bg2)',      color: 'var(--text2)'    },
+  '対象外':     { bg: 'var(--bg3)',      color: 'var(--text3)'    },
 };
 
 async function analyzeBankStatement() {
@@ -1685,40 +2104,56 @@ async function analyzeBankStatement() {
   const btn = document.getElementById('bank-analyze-btn');
   btn.disabled = true; btn.textContent = '仕分け中...';
 
-  const categoryList = Object.entries(BANK_CATEGORIES)
-    .filter(([k]) => k !== 'skip')
-    .map(([k, v]) => `  ${k}: ${v.label}`)
-    .join('\n');;
+  // 科目リストをグループ別に整理してAIに渡す
+  const catGroups = {};
+  Object.entries(BANK_CATEGORIES).forEach(([k, v]) => {
+    if (!catGroups[v.group]) catGroups[v.group] = [];
+    catGroups[v.group].push(`    ${k}: ${v.label}`);
+  });
+  const categoryList = Object.entries(catGroups)
+    .map(([g, items]) => `【${g}】\n${items.join('\n')}`)
+    .join('\n');
 
-  const prompt = `あなたはNEO福岡（福岡市の経営者コミュニティ）の経理担当です。
-以下の通帳明細を1行ずつ解析し、各取引をNEO福岡の科目に仕分けしてください。
+  const prompt = `あなたはNEO福岡（福岡市の経営者コミュニティ運営会社）の経理担当です。
+以下の通帳入出金明細を1行ずつ解析し、NEO福岡の勘定科目に仕分けしてください。
 
 【口座】${account || '不明'}
 【対象月】${month}
-【通帳明細】
+【通帳明細（原文）】
 ${text}
 
-【仕分け科目（必ずこの中から選ぶ）】
+【仕分け科目一覧（必ずこの中のキーを使う）】
 ${categoryList}
-  skip: 対象外（残高・繰越・手数料など無視すべき行）
 
-以下のJSON配列のみ返してください（他の説明不要）：
+【仕分けルール】
+- 会費・月謝入金 → membership
+- 研修・セミナー入金 → training_rev
+- 給与・役員報酬・社会保険料 → salary
+- 業務委託・フリーランス支払 → biz_commission
+- 開発系外注 → dev_outsource
+- 専門家（弁護士・税理士・コンサル）→ expert_fee
+- 家賃・駐車場 → rent
+- 交通費・ツール・SaaS・カート → expense
+- 接待・会食・会議 → entertainment
+- 広告・協賛・PR費 → ad_sports
+- イベント会場・運営外注 → event_cost
+- 採用・研修費 → recruiting
+- 借入金着金 → loan_in、借入返済 → loan_out
+- 残高・繰越・手数料・振込手数料・ATM → skip
+- 用途不明で少額 → sales_other
+
+以下のJSON配列のみ返してください（説明不要）：
 [
   {
     "date": "日付（MM/DD形式）",
-    "description": "摘要（原文のまま）",
-    "amount": 金額（千円単位・整数。入金は正、出金は正の値で絶対値。符号はcategoryで判定）,
+    "description": "摘要（原文）",
+    "amount": 金額（千円単位・整数・絶対値）,
     "direction": "in" または "out",
-    "category": "科目キー（上記リストから選択）",
-    "reason": "仕分け理由（15字以内）"
+    "category": "科目キー",
+    "reason": "仕分け理由（20字以内）"
   }
 ]
-
-注意：
-- 金額はカンマ・円マーク・△・マイナスを除いた数値（千円単位に変換）
-- 残高欄・合計欄・ヘッダー行はskipにする
-- 融資・借入は funding、給与・役員報酬は laborPay
-- JSONのみ返す`;
+注意：金額はカンマ・円・△・マイナス除去後の千円整数。JSONのみ返す。`;
 
   try {
     const raw = await callAI(prompt, 2000);
@@ -1740,33 +2175,48 @@ ${categoryList}
 }
 
 function renderBankResult(rows, month) {
-  const catOptions = Object.entries(BANK_CATEGORIES)
-    .map(([k, v]) => `<option value="${k}">${v.label}</option>`)
-    .join('');
+  // グループ別optgroup でセレクトを構築
+  const groups = {};
+  Object.entries(BANK_CATEGORIES).forEach(([k, v]) => {
+    if (!groups[v.group]) groups[v.group] = [];
+    groups[v.group].push([k, v]);
+  });
+  const catOptionsGrouped = Object.entries(groups).map(([g, items]) =>
+    `<optgroup label="${g}">${items.map(([k,v]) => `<option value="${k}">${v.label}</option>`).join('')}</optgroup>`
+  ).join('');
 
-  let html = `<table class="dt" style="min-width:700px">
+  let html = `<table class="dt" style="min-width:760px">
     <thead><tr>
-      <th class="l" style="min-width:60px">日付</th>
-      <th class="l" style="min-width:200px">摘要</th>
+      <th class="l" style="min-width:55px">日付</th>
+      <th class="l" style="min-width:180px">摘要</th>
       <th style="min-width:80px">金額（千円）</th>
-      <th style="min-width:60px">入出金</th>
-      <th class="l" style="min-width:160px">科目</th>
-      <th class="l" style="min-width:120px">仕分け理由</th>
+      <th style="min-width:50px">区分</th>
+      <th class="l" style="min-width:180px">科目</th>
+      <th class="l" style="min-width:130px">仕分け理由</th>
     </tr></thead><tbody>`;
 
   rows.forEach((row, idx) => {
-    const cat = BANK_CATEGORIES[row.category] || BANK_CATEGORIES.otherPay;
-    const dirColor = row.direction === 'in' ? 'color:var(--tc-green)' : 'color:var(--tc-red)';
-    html += `<tr>
+    const cat = BANK_CATEGORIES[row.category] || BANK_CATEGORIES.sales_other;
+    const gc = CAT_GROUP_COLORS[cat.group] || {};
+    const isIn = row.direction === 'in';
+    const dirColor = isIn ? 'color:var(--tc-green)' : 'color:var(--tc-red)';
+    const rowBg = idx % 2 === 0 ? '' : 'background:var(--bg2)';
+    html += `<tr style="${rowBg}">
       <td class="l" style="font-size:10px;color:var(--text3)">${row.date||'—'}</td>
       <td class="l" style="font-size:11px">${row.description||'—'}</td>
-      <td style="${dirColor};font-weight:600">${(row.amount||0).toLocaleString()}</td>
-      <td style="${dirColor};font-size:10px">${row.direction==='in'?'↑入金':'↓出金'}</td>
+      <td style="${dirColor};font-weight:700">${Number(row.amount||0).toLocaleString()}</td>
+      <td>
+        <span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:${isIn?'var(--bg-green)':'var(--bg-red)'};color:${isIn?'var(--tc-green)':'var(--tc-red)'}">
+          ${isIn?'↑入金':'↓出金'}
+        </span>
+      </td>
       <td>
         <select data-idx="${idx}" onchange="updateBankRowCat(${idx},this.value)"
-          style="width:100%;padding:3px 5px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:11px;font-family:inherit">
-          ${Object.entries(BANK_CATEGORIES).map(([k,v]) =>
-            `<option value="${k}" ${k===row.category?'selected':''}>${v.label}</option>`
+          style="width:100%;padding:3px 6px;border:1px solid var(--border2);border-radius:var(--r);background:${gc.bg||'var(--bg)'};color:${gc.color||'var(--text)'};font-size:11px;font-family:inherit;font-weight:600">
+          ${Object.entries(groups).map(([g, items]) =>
+            `<optgroup label="${g}">${items.map(([k,v]) =>
+              `<option value="${k}" ${k===row.category?'selected':''}>${v.label}</option>`
+            ).join('')}</optgroup>`
           ).join('')}
         </select>
       </td>
@@ -1776,8 +2226,6 @@ function renderBankResult(rows, month) {
 
   html += '</tbody></table>';
   document.getElementById('bank-result-table').innerHTML = html;
-
-  // サマリー
   renderBankSummary(rows);
 }
 
@@ -1787,23 +2235,66 @@ function updateBankRowCat(idx, newCat) {
 }
 
 function renderBankSummary(rows) {
+  // 科目別集計
   const totals = {};
+  let totalIn = 0, totalOut = 0;
   rows.forEach(row => {
+    if (row.category === 'skip') return;
     const cat = row.category;
     if (!totals[cat]) totals[cat] = 0;
     totals[cat] += Number(row.amount) || 0;
+    const info = BANK_CATEGORIES[cat];
+    if (info && info.sign > 0) totalIn  += Number(row.amount) || 0;
+    if (info && info.sign < 0) totalOut += Number(row.amount) || 0;
   });
 
-  let html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">';
+  // グループ別に集計
+  const groupTotals = {};
   Object.entries(totals).forEach(([cat, amt]) => {
     const info = BANK_CATEGORIES[cat];
-    if (!info || cat === 'skip') return;
-    const isIn = info.sign > 0;
-    html += `<div style="background:${isIn?'var(--bg-green)':'var(--bg-red)'};border-radius:var(--r);padding:8px 10px">
-      <div style="font-size:10px;font-weight:700;color:${isIn?'var(--tc-green)':'var(--tc-red)'}">${info.label}</div>
-      <div style="font-size:14px;font-weight:700;color:${isIn?'var(--tc-green)':'var(--tc-red)'}">${amt.toLocaleString()}千円</div>
+    if (!info) return;
+    if (!groupTotals[info.group]) groupTotals[info.group] = { in:0, out:0, items:[] };
+    if (info.sign > 0) groupTotals[info.group].in  += amt;
+    if (info.sign < 0) groupTotals[info.group].out += amt;
+    groupTotals[info.group].items.push({ label: info.label, amt, sign: info.sign });
+  });
+
+  // 合計行
+  const netCF = totalIn - totalOut;
+  let html = `
+    <div style="display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+      <div style="background:var(--bg-green);border-radius:var(--r);padding:9px 16px;flex:1;min-width:120px">
+        <div style="font-size:10px;color:var(--tc-green);font-weight:700">収入合計</div>
+        <div style="font-size:18px;font-weight:700;color:var(--tc-green)">+${totalIn.toLocaleString()}千円</div>
+      </div>
+      <div style="background:var(--bg-red);border-radius:var(--r);padding:9px 16px;flex:1;min-width:120px">
+        <div style="font-size:10px;color:var(--tc-red);font-weight:700">支出合計</div>
+        <div style="font-size:18px;font-weight:700;color:var(--tc-red)">▲${totalOut.toLocaleString()}千円</div>
+      </div>
+      <div style="background:${netCF>=0?'var(--bg-green)':'var(--bg-red)'};border-radius:var(--r);padding:9px 16px;flex:1;min-width:120px">
+        <div style="font-size:10px;color:${netCF>=0?'var(--tc-green)':'var(--tc-red)'};font-weight:700">月次純CF</div>
+        <div style="font-size:18px;font-weight:700;color:${netCF>=0?'var(--tc-green)':'var(--tc-red)'}">
+          ${netCF>=0?'+':'▲'}${Math.abs(netCF).toLocaleString()}千円
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">`;
+
+  Object.entries(groupTotals).forEach(([group, data]) => {
+    const gc = CAT_GROUP_COLORS[group] || {};
+    const amt = data.in > 0 ? data.in : data.out;
+    const sign = data.in > 0 ? '+' : '▲';
+    html += `<div style="background:${gc.bg||'var(--bg2)'};border-radius:var(--r);padding:8px 10px">
+      <div style="font-size:10px;font-weight:700;color:${gc.color||'var(--text2)'};margin-bottom:4px">${group}</div>
+      <div style="font-size:13px;font-weight:700;color:${gc.color||'var(--text2)'}">
+        ${sign}${amt.toLocaleString()}千円
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">
+        ${data.items.map(i => `${i.label}:${i.amt.toLocaleString()}`).join(' / ')}
+      </div>
     </div>`;
   });
+
   html += '</div>';
   document.getElementById('bank-summary').innerHTML = html;
 }
