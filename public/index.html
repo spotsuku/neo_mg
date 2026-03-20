@@ -669,7 +669,7 @@ td.actual.editable-cell {
           </div>
         </div>
         <div class="btn-row">
-          <button class="btn btn-p" id="csv-analyze-btn" onclick="analyzeCSV()" disabled>🤖 AIで解析・取込</button>
+          <button class="btn btn-p" id="csv-analyze-btn" onclick="analyzeCSV()" disabled>🤖 AIで解析</button>
           <button class="btn" onclick="clearCSV()">🗑 クリア</button>
         </div>
         <div id="import-log" class="import-log" style="display:none"></div>
@@ -679,6 +679,23 @@ td.actual.editable-cell {
         <div id="csv-preview-wrap" style="color:var(--text3);font-size:11px">CSVを選択するとプレビューが表示されます</div>
       </div>
     </div>
+
+    <!-- ── 解析結果プレビュー（確認・取込） ── -->
+    <div class="card" id="csv-confirm-card" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem;flex-wrap:wrap;gap:8px">
+        <div>
+          <div class="ct" style="margin-bottom:2px">📋 解析結果の確認</div>
+          <div style="font-size:11px;color:var(--text3)">内容を確認して「取込確定」を押してください。セルをクリックして修正もできます。</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-g" style="font-weight:700;font-size:12px;padding:7px 18px" onclick="commitCSVResult()">✓ 取込確定</button>
+          <button class="btn" style="font-size:11px" onclick="cancelCSVResult()">✕ キャンセル</button>
+        </div>
+      </div>
+      <div id="csv-confirm-table" class="scroll-x"></div>
+      <div id="csv-confirm-warnings" style="margin-top:.75rem"></div>
+    </div>
+
     <div class="card">
       <div class="ct">取込済みデータ一覧</div>
       <div id="imported-list" style="font-size:11px;color:var(--text3)">取込済みデータはありません</div>
@@ -2893,110 +2910,319 @@ async function analyzeCSV() {
 
   const log = document.getElementById('import-log');
   log.style.display = 'block';
+  log.innerHTML = '<span class="log-info">🤖 AIがCSVを解析中...</span>\n';
 
   const btn = document.getElementById('csv-analyze-btn');
   btn.disabled = true;
+  btn.textContent = '解析中...';
 
-  const csvPreview = csvParsed.slice(0, 50).map(r => r.join(',')).join('\n');
-  const monthLabel = _csvMonthMode === 'year'
-    ? `${document.getElementById('csv-year-select').value}年度（全12ヶ月）`
-    : months.length === 1 ? months[0]
-    : `${months.join('・')}（${months.length}ヶ月）`;
+  // CSVの全内容（最大200行）をAIに渡し、月ごとの数値を一括抽出
+  const csvFull = csvParsed.slice(0, 200).map(r => r.join(',')).join('\n');
+  const monthsStr = months.map(m => `${m}（${MONTH_LABELS[m]||m}）`).join('、');
 
-  // 月ごとにループ処理
-  let successCount = 0;
-  for (const month of months) {
-    log.innerHTML += `<span class="log-info">📅 ${MONTH_LABELS[month]||month} を解析中...</span>\n`;
-    btn.textContent = `解析中... (${months.indexOf(month)+1}/${months.length})`;
+  const prompt = `あなたはマネーフォワード クラウド会計のCSVデータを解析する専門家です。
+以下のCSVデータから、指定された各月の数値を**月ごとに個別に**抽出してください。
 
-    const prompt = `あなたはマネーフォワード クラウド会計のCSVデータを解析する専門家です。
-以下のCSVデータを解析して、NEO福岡の経営管理用データに変換してください。
+重要：マネーフォワードのCSVは月ごとに列が分かれています。各月の列から**その月固有の値**を読み取ってください。全月同じ値にしてはいけません。
 
-【CSVの内容】（最初の50行）:
-${csvPreview}
+【CSVの内容】（最大200行）:
+${csvFull}
 
 【CSVタイプ】: ${csvType === 'pl' ? '損益計算書(PL)' : csvType === 'bs' ? '貸借対照表(BS)' : 'CF資金繰り'}
-【対象月】: ${month}
+【取込対象月】: ${monthsStr}
 【区分】: ${kind === 'actual' ? '実績' : '予算'}
 
-以下の科目に分類して、JSONで数値を返してください（単位は万円、整数）:
+以下のJSON形式で、月ごとの数値を返してください（単位は万円・整数。CFのみ千円）:
 {
-  "month": "${month}",
-  "type": "${kind}",
-  "csvType": "${csvType}",
-  "data": {
-    "rev": 売上合計（万円）,
-    "cogs": 売上原価（万円）,
-    "labor": 人件費合計（役員報酬＋給与＋賞与＋社保）（万円）,
-    "outsource": 業務委託費合計（万円）,
-    "adv": 広告販促費合計（万円）,
-    "gaichu": 外注費合計（万円）,
-    "other": その他販管費合計（万円）,
-    "cfOpen": 月初現金残高（千円）,
-    "cfIn": 売上入金（千円）,
-    "cfClose": 月末現金残高（千円）
+  "months": {
+    "YYMM": {
+      "rev": 売上合計（万円）,
+      "labor": 人件費合計（役員報酬＋給与＋賞与＋社保）（万円）,
+      "outsource": 業務委託費合計（万円）,
+      "adv": 広告販促費合計（万円）,
+      "gaichu": 外注費合計（万円）,
+      "other": その他販管費合計（万円）,
+      "cfOpen": 月初現金残高（千円）,
+      "cfIn": 売上入金（千円）,
+      "cfClose": 月末現金残高（千円）
+    }
   },
-  "summary": "取込内容の要約（2〜3行）",
-  "warnings": ["注意事項があれば配列で"]
+  "summary": "取込内容の要約",
+  "warnings": ["注意事項"]
 }
 
-数値が見つからない場合は0。JSONのみを返してください。`;
+ルール:
+- YYMMは ${months.map(m=>`"${m}"`).join('、')} の形式
+- 各月の列（例：4月列、5月列）から個別に値を読み取る
+- 数値が見つからない場合は0
+- 月ごとに異なる値になるはず。全月同一値の場合は再確認すること
+- JSONのみ返す`;
 
   try {
-    // callAI を使って統一的にAPI呼び出し
-    const raw = await callAI(prompt, 1500);
+    const raw = await callAI(prompt, 3000);
     const clean = (typeof raw === 'string' ? raw : JSON.stringify(raw)).replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
 
-    log.innerHTML += `<span class="log-ok">✓ AI解析完了</span>\n`;
-    log.innerHTML += `<span class="log-info">📊 ${parsed.summary || '取込成功'}</span>\n`;
-    if (parsed.warnings && parsed.warnings.length > 0) {
-      parsed.warnings.forEach(w => { log.innerHTML += `<span class="log-warn">⚠ ${w}</span>\n`; });
+    if (parsed.summary) log.innerHTML += `<span class="log-info">📊 ${parsed.summary}</span>\n`;
+    if (parsed.warnings?.length) {
+      parsed.warnings.forEach(w => log.innerHTML += `<span class="log-warn">⚠ ${w}</span>\n`);
     }
 
-    // Save to DB
-    const yr = month.startsWith('26') && parseInt(month.slice(2,4)) >= 4 ? '2025' : '2026';
+    // 解析結果をプレビューに表示（DBにはまだ書き込まない）
+    const monthsFound = Object.keys(parsed.months || {});
+    log.innerHTML += `<span class="log-ok">✓ ${monthsFound.length}ヶ月分の解析完了 — 下の確認テーブルで内容を確認してください</span>\n`;
+
+    // グローバルに保持（commitCSVResult で使用）
+    window._csvPendingResult = { parsed, months, kind, csvType };
+
+    // プレビューテーブルを描画
+    renderCSVConfirmTable(parsed, months, kind);
+
+    // 確認カードを表示
+    document.getElementById('csv-confirm-card').style.display = '';
+    document.getElementById('csv-confirm-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch (e) {
+    log.innerHTML += `<span class="log-err">✗ エラー: ${e.message}</span>\n`;
+    log.innerHTML += `<span class="log-warn">⚠ ANTHROPIC_API_KEY が設定されているか確認してください</span>\n`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🤖 AIで解析';
+}
+
+// ═══════════════════════════════════════════
+//  CSV 解析結果 確認 → 取込確定
+// ═══════════════════════════════════════════
+
+// プレビューテーブルを描画（セルをクリックして修正可能）
+function renderCSVConfirmTable(parsed, months, kind) {
+  // グループ別に科目を定義（pl/cf/bsに対応）
+  const groups = [
+    {
+      title: '── PL（万円）', color: 'rgba(55,138,221,0.12)',
+      rows: [
+        { section:'pl', key:'rev',       label:'売上合計',     isRev:true },
+        { section:'pl', key:'labor',     label:'人件費',       isOut:true },
+        { section:'pl', key:'outsource', label:'業務委託費',   isOut:true },
+        { section:'pl', key:'adv',       label:'広告販促費',   isOut:true },
+        { section:'pl', key:'gaichu',    label:'外注費',       isOut:true },
+        { section:'pl', key:'other',     label:'その他販管費', isOut:true },
+      ]
+    },
+    {
+      title: '── CF収入（千円）', color: 'rgba(39,174,96,0.08)',
+      rows: [
+        { section:'cf', key:'open',         label:'月初残高',     isRev:true },
+        { section:'cf', key:'cfIn',         label:'売上入金合計', isRev:true },
+        { section:'cf', key:'cfInFee',      label:'　会費入金',   isRev:true },
+        { section:'cf', key:'cfInTraining', label:'　研修入金',   isRev:true },
+        { section:'cf', key:'cfInOther',    label:'　その他入金', isRev:true },
+        { section:'cf', key:'loanIn',       label:'新規借入',     isRev:true },
+        { section:'cf', key:'capitalIn',    label:'資本金増加',   isRev:true },
+      ]
+    },
+    {
+      title: '── CF出金（千円）', color: 'rgba(226,75,74,0.07)',
+      rows: [
+        { section:'cf', key:'salaryPay',    label:'人件費・税金',   isOut:true },
+        { section:'cf', key:'devOutPay',    label:'開発外注',       isOut:true },
+        { section:'cf', key:'bizComPay',    label:'業務委託＋経費', isOut:true },
+        { section:'cf', key:'incentivePay', label:'インセンティブ', isOut:true },
+        { section:'cf', key:'expertPay',    label:'専門家外注',     isOut:true },
+        { section:'cf', key:'rentPay',      label:'家賃',           isOut:true },
+        { section:'cf', key:'expensePay',   label:'経費精算・ツール',isOut:true },
+        { section:'cf', key:'telPay',       label:'通信費',         isOut:true },
+        { section:'cf', key:'entertainPay', label:'交際費・会議費', isOut:true },
+        { section:'cf', key:'taxPay',       label:'租税公課',       isOut:true },
+        { section:'cf', key:'toolsPay',     label:'ツール費用',     isOut:true },
+        { section:'cf', key:'suppliesPay',  label:'消耗品',         isOut:true },
+        { section:'cf', key:'adSportsPay',  label:'広告費・協賛',   isOut:true },
+        { section:'cf', key:'eventCostPay', label:'イベント外注',   isOut:true },
+        { section:'cf', key:'recruitPay',   label:'採用費',         isOut:true },
+        { section:'cf', key:'annualFeePay', label:'年会費',         isOut:true },
+        { section:'cf', key:'salesOtherPay',label:'その他支出',     isOut:true },
+        { section:'cf', key:'investPay',    label:'事業投資',       isOut:true },
+        { section:'cf', key:'loanOut',      label:'借入返済',       isOut:true },
+        { section:'cf', key:'cfClose',      label:'月末残高',       isRev:true },
+      ]
+    },
+    {
+      title: '── BS（千円）', color: 'rgba(239,159,39,0.07)',
+      rows: [
+        { section:'bs', key:'cash',       label:'現預金',       isRev:true },
+        { section:'bs', key:'receivable', label:'売掛金',       isRev:true },
+        { section:'bs', key:'other_ca',   label:'その他流動資産',isRev:true },
+        { section:'bs', key:'fixed',      label:'固定資産',     isRev:true },
+        { section:'bs', key:'payable',    label:'買掛金・未払金',isOut:true },
+        { section:'bs', key:'borrowing',  label:'借入金',       isOut:true },
+        { section:'bs', key:'other_cl',   label:'その他流動負債',isOut:true },
+        { section:'bs', key:'capital',    label:'資本金',       isRev:true },
+        { section:'bs', key:'retained',   label:'利益剰余金',   isRev:true },
+      ]
+    },
+  ];
+
+  const kindLabel = kind === 'actual' ? '実績' : '予算';
+  let html = `<table class="dt" style="width:100%;min-width:${160 + months.length * 90}px">
+    <thead><tr>
+      <th class="l" style="min-width:150px">科目</th>
+      ${months.map(m => `<th style="min-width:85px">${MONTH_LABELS[m]||m}<br><span style="font-size:9px;color:var(--text3)">${kindLabel}</span></th>`).join('')}
+    </tr></thead><tbody>`;
+
+  groups.forEach(group => {
+    html += `<tr><td colspan="${months.length+1}" style="background:${group.color};font-size:10px;font-weight:700;color:var(--text3);padding:4px 8px">${group.title}</td></tr>`;
+    group.rows.forEach(row => {
+      html += `<tr><td class="l" style="font-size:11px;padding-left:${row.key.startsWith('cfIn') && row.key !== 'cfIn' ? '20px' : '8px'}">${row.label}</td>`;
+      months.forEach(m => {
+        const val = parsed.months?.[m]?.[row.section]?.[row.key] ?? 0;
+        const bg = val > 0 ? (row.isRev ? 'background:rgba(39,174,96,0.08)' : 'background:rgba(226,75,74,0.07)') : '';
+        const fullKey = `${row.section}.${row.key}`;
+        html += `<td class="editable-cell" style="${bg}"
+          onclick="editCsvConfirmCell(this,'${m}','${fullKey}')"
+          data-month="${m}" data-key="${fullKey}">
+          ${val ? Number(val).toLocaleString() : '—'}
+        </td>`;
+      });
+      html += '</tr>';
+    });
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('csv-confirm-table').innerHTML = html;
+
+  // 警告表示
+  const warnings = parsed.warnings || [];
+  const warnEl = document.getElementById('csv-confirm-warnings');
+  if (warnings.length) {
+    warnEl.innerHTML = warnings.map(w =>
+      `<div style="background:var(--bg-amber);color:var(--tc-amber);padding:6px 10px;border-radius:var(--r);font-size:10px;margin-bottom:4px">⚠ ${w}</div>`
+    ).join('');
+  } else {
+    warnEl.innerHTML = '';
+  }
+}
+
+// セルをクリックして値を修正
+function editCsvConfirmCell(td, month, key) {
+  if (td.classList.contains('cell-editing')) return;
+  td.classList.add('cell-editing');
+  const cur = td.textContent.replace(/[^0-9\-]/g, '') || '0';
+  td.innerHTML = `<input class="cell-input" type="number" value="${cur}" placeholder="0">`;
+  const inp = td.querySelector('input');
+  inp.focus(); inp.select();
+  function commit() {
+    const val = Number(inp.value) || 0;
+    // pending result に反映（section.key 形式対応）
+    if (window._csvPendingResult?.parsed?.months?.[month]) {
+      const parts = key.split('.');
+      if (parts.length === 2) {
+        const [sec, k] = parts;
+        if (!window._csvPendingResult.parsed.months[month][sec]) {
+          window._csvPendingResult.parsed.months[month][sec] = {};
+        }
+        window._csvPendingResult.parsed.months[month][sec][k] = val;
+      } else {
+        window._csvPendingResult.parsed.months[month][key] = val;
+      }
+    }
+    td.classList.remove('cell-editing');
+    td.textContent = val.toLocaleString();
+  }
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') inp.blur();
+    if (e.key === 'Escape') { td.classList.remove('cell-editing'); td.textContent = cur; }
+    if (e.key === 'Tab') { e.preventDefault(); inp.blur(); }
+  });
+}
+
+// 取込確定：確認済みデータをDBに書き込む
+async function commitCSVResult() {
+  const pending = window._csvPendingResult;
+  if (!pending) return;
+  const { parsed, months, kind } = pending;
+
+  let successCount = 0;
+  for (const month of months) {
+    const pd = parsed.months?.[month];
+    if (!pd) continue;
+
     const yearKey = month.startsWith('27') ? '2026' : (parseInt(month.slice(2,4)) >= 4 ? '2025' : '2026');
     const d = DB[yearKey];
     const idx = d.months.indexOf(month);
+    if (idx === -1) continue;
 
-    if (idx === -1) {
-      log.innerHTML += `<span class="log-err">✗ 月 ${month} はデータセットに存在しません</span>\n`;
-    } else {
-      const pd = parsed.data;
-      const target = kind === 'actual' ? d.pl.actual : d.pl.budget;
-      if (pd.rev !== undefined) target.rev[idx] = pd.rev;
-      if (pd.labor !== undefined) target.labor[idx] = pd.labor;
-      if (pd.outsource !== undefined) target.outsource[idx] = pd.outsource;
-      if (pd.adv !== undefined) target.adv[idx] = pd.adv;
-      if (pd.gaichu !== undefined) { if (!target.gaichu) target.gaichu=[]; target.gaichu[idx] = pd.gaichu; }
-      if (pd.other !== undefined) target.other[idx] = pd.other;
-      if (kind === 'actual' && d.cf.actual) {
-        if (pd.cfOpen) d.cf.actual.open[idx] = pd.cfOpen;
-        if (pd.cfIn) d.cf.actual.cfIn[idx] = pd.cfIn;
-        if (pd.cfClose) d.cf.actual.cfClose[idx] = pd.cfClose;
-      }
-      log.innerHTML += `<span class="log-ok">✓ ${yearKey}年度 ${MONTH_LABELS[month]}（${kind === 'actual' ? '実績' : '予算'}）を取込みました</span>\n`;
-      log.innerHTML += `<span class="log-info">売上:${pd.rev||0}万円 / 人件費:${pd.labor||0}万円 / 業務委託:${pd.outsource||0}万円 / 広告:${pd.adv||0}万円</span>\n`;
-
-      // Persist
-      await saveDB();
-      log.innerHTML += `<span class="log-ok">✓ データを保存しました</span>\n`;
-      loadImportedList();
-      updateWeeklyKPIs();
+    // PL書き込み
+    const pl_sec = pd.pl || pd; // 新形式(pd.pl)と旧形式(pd直下)の両対応
+    const target = kind === 'actual' ? d.pl.actual : d.pl.budget;
+    const setpl = (key, src) => { if (src?.[key] !== undefined && src[key] !== 0) target[key][idx] = src[key]; };
+    setpl('rev', pl_sec); setpl('labor', pl_sec); setpl('outsource', pl_sec);
+    setpl('adv', pl_sec); setpl('other', pl_sec);
+    if (pl_sec?.gaichu !== undefined && pl_sec.gaichu !== 0) {
+      if (!target.gaichu) target.gaichu = [];
+      target.gaichu[idx] = pl_sec.gaichu;
     }
-  } catch (e) {
-    log.innerHTML += `<span class="log-err">✗ ${MONTH_LABELS[month]||month} エラー: ${e.message}</span>\n`;
-    log.innerHTML += `<span class="log-warn">⚠ VercelのEnvironment VariablesにANTHROPIC_API_KEYが設定されているか確認してください</span>\n`;
-  }
-    successCount++;
-  } // end for month loop
 
-  btn.disabled = false;
-  btn.textContent = '🤖 AIで解析・取込';
-  if (months.length > 1) {
-    log.innerHTML += `<span class="log-ok">✅ ${months.length}ヶ月分の取込処理が完了しました</span>\n`;
+    // CF書き込み（詳細科目すべて）
+    const cf_sec = pd.cf || {};
+    const cf_target = kind === 'actual' ? d.cf.actual : d.cf.budget;
+    const CF_KEYS = [
+      'open','cfIn','cfClose','cfInFee','cfInTraining','cfInEvent','cfInOther',
+      'salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
+      'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
+      'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay',
+      'investPay','loanIn','loanOut','capitalIn','warrantPay','finOtherPay','funding'
+    ];
+    CF_KEYS.forEach(key => {
+      if (cf_sec[key] !== undefined && cf_sec[key] !== 0) {
+        if (!cf_target[key]) cf_target[key] = Array(d.months.length).fill(0);
+        cf_target[key][idx] = cf_sec[key];
+      }
+    });
+
+    // BS書き込み
+    const bs_sec = pd.bs || {};
+    if (Object.keys(bs_sec).some(k => bs_sec[k] !== 0)) {
+      if (!d.bs) d.bs = {};
+      if (!d.bs[kind]) d.bs[kind] = {};
+      d.bs[kind][idx] = bs_sec;
+      // BS_DATAも更新（年次サマリー用）
+      if (typeof BS_DATA !== 'undefined' && kind === 'actual') {
+        if (bs_sec.cash      !== undefined) BS_DATA.assets.cash.actual      = bs_sec.cash;
+        if (bs_sec.receivable!== undefined) BS_DATA.assets.receivable.actual = bs_sec.receivable;
+        if (bs_sec.fixed     !== undefined) BS_DATA.assets.fixed.actual      = bs_sec.fixed;
+        if (bs_sec.payable   !== undefined) BS_DATA.liabilities.payable.actual = bs_sec.payable;
+        if (bs_sec.borrowing !== undefined) BS_DATA.liabilities.borrowing.actual = bs_sec.borrowing;
+        if (bs_sec.capital   !== undefined) BS_DATA.equity.capital.actual   = bs_sec.capital;
+        if (bs_sec.retained  !== undefined) BS_DATA.equity.retained.actual  = bs_sec.retained;
+      }
+    }
+
+    successCount++;
   }
+
+  await saveDB();
+  updateWeeklyKPIs();
+  renderPLCF();
+  loadImportedList();
+
+  // UI 後片付け
+  window._csvPendingResult = null;
+  document.getElementById('csv-confirm-card').style.display = 'none';
+
+  const log = document.getElementById('import-log');
+  log.innerHTML += `<span class="log-ok">✅ ${successCount}/${months.length}ヶ月を取込・保存しました</span>\n`;
+
+  alert(`✅ ${successCount}ヶ月分のデータを取込みました。`);
+}
+
+// キャンセル：プレビューを閉じる
+function cancelCSVResult() {
+  window._csvPendingResult = null;
+  document.getElementById('csv-confirm-card').style.display = 'none';
+  const log = document.getElementById('import-log');
+  log.innerHTML += '<span class="log-warn">⚠ 取込をキャンセルしました</span>\n';
 }
 
 function clearCSV() {
@@ -3010,22 +3236,124 @@ function clearCSV() {
 async function loadImportedList() {
   const el = document.getElementById('imported-list');
   const d = DB[currentYear];
-  const rows = [];
-  d.months.forEach((m, i) => {
-    const hasActual = d.pl.actual.rev[i] !== undefined && d.pl.actual.rev[i] !== '';
-    const hasBudget = d.pl.budget.rev[i] !== undefined && d.pl.budget.rev[i] !== '';
-    if (hasActual || hasBudget) {
-      rows.push({ month: m, label: MONTH_LABELS[m], actual: hasActual ? d.pl.actual.rev[i] : null, budget: hasBudget ? d.pl.budget.rev[i] : null });
+
+  // 実績・予算どちらかでも1項目でもデータがある月を対象に
+  const hasData = (i) => {
+    const pl = d.pl;
+    const cf = d.cf;
+    return (pl.actual.rev[i] !== undefined && pl.actual.rev[i] !== '')
+        || (pl.budget.rev[i] !== undefined && pl.budget.rev[i] !== '')
+        || (cf.actual?.cfIn?.[i] > 0)
+        || (cf.actual?.cfClose?.[i] > 0);
+  };
+
+  const activeMonths = d.months.filter((m, i) => hasData(i));
+  if (activeMonths.length === 0) {
+    el.innerHTML = '<span style="color:var(--text3)">取込済みデータはありません</span>';
+    return;
+  }
+
+  const cfA = (key, i) => { const v = d.cf?.actual?.[key]?.[i]; return (v !== undefined && v !== null && v !== '') ? Number(v) : null; };
+  const cfB = (key, i) => { const v = d.cf?.budget?.[key]?.[i]; return (v !== undefined && v !== null && v !== '') ? Number(v) : null; };
+  const plA = (key, i) => { const v = d.pl?.actual?.[key]?.[i]; return (v !== undefined && v !== null && v !== '') ? Number(v) : null; };
+  const plB = (key, i) => { const v = d.pl?.budget?.[key]?.[i]; return (v !== undefined && v !== null && v !== '') ? Number(v) : null; };
+  const fmt = (v, cls='') => v !== null ? `<span class="${cls}">${Math.round(v).toLocaleString()}</span>` : '<span style="color:var(--text3)">—</span>';
+  const fmtBA = (b, a, isOut=false) => {
+    const rate = (b && a !== null) ? Math.round(a / b * 100) : null;
+    const good = rate !== null ? (isOut ? rate <= 100 : rate >= 100) : null;
+    const badge = rate !== null ? `<span class="badge ${good?'bg':'br'}" style="font-size:9px;margin-left:3px">${rate}%</span>` : '';
+    return `${fmt(a, a !== null && !isOut ? 'g' : '')}${badge}`;
+  };
+
+  // タブ切り替え
+  const tabs = ['pl','cf','cf-out','cf-detail'];
+  const tabLabels = { pl:'PL（万円）', cf:'CF収入（千円）', 'cf-out':'CF出金（千円）', 'cf-detail':'CF詳細（千円）' };
+  let currentTab = 'pl';
+
+  const renderTab = (tab) => {
+    currentTab = tab;
+    let cols, getRow;
+
+    if (tab === 'pl') {
+      cols = ['売上', '人件費', '業務委託', '広告', '外注費', 'その他', '営業利益'];
+      getRow = (m, i) => {
+        const ra=plA('rev',i), rb=plB('rev',i);
+        const la=plA('labor',i), lb=plB('labor',i);
+        const oa=plA('outsource',i), ob=plB('outsource',i);
+        const aa=plA('adv',i), ab=plB('adv',i);
+        const ga=plA('gaichu',i), gb=plB('gaichu',i);
+        const xa=plA('other',i), xb=plB('other',i);
+        const opexA = [la,oa,aa,ga,xa].reduce((t,v)=>t+(v||0),0);
+        const opA = ra !== null ? ra - opexA : null;
+        return [
+          `<div style="font-size:10px;color:var(--text3)">${fmt(rb)}</div>${fmtBA(rb,ra)}`,
+          `<div style="font-size:10px;color:var(--text3)">${fmt(lb)}</div>${fmtBA(lb,la,true)}`,
+          `<div style="font-size:10px;color:var(--text3)">${fmt(ob)}</div>${fmtBA(ob,oa,true)}`,
+          `<div style="font-size:10px;color:var(--text3)">${fmt(ab)}</div>${fmtBA(ab,aa,true)}`,
+          `<div style="font-size:10px;color:var(--text3)">${fmt(gb)}</div>${fmtBA(gb,ga,true)}`,
+          `<div style="font-size:10px;color:var(--text3)">${fmt(xb)}</div>${fmtBA(xb,xa,true)}`,
+          opA !== null ? `<span class="${opA>=0?'g':'r'}">${opA>=0?'+':'▲'}${Math.abs(Math.round(opA)).toLocaleString()}</span>` : '—',
+        ];
+      };
+    } else if (tab === 'cf') {
+      cols = ['売上入金','会費','研修','その他収入','新規借入','月末残高'];
+      getRow = (m, i) => [
+        `<div style="font-size:10px;color:var(--text3)">${fmt(cfB('cfIn',i))}</div>${fmtBA(cfB('cfIn',i),cfA('cfIn',i))}`,
+        fmt(cfA('cfInFee',i),'g'), fmt(cfA('cfInTraining',i),'g'),
+        fmt(cfA('cfInOther',i),'g'), fmt(cfA('loanIn',i),'g'),
+        fmt(cfA('cfClose',i),'g'),
+      ];
+    } else if (tab === 'cf-out') {
+      cols = ['人件費・税金','業務委託','インセン','家賃','経費精算','広告費','イベント外注','その他支出'];
+      getRow = (m, i) => [
+        `<div style="font-size:10px;color:var(--text3)">${fmt(cfB('salaryPay',i))}</div>${fmtBA(cfB('salaryPay',i),cfA('salaryPay',i),true)}`,
+        `<div style="font-size:10px;color:var(--text3)">${fmt(cfB('bizComPay',i))}</div>${fmtBA(cfB('bizComPay',i),cfA('bizComPay',i),true)}`,
+        fmt(cfA('incentivePay',i)), fmt(cfA('rentPay',i)),
+        fmt(cfA('expensePay',i)), fmt(cfA('adSportsPay',i)),
+        fmt(cfA('eventCostPay',i)), fmt(cfA('salesOtherPay',i)),
+      ];
+    } else {
+      cols = ['通信費','交際費','租税公課','ツール','消耗品','採用費','年会費','借入返済'];
+      getRow = (m, i) => [
+        fmt(cfA('telPay',i)), fmt(cfA('entertainPay',i)),
+        fmt(cfA('taxPay',i)), fmt(cfA('toolsPay',i)),
+        fmt(cfA('suppliesPay',i)), fmt(cfA('recruitPay',i)),
+        fmt(cfA('annualFeePay',i)), fmt(cfA('loanOut',i)),
+      ];
     }
-  });
-  if (rows.length === 0) { el.innerHTML = '<span style="color:var(--text3)">取込済みデータはありません</span>'; return; }
-  let html = '<table class="dt"><thead><tr><th class="l">月</th><th>売上（予算）</th><th>売上（実績）</th><th>人件費（実績）</th><th>業務委託（実績）</th></tr></thead><tbody>';
-  rows.forEach(r => {
-    const i = d.months.indexOf(r.month);
-    html += `<tr><td class="l">${r.label}</td><td>${r.budget !== null ? Number(r.budget).toLocaleString() : '—'}</td><td class="${r.actual !== null ? 'g' : ''}">${r.actual !== null ? Number(r.actual).toLocaleString() : '—'}</td><td>${d.pl.actual.labor[i] !== undefined ? Number(d.pl.actual.labor[i]).toLocaleString() : '—'}</td><td>${d.pl.actual.outsource[i] !== undefined ? Number(d.pl.actual.outsource[i]).toLocaleString() : '—'}</td></tr>`;
-  });
-  html += '</tbody></table>';
-  el.innerHTML = html;
+
+    const tabHtml = Object.entries(tabLabels).map(([k,v]) =>
+      `<button onclick="document.getElementById('il-tab-${k}').click()" class="btn${currentTab===k?' btn-p':''}" style="font-size:10px;padding:3px 10px">${v}</button>`
+    ).join('');
+
+    let html = `<div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap">
+      ${Object.entries(tabLabels).map(([k,v]) =>
+        `<button id="il-tab-${k}" onclick="ilSetTab('${k}')" class="btn${tab===k?' btn-p':''}" style="font-size:10px;padding:3px 10px">${v}</button>`
+      ).join('')}
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
+      ※ 小数字＝予算値、大数字＝実績値、バッジ＝予実達成率
+    </div>
+    <div class="scroll-x">
+    <table class="dt" style="min-width:${120+cols.length*95}px">
+      <thead><tr>
+        <th class="l" style="min-width:50px">月</th>
+        ${cols.map(c=>`<th style="min-width:90px">${c}</th>`).join('')}
+      </tr></thead><tbody>`;
+
+    activeMonths.forEach(m => {
+      const i = d.months.indexOf(m);
+      const cells = getRow(m, i);
+      html += `<tr><td class="l" style="font-weight:600">${MONTH_LABELS[m]||m}</td>${cells.map(c=>`<td style="line-height:1.4">${c}</td>`).join('')}</tr>`;
+    });
+
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+  };
+
+  // グローバルにタブ切り替え関数を公開
+  window.ilSetTab = (tab) => renderTab(tab);
+  renderTab('pl');
 }
 
 // ═══════════════════════════════════════════
