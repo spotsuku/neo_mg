@@ -262,6 +262,43 @@ td.actual.editable-cell {
   outline: none;
   display: block;
 }
+.version-panel {
+  position: fixed;
+  right: 0; top: 0; bottom: 0;
+  width: 340px;
+  background: var(--bg2);
+  border-left: 1px solid var(--border2);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .25s cubic-bezier(.4,0,.2,1);
+  box-shadow: -4px 0 24px rgba(0,0,0,.18);
+}
+.version-panel.open { transform: translateX(0); }
+.version-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .875rem 1rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.version-list { overflow-y: auto; flex: 1; padding: .5rem 0; }
+.version-item {
+  padding: .625rem 1rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background .1s;
+}
+.version-item:hover { background: var(--bg3); }
+.version-item.current { border-left: 3px solid var(--tc-blue); }
+.version-item .v-tag { font-size: 10px; font-weight: 700; color: var(--tc-blue); margin-bottom: 2px; }
+.version-item .v-desc { font-size: 11px; color: var(--text); margin-bottom: 2px; }
+.version-item .v-meta { font-size: 10px; color: var(--text3); }
+.version-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.3);
+  z-index: 999; display: none;
+}
+.version-overlay.open { display: block; }
 .pl-cf-save-bar {
   display: none;
   position: sticky;
@@ -302,12 +339,18 @@ td.actual.editable-cell {
       <button class="yt" onclick="setYear('2026',this)">2026年度</button>
     </div>
     <div class="tabs">
-      <button class="tab active" onclick="sw('weekly',this)">📊 週次KPI</button>
+      <button class="tab active" onclick="sw('weekly',this)">📊 サマリー</button>
       <button class="tab" onclick="sw('pl-cf',this)">📈 月次PL/CF</button>
       <button class="tab" onclick="sw('import',this)">📂 CSV取込</button>
       <button class="tab" onclick="sw('sim',this)">🔮 シミュレーション</button>
       <button class="tab" onclick="sw('report',this)">📋 月次レポート</button>
       <button class="tab" onclick="sw('pdf',this)">📄 役員PDF</button>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+      <button class="btn" style="font-size:10px;padding:4px 10px" onclick="exportJSON()" title="データをJSONファイルに書き出し">⬇ エクスポート</button>
+      <button class="btn" style="font-size:10px;padding:4px 10px" onclick="importJSON()" title="JSONファイルからデータを読み込み">⬆ インポート</button>
+      <button class="btn" style="font-size:10px;padding:4px 10px" onclick="openVersionPanel()" title="保存したバージョンに戻す">🕐 バージョン履歴</button>
+      <span id="save-status" style="font-size:10px;color:var(--text3);display:none">✓ 保存済み</span>
     </div>
   </div>
 </div>
@@ -361,6 +404,44 @@ td.actual.editable-cell {
         <div class="okr-row"><span class="okr-s okr-pend">進行中</span><span class="okr-k">KR5</span><span class="okr-t">圧倒的な経営人材の採用実施</span></div>
         <div class="okr-row"><span class="okr-s okr-pend">進行中</span><span class="okr-k">KR—</span><span class="okr-t">研修商品・NEOカリキュラムの最終化</span></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ══ 年次予実サマリー ══ -->
+  <div style="margin-bottom:1rem">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:.625rem">
+      📋 年次予実サマリー — <span id="annual-year-label">2025年度</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:start">
+
+      <!-- PL -->
+      <div class="card" style="margin:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:.75rem">
+          <span style="width:3px;height:14px;background:var(--chart-blue);border-radius:2px;display:inline-block;flex-shrink:0"></span>
+          <span style="font-size:11px;font-weight:700;color:var(--text)">PL（損益計算書）</span>
+        </div>
+        <div id="annual-pl-table"></div>
+      </div>
+
+      <!-- CF -->
+      <div class="card" style="margin:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:.75rem">
+          <span style="width:3px;height:14px;background:var(--chart-green);border-radius:2px;display:inline-block;flex-shrink:0"></span>
+          <span style="font-size:11px;font-weight:700;color:var(--text)">CF（資金繰り）</span>
+        </div>
+        <div id="annual-cf-table"></div>
+      </div>
+
+      <!-- BS -->
+      <div class="card" style="margin:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:.75rem">
+          <span style="width:3px;height:14px;background:var(--chart-amber);border-radius:2px;display:inline-block;flex-shrink:0"></span>
+          <span style="font-size:11px;font-weight:700;color:var(--text)">BS（貸借対照表）</span>
+          <span style="font-size:10px;color:var(--text3)">クリックで入力</span>
+        </div>
+        <div id="annual-bs-table"></div>
+      </div>
+
     </div>
   </div>
 
@@ -908,6 +989,42 @@ td.actual.editable-cell {
 
 </div><!-- /wrap -->
 
+<!-- バージョン管理オーバーレイ -->
+<div class="version-overlay" id="ver-overlay" onclick="closeVersionPanel()"></div>
+
+<!-- バージョン管理パネル（右スライドイン）-->
+<div class="version-panel" id="ver-panel">
+  <div class="version-panel-header">
+    <div>
+      <div style="font-size:13px;font-weight:700">🕐 バージョン履歴</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">保存した状態にいつでも戻せます</div>
+    </div>
+    <button class="btn" style="font-size:11px;padding:4px 10px" onclick="closeVersionPanel()">✕</button>
+  </div>
+  <div style="padding:.75rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:8px">
+    <button class="btn btn-p" style="width:100%;font-size:12px;padding:7px" onclick="saveVersion()">💾 現在の状態を保存する</button>
+    <div style="font-size:10px;color:var(--text3);text-align:center">最大20バージョンまで保存（古いものは自動削除）</div>
+  </div>
+  <div class="version-list" id="ver-list">
+    <div style="padding:1.5rem 1rem;font-size:11px;color:var(--text3);text-align:center">保存されたバージョンはありません</div>
+  </div>
+</div>
+
+<!-- バージョン確認モーダル -->
+<div id="ver-modal" style="display:none;position:fixed;inset:0;z-index:1100;background:rgba(0,0,0,.5);align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border-radius:var(--rl);padding:1.5rem;width:500px;max-width:92vw;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div style="font-size:13px;font-weight:700" id="ver-modal-title">バージョン確認</div>
+      <button class="btn" onclick="closeVerModal()" style="font-size:11px;padding:3px 9px">✕</button>
+    </div>
+    <div id="ver-modal-body" style="font-size:11px;line-height:1.8;color:var(--text2);margin-bottom:1rem"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="closeVerModal()" style="font-size:11px">キャンセル</button>
+      <button class="btn btn-p" id="ver-restore-btn" style="font-size:11px">↩ このバージョンに戻す</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
 // ── Storage polyfill (works in Claude artifacts AND local HTML) ──
@@ -1157,6 +1274,7 @@ function updateWeeklyKPIs() {
 
   // charts
   initWeeklyCharts(d, lastActualIdx);
+  renderAnnualSummary();
 }
 
 function riskClass(months) {
@@ -1264,6 +1382,220 @@ const _cfSectionOpen = {
 function toggleCFSection(id) {
   _cfSectionOpen[id] = !_cfSectionOpen[id];
   renderCFView(DB[currentYear]);
+}
+
+// ═══════════════════════════════════════════
+//  年次予実サマリー
+// ═══════════════════════════════════════════
+let currentAnnualView = 'pl';
+
+// BS初期データ（入力可能）
+const DEFAULT_BS = {
+  assets: {
+    cash:       { label: '現預金',         budget: 53706, actual: 53706 },
+    receivable: { label: '売掛金',          budget: 0,     actual: 0 },
+    other_ca:   { label: 'その他流動資産',   budget: 0,     actual: 0 },
+    fixed:      { label: '固定資産',         budget: 0,     actual: 0 },
+    other_nca:  { label: 'その他非流動資産', budget: 0,     actual: 0 },
+  },
+  liabilities: {
+    payable:    { label: '買掛金・未払金',   budget: 0,     actual: 0 },
+    borrowing:  { label: '借入金',           budget: 15000, actual: 15000 },
+    other_cl:   { label: 'その他流動負債',   budget: 0,     actual: 0 },
+    other_ncl:  { label: 'その他固定負債',   budget: 0,     actual: 0 },
+  },
+  equity: {
+    capital:    { label: '資本金・資本剰余金', budget: 3200, actual: 3200 },
+    retained:   { label: '利益剰余金（累積）', budget: -71710, actual: -71710 },
+    other_eq:   { label: 'その他純資産',       budget: 0,    actual: 0 },
+  }
+};
+let BS_DATA = JSON.parse(JSON.stringify(DEFAULT_BS));
+
+function setAnnualView(v, el) {
+  // 後方互換のためシグネチャ維持（タブ切り替えは廃止）
+  renderAnnualSummary();
+}
+
+function renderAnnualSummary() {
+  const el = document.getElementById('annual-year-label');
+  if (!el) return;
+  el.textContent = currentYear + '年度';
+  const d = DB[currentYear];
+  renderAnnualPL(d);
+  renderAnnualCF(d);
+  renderAnnualBS();
+}
+
+function renderAnnualPL(d) {
+  const sumA = (arr) => (arr||[]).reduce((t,v) => t+(Number(v)||0), 0);
+
+  const revA  = sumA(d.pl.actual.rev);
+  const revB  = sumA(d.pl.budget.rev);
+  const laborA = sumA(d.pl.actual.labor);    const laborB = sumA(d.pl.budget.labor);
+  const outA   = sumA(d.pl.actual.outsource); const outB  = sumA(d.pl.budget.outsource);
+  const advA   = sumA(d.pl.actual.adv);       const advB   = sumA(d.pl.budget.adv);
+  const gaichuA= sumA(d.pl.actual.gaichu||[]); const gaichuB=sumA(d.pl.budget.gaichu||[]);
+  const otherA = sumA(d.pl.actual.other);     const otherB = sumA(d.pl.budget.other);
+  const opexA  = laborA+outA+advA+gaichuA+otherA;
+  const opexB  = laborB+outB+advB+gaichuB+otherB;
+  const opA    = revA - opexA;
+  const opB    = revB - opexB;
+
+  const rows = [
+    { label:'売上高',       a:revA,   b:revB,   isRev:true, isTot:true },
+    { label:'販管費合計',   a:opexA,  b:opexB,  isOut:true, isTot:true },
+    { label:'　人件費',     a:laborA, b:laborB, isOut:true  },
+    { label:'　業務委託費', a:outA,   b:outB,   isOut:true  },
+    { label:'　広告販促費', a:advA,   b:advB,   isOut:true  },
+    { label:'　外注費',     a:gaichuA,b:gaichuB,isOut:true  },
+    { label:'　その他',     a:otherA, b:otherB, isOut:true  },
+    { label:'営業利益',     a:opA,    b:opB,    isRev:true, isTot:true, isPL:true },
+  ];
+  document.getElementById('annual-pl-table').innerHTML = buildAnnualTable(rows, '万円');
+}
+
+function renderAnnualCF(d) {
+  const cfGet = (sec, key) => (d.cf[sec]&&d.cf[sec][key]) || [];
+  const sumA = (arr) => (arr||[]).reduce((t,v) => t+(Number(v)||0), 0);
+  const sA = (key) => sumA(cfGet('actual', key));
+  const sB = (key) => sumA(cfGet('budget', key));
+
+  const opexKeys = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
+    'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
+    'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay'];
+  const opexA = opexKeys.reduce((t,k)=>t+sA(k), 0);
+  const opexB = opexKeys.reduce((t,k)=>t+sB(k), 0);
+  const fixedKeys = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay'];
+  const varKeys   = opexKeys.filter(k => !fixedKeys.includes(k));
+  const fixedA = fixedKeys.reduce((t,k)=>t+sA(k),0); const fixedB = fixedKeys.reduce((t,k)=>t+sB(k),0);
+  const varA   = varKeys.reduce((t,k)=>t+sA(k),0);   const varB   = varKeys.reduce((t,k)=>t+sB(k),0);
+
+  const rows = [
+    { label:'売上入金',       a:sA('cfIn'),     b:sB('cfIn'),    isRev:true,  isTot:true },
+    { label:'販管費合計',     a:opexA,          b:opexB,          isOut:true,  isTot:true },
+    { label:'　固定費合計',   a:fixedA,         b:fixedB,         isOut:true  },
+    { label:'　変動費合計',   a:varA,           b:varB,           isOut:true  },
+    { label:'事業投資',       a:sA('investPay'),b:sB('investPay'),isOut:true  },
+    { label:'新規借入',       a:sA('loanIn'),   b:sB('loanIn'),   isRev:true  },
+    { label:'借入返済',       a:sA('loanOut'),  b:sB('loanOut'),  isOut:true  },
+    { label:'営業CF',         a:sA('cfIn')-opexA, b:sB('cfIn')-opexB, isTot:true, isCF:true },
+    { label:'月末残高',       a:(() => { const arr=cfGet('actual','cfClose'); for(let i=arr.length-1;i>=0;i--){if(Number(arr[i])>0)return Number(arr[i]);} return 0; })(),
+                              b:(() => {
+                                let bal=Number((cfGet('budget','open')||[])[0])||0;
+                                const bIn=cfGet('budget','cfIn');
+                                for(let i=0;i<12;i++){
+                                  const out=opexKeys.reduce((t,k)=>t+(Number((cfGet('budget',k)||[])[i])||0),0);
+                                  bal+=((Number(bIn[i])||0)-out);
+                                }
+                                return Math.round(bal);
+                              })(), isTot:true, noSign:true },
+  ];
+  document.getElementById('annual-cf-table').innerHTML = buildAnnualTable(rows, '千円');
+}
+
+function renderAnnualBS() {
+  const sections = [
+    { key: 'assets',      label: '資産の部',   sign: 1  },
+    { key: 'liabilities', label: '負債の部',   sign: -1 },
+    { key: 'equity',      label: '純資産の部', sign: 1  },
+  ];
+  const inputStyle = 'width:100%;padding:3px 5px;border:none;background:transparent;color:var(--tc-blue);font-size:11px;font-weight:600;text-align:right;font-family:inherit;outline:none';
+
+  let html = `<table class="dt" style="width:100%;font-size:11px">
+    <thead><tr>
+      <th class="l" style="min-width:110px;font-size:10px">科目</th>
+      <th style="min-width:70px;font-size:10px">予算（千円）</th>
+      <th style="min-width:70px;font-size:10px">実績（千円）</th>
+      <th style="min-width:60px;font-size:10px;background:rgba(55,138,221,0.15);border-left:2px solid rgba(55,138,221,0.3)">差異</th>
+    </tr></thead><tbody>`;
+
+  sections.forEach(sec => {
+    html += `<tr><td colspan="4" style="background:var(--bg3);font-size:10px;font-weight:700;color:var(--text3);padding:4px 8px">${sec.label}</td></tr>`;
+    let secTotB = 0, secTotA = 0;
+    Object.entries(BS_DATA[sec.key]).forEach(([key, row]) => {
+      const diff = (row.actual - row.budget) * sec.sign;
+      const diffStr = diff > 0 ? `<span class="g">+${Math.round(diff).toLocaleString()}</span>`
+                    : diff < 0 ? `<span class="r">▲${Math.round(Math.abs(diff)).toLocaleString()}</span>`
+                    : '—';
+      secTotB += row.budget; secTotA += row.actual;
+      html += `<tr>
+        <td class="l" style="font-size:11px;padding-left:14px">${row.label}</td>
+        <td class="budget editable-cell" onclick="editBSCell(this,'${sec.key}','${key}','budget')">${row.budget?Math.round(row.budget).toLocaleString():'—'}</td>
+        <td class="actual editable-cell" onclick="editBSCell(this,'${sec.key}','${key}','actual')">${row.actual?Math.round(row.actual).toLocaleString():'—'}</td>
+        <td style="background:rgba(55,138,221,0.08);border-left:2px solid rgba(55,138,221,0.2);font-size:11px;text-align:right;padding:4px 6px">${diffStr}</td>
+      </tr>`;
+    });
+    const secDiff = (secTotA - secTotB) * sec.sign;
+    const secDiffStr = secDiff > 0 ? `<span class="g">+${Math.round(secDiff).toLocaleString()}</span>`
+                      : secDiff < 0 ? `<span class="r">▲${Math.round(Math.abs(secDiff)).toLocaleString()}</span>` : '—';
+    html += `<tr style="background:var(--bg3);font-weight:700">
+      <td class="l" style="font-size:11px">　合計</td>
+      <td class="budget" style="background:rgba(55,138,221,0.12);border-left:2px solid rgba(55,138,221,0.3);font-weight:700">${Math.round(secTotB).toLocaleString()}</td>
+      <td class="actual" style="background:rgba(39,174,96,0.10);border-left:2px solid rgba(39,174,96,0.25);font-weight:700">${Math.round(secTotA).toLocaleString()}</td>
+      <td style="background:rgba(55,138,221,0.08);border-left:2px solid rgba(55,138,221,0.2);font-size:11px;text-align:right;padding:4px 6px;font-weight:700">${secDiffStr}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('annual-bs-table').innerHTML = html;
+}
+
+function editBSCell(td, section, key, kind) {
+  if (td.classList.contains('cell-editing')) return;
+  td.classList.add('cell-editing');
+  const cur = td.textContent.replace(/[^0-9\-]/g, '') || '';
+  td.innerHTML = `<input class="cell-input" type="number" value="${cur}" placeholder="0">`;
+  const inp = td.querySelector('input');
+  inp.focus(); inp.select();
+  function commit() {
+    const val = inp.value === '' ? 0 : Number(inp.value) || 0;
+    BS_DATA[section][key][kind] = val;
+    renderAnnualBS();
+  }
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { td.classList.remove('cell-editing'); renderAnnualBS(); } });
+}
+
+function buildAnnualTable(rows, unit) {
+  const fmt = (v) => v !== null && v !== undefined ? Math.round(Math.abs(v)).toLocaleString() : '—';
+  const sign = (v, isOut, isPL, isCF, noSign) => {
+    if (noSign) return v >= 0 ? fmt(v) : `▲${fmt(v)}`;
+    if (isPL || isCF) return v >= 0 ? `<span class="g">+${fmt(v)}</span>` : `<span class="r">▲${fmt(v)}</span>`;
+    return fmt(v);
+  };
+
+  let html = `<table class="dt" style="width:100%;font-size:11px">
+    <thead><tr>
+      <th class="l" style="min-width:110px;font-size:10px">科目</th>
+      <th style="min-width:70px;font-size:10px">予算（${unit}）</th>
+      <th style="min-width:70px;font-size:10px">実績（${unit}）</th>
+      <th style="min-width:60px;font-size:10px;background:rgba(55,138,221,0.15);border-left:2px solid rgba(55,138,221,0.3)">差異</th>
+      <th style="min-width:48px;font-size:10px">達成率</th>
+    </tr></thead><tbody>`;
+
+  rows.forEach(row => {
+    const isOut = row.isOut; const isTot = row.isTot; const isRev = row.isRev;
+    const rowBg = isTot ? 'background:var(--bg3);font-weight:700;' : '';
+    const labelStyle = !isTot ? 'padding-left:14px;font-size:10px;color:var(--text3)' : 'font-size:11px';
+    const diff = (isOut ? -1 : 1) * ((row.a||0) - (row.b||0));
+    const diffStr = row.noSign ? (diff > 0 ? `<span class="g">+${fmt(diff)}</span>` : diff < 0 ? `<span class="r">▲${fmt(diff)}</span>` : '—')
+                  : diff > 0 ? `<span class="g">+${fmt(diff)}</span>` : diff < 0 ? `<span class="r">▲${fmt(diff)}</span>` : '—';
+    const rate = row.b > 0 ? Math.round(row.a / row.b * 100) : null;
+    const rateBadge = rate !== null
+      ? `<span class="badge ${(isOut ? rate <= 100 : rate >= 100) ? 'bg' : 'br'}">${rate}%</span>` : '—';
+
+    html += `<tr style="${rowBg}">
+      <td class="l" style="${labelStyle}">${row.label}</td>
+      <td class="budget" style="${isTot?'background:rgba(55,138,221,0.12);border-left:2px solid rgba(55,138,221,0.3);font-weight:700':''}">${fmt(row.b)}</td>
+      <td class="actual" style="${isTot?'background:rgba(39,174,96,0.10);border-left:2px solid rgba(39,174,96,0.25);font-weight:700':''}">${sign(row.a, isOut, row.isPL, row.isCF, row.noSign)}</td>
+      <td style="background:rgba(55,138,221,0.08);border-left:2px solid rgba(55,138,221,0.2);font-size:11px;text-align:right;padding:4px 6px${isTot?';font-weight:700':''}">${diffStr}</td>
+      <td style="text-align:center;padding:4px 6px">${rateBadge}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  return html;
 }
 
 // ═══════════════════════════════════════════
@@ -1572,23 +1904,22 @@ function renderCFView(d) {
       'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
       'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay','investPay'];
 
-    // 実績入金合計
+    // 実績入金合計（売上入金のみ）
     const aInTot  = sumArr(cfGet('actual','cfIn'));
     const bInTot  = sumArr(cfGet('budget','cfIn'));
-    // 実績出金合計（詳細科目 or 旧科目どちらかから合算）
+    // 実績出金合計（販管費 + 借入返済）
     const aOutTot = opexDetailKeys.reduce((t,k) => t + sumArr(cfGet('actual',k)), 0) +
                     sumArr(cfGet('actual','loanOut'));
     const bOutTot = opexDetailKeys.reduce((t,k) => t + sumArr(cfGet('budget',k)), 0) +
                     sumArr(cfGet('budget','loanOut'));
-    // 融資
-    const aFundTot = sumArr(cfGet('actual','loanIn')) + sumArr(cfGet('actual','capitalIn'));
     // 月末残高（最新非ゼロ）
     const closeArr = cfGet('actual','cfClose');
     let lastClose = 0;
     for (let i = closeArr.length-1; i >= 0; i--) {
       if (Number(closeArr[i]) > 0) { lastClose = Number(closeArr[i]); break; }
     }
-    const netCF   = aInTot + aFundTot - aOutTot;
+    // 純CF = 入金 - 出金（融資は除外してシンプルな差引）
+    const netCF = aInTot - aOutTot;
     const rateIn  = bInTot > 0 ? Math.round(aInTot / bInTot * 100) : null;
     const rateOut = bOutTot > 0 ? Math.round(aOutTot / bOutTot * 100) : null;
 
@@ -3655,21 +3986,36 @@ async function renderBudgetHistory() {
 // ── 保存・ロード ──
 async function saveSimData() {
   try {
-    await window.storage.set('neo_sim_2025', JSON.stringify(SIM_DATA['2025']));
-    await window.storage.set('neo_sim_2026', JSON.stringify(SIM_DATA['2026']));
+    localStorage.setItem('neo_sim_2025', JSON.stringify(SIM_DATA['2025']));
+    localStorage.setItem('neo_sim_2026', JSON.stringify(SIM_DATA['2026']));
+    if (!IS_LOCAL) {
+      for (const yr of ['2025', '2026']) {
+        await fetch('/api/db?action=save_sim', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fiscal_year: yr, data: SIM_DATA[yr] })
+        });
+      }
+    }
     const ok = document.getElementById('sim-save-ok');
-    ok.style.display = 'inline';
-    setTimeout(() => ok.style.display = 'none', 2500);
+    if (ok) { ok.style.display = 'inline'; setTimeout(() => ok.style.display = 'none', 2500); }
   } catch (e) { console.error(e); }
 }
 
 async function loadSimData() {
   try {
-    const r25 = await window.storage.get('neo_sim_2025');
-    if (r25) SIM_DATA['2025'] = JSON.parse(r25.value);
-    const r26 = await window.storage.get('neo_sim_2026');
-    if (r26) SIM_DATA['2026'] = JSON.parse(r26.value);
-  } catch (e) {}
+    if (!IS_LOCAL) {
+      const res = await fetch('/api/db?action=load_sim');
+      const r = await res.json();
+      if (r.ok && r.data) {
+        for (const yr of ['2025', '2026']) { if (r.data[yr]) SIM_DATA[yr] = r.data[yr]; }
+        return;
+      }
+    }
+    const r25 = localStorage.getItem('neo_sim_2025');
+    if (r25) SIM_DATA['2025'] = JSON.parse(r25);
+    const r26 = localStorage.getItem('neo_sim_2026');
+    if (r26) SIM_DATA['2026'] = JSON.parse(r26);
+  } catch (e) { console.warn('loadSimData failed:', e); }
 }
 
 function resetSimData() {
@@ -4088,48 +4434,16 @@ async function saveReportData(month) {
 const LOCAL_API_KEY = '';  // ← ここに sk-ant-... を貼るとローカルでも動作します
 
 async function callAI(prompt, maxTokens = 1200) {
-  const isLocal = window.location.protocol === 'file:' || window.location.hostname === '';
-  const hasLocalKey = LOCAL_API_KEY && LOCAL_API_KEY.startsWith('sk-ant-');
-
-  // ── ① ローカルファイル + APIキーあり → 直接Anthropic API ──
-  if (isLocal && hasLocalKey) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': LOCAL_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: maxTokens,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    return data.content?.find(b => b.type === 'text')?.text || 'エラーが発生しました';
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(data.error?.message || data.error || `HTTP ${res.status}`);
   }
-
-  // ── ② Vercel環境 → /api/chat プロキシ経由 ──
-  if (!isLocal) {
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      return data.content?.find(b => b.type === 'text')?.text || 'エラーが発生しました';
-    } catch(e) {
-      throw new Error('サーバーエラー: ' + e.message);
-    }
-  }
-
-  // ── ③ ローカル + APIキーなし → 案内メッセージ ──
-  throw new Error('LOCAL_API_KEY が未設定です。HTMLファイル内の LOCAL_API_KEY にAPIキーを貼り付けてください。');
+  return data.content?.find(b => b.type === 'text')?.text || '';
 }
 
 
@@ -4198,22 +4512,303 @@ async function genAI(type) {
 // ═══════════════════════════════════════════
 //  STORAGE
 // ═══════════════════════════════════════════
+// ── ストレージ判定 ──
+// ローカルHTML: localStorage を使用
+// Vercel環境: /api/db (Supabase) を使用
+const IS_LOCAL = window.location.protocol === 'file:' || window.location.hostname === '';
+
 async function saveDB() {
   try {
-    await window.storage.set('neo_db_2025', JSON.stringify(DB['2025']));
-    await window.storage.set('neo_db_2026', JSON.stringify(DB['2026']));
-  } catch (e) { console.error('Storage save error:', e); }
+    // 常に localStorage にも保存（バックアップ）
+    localStorage.setItem('neo_db_2025', JSON.stringify(DB['2025']));
+    localStorage.setItem('neo_db_2026', JSON.stringify(DB['2026']));
+
+    if (!IS_LOCAL) {
+      // Vercel環境: Supabaseにも保存
+      for (const yr of ['2025', '2026']) {
+        const d = DB[yr];
+        await fetch(`/api/db?action=save_fiscal`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fiscal_year: yr, months: d.months, pl: d.pl, cf: d.cf, reportData: d.reportData || {} })
+        });
+      }
+    }
+    // 保存済みインジケーター
+    const ss = document.getElementById('save-status');
+    if (ss) { ss.style.display = 'inline'; setTimeout(() => ss.style.display = 'none', 2000); }
+  } catch (e) { console.error('saveDB error:', e); }
 }
 
 async function loadDB() {
   try {
-    const r25 = await window.storage.get('neo_db_2025');
-    if (r25) DB['2025'] = JSON.parse(r25.value);
-    const r26 = await window.storage.get('neo_db_2026');
-    if (r26) DB['2026'] = JSON.parse(r26.value);
+    if (!IS_LOCAL) {
+      // Vercel環境: Supabaseから読み込み
+      const res = await fetch('/api/db?action=load_fiscal');
+      const r = await res.json();
+      if (r.ok && r.data) {
+        for (const yr of ['2025', '2026']) {
+          if (r.data[yr]) DB[yr] = { months: r.data[yr].months, pl: r.data[yr].pl, cf: r.data[yr].cf, reportData: r.data[yr].reportData || {} };
+        }
+        return; // Supabaseから取得できたらlocalStorageは不要
+      }
+    }
+    // ローカルまたはSupabase失敗時: localStorage から読み込み
+    const r25 = localStorage.getItem('neo_db_2025');
+    if (r25) DB['2025'] = JSON.parse(r25);
+    const r26 = localStorage.getItem('neo_db_2026');
+    if (r26) DB['2026'] = JSON.parse(r26);
   } catch (e) {
-    // storage not available or first run – use defaults
+    console.warn('loadDB failed, using defaults:', e);
   }
+}
+
+// ═══════════════════════════════════════════
+//  バージョン管理（localStorage）
+// ═══════════════════════════════════════════
+const VER_KEY = 'neo_versions';
+const VER_MAX = 20;
+
+function getVersions() {
+  try { return JSON.parse(localStorage.getItem(VER_KEY) || '[]'); } catch { return []; }
+}
+function saveVersions(arr) {
+  localStorage.setItem(VER_KEY, JSON.stringify(arr));
+}
+
+// バージョンパネルを開く
+function openVersionPanel() {
+  document.getElementById('ver-panel').classList.add('open');
+  document.getElementById('ver-overlay').classList.add('open');
+  renderVersionList();
+}
+function closeVersionPanel() {
+  document.getElementById('ver-panel').classList.remove('open');
+  document.getElementById('ver-overlay').classList.remove('open');
+}
+
+// 現在の状態を保存
+function saveVersion() {
+  const desc = prompt('このバージョンの説明を入力してください（例：2月末実績入力後、予算修正前）');
+  if (desc === null) return; // キャンセル
+  const versions = getVersions();
+  const ver = {
+    id: Date.now(),
+    desc: desc.trim() || '説明なし',
+    savedAt: new Date().toISOString(),
+    year: currentYear,
+    DB: JSON.parse(JSON.stringify(DB)),
+    SIM_DATA: JSON.parse(JSON.stringify(SIM_DATA)),
+  };
+  versions.unshift(ver); // 先頭に追加
+  if (versions.length > VER_MAX) versions.splice(VER_MAX); // 古いものを削除
+  saveVersions(versions);
+  renderVersionList();
+
+  // 通知
+  const ss = document.getElementById('save-status');
+  if (ss) {
+    ss.textContent = '✓ バージョン保存済み';
+    ss.style.display = 'inline';
+    setTimeout(() => { ss.textContent = '✓ 保存済み'; ss.style.display = 'none'; }, 2500);
+  }
+}
+
+// バージョン一覧を描画
+function renderVersionList() {
+  const list = document.getElementById('ver-list');
+  const versions = getVersions();
+  if (!versions.length) {
+    list.innerHTML = '<div style="padding:1.5rem 1rem;font-size:11px;color:var(--text3);text-align:center">保存されたバージョンはありません<br><br>「現在の状態を保存する」ボタンで<br>スナップショットを作成できます</div>';
+    return;
+  }
+  list.innerHTML = versions.map((v, idx) => {
+    const dt = new Date(v.savedAt).toLocaleString('ja-JP', {
+      year: '2-digit', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit'
+    });
+    const revA = Object.values(v.DB || {}).reduce((t, d) =>
+      t + (d.pl?.actual?.rev || []).reduce((a, x) => a + (Number(x)||0), 0), 0);
+    const cash = (() => {
+      for (const d of Object.values(v.DB || {})) {
+        const arr = d.cf?.actual?.cfClose || [];
+        for (let i = arr.length-1; i >= 0; i--) {
+          if (Number(arr[i]) > 0) return Number(arr[i]);
+        }
+      }
+      return 0;
+    })();
+    return `<div class="version-item${idx === 0 ? ' current' : ''}" onclick="previewVersion(${v.id})">
+      <div class="v-tag">v${versions.length - idx}${idx === 0 ? ' 　最新' : ''}</div>
+      <div class="v-desc">${v.desc}</div>
+      <div class="v-meta">
+        ${dt}　|　累積売上 ${revA.toLocaleString()}万円　|　現金 ${Math.round(cash/10).toLocaleString()}万円
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button class="btn" style="font-size:10px;padding:2px 8px" onclick="event.stopPropagation();previewVersion(${v.id})">👁 確認</button>
+        <button class="btn btn-p" style="font-size:10px;padding:2px 8px" onclick="event.stopPropagation();restoreVersion(${v.id})">↩ 復元</button>
+        <button class="btn" style="font-size:10px;padding:2px 8px;color:var(--tc-red)" onclick="event.stopPropagation();deleteVersion(${v.id})">🗑 削除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// バージョン内容をプレビュー
+function previewVersion(id) {
+  const versions = getVersions();
+  const ver = versions.find(v => v.id === id);
+  if (!ver) return;
+  const dt = new Date(ver.savedAt).toLocaleString('ja-JP');
+
+  // PL/CF数値サマリーを生成
+  let summary = '';
+  for (const [yr, d] of Object.entries(ver.DB || {})) {
+    const revA  = (d.pl?.actual?.rev||[]).reduce((a,x)=>a+(Number(x)||0),0);
+    const revB  = (d.pl?.budget?.rev||[]).reduce((a,x)=>a+(Number(x)||0),0);
+    const opexA = ['labor','outsource','adv','gaichu','other'].reduce((t,k)=>
+      t+(d.pl?.actual?.[k]||[]).reduce((a,x)=>a+(Number(x)||0),0),0);
+    const opA   = revA - opexA;
+    const cfClose = d.cf?.actual?.cfClose || [];
+    let cash = 0;
+    for (let i = cfClose.length-1; i >= 0; i--) { if (Number(cfClose[i])>0){cash=Number(cfClose[i]);break;} }
+
+    summary += `<div style="margin-bottom:.75rem">
+      <div style="font-weight:700;color:var(--text);margin-bottom:4px">${yr}年度</div>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">
+        <tr><td style="padding:3px 0;color:var(--text3)">売上（実績/予算）</td>
+            <td style="text-align:right">${revA.toLocaleString()}万 / ${revB.toLocaleString()}万円</td></tr>
+        <tr><td style="padding:3px 0;color:var(--text3)">販管費（実績）</td>
+            <td style="text-align:right">${opexA.toLocaleString()}万円</td></tr>
+        <tr><td style="padding:3px 0;color:var(--text3)">営業利益（実績）</td>
+            <td style="text-align:right;${opA>=0?'color:var(--tc-green)':'color:var(--tc-red)'}">${opA>=0?'+':'▲'}${Math.abs(opA).toLocaleString()}万円</td></tr>
+        <tr><td style="padding:3px 0;color:var(--text3)">現金残高（最新月）</td>
+            <td style="text-align:right">${Math.round(cash/10).toLocaleString()}万円</td></tr>
+      </table>
+    </div>`;
+  }
+
+  document.getElementById('ver-modal-title').textContent = `v確認 — ${ver.desc}`;
+  document.getElementById('ver-modal-body').innerHTML = `
+    <div style="font-size:10px;color:var(--text3);margin-bottom:.75rem">保存日時：${dt}</div>
+    ${summary}
+    <div style="background:var(--bg-amber);color:var(--tc-amber);padding:8px 10px;border-radius:var(--r);font-size:10px;margin-top:.5rem">
+      ⚠️ 「このバージョンに戻す」を押すと現在のデータが上書きされます。<br>戻す前に現在の状態を保存しておくことをお勧めします。
+    </div>`;
+  document.getElementById('ver-restore-btn').onclick = () => { closeVerModal(); restoreVersion(id); };
+  const modal = document.getElementById('ver-modal');
+  modal.style.display = 'flex';
+}
+function closeVerModal() {
+  document.getElementById('ver-modal').style.display = 'none';
+}
+
+// バージョンを復元
+function restoreVersion(id) {
+  const versions = getVersions();
+  const ver = versions.find(v => v.id === id);
+  if (!ver) return;
+  if (!confirm(`「${ver.desc}」に戻しますか？
+現在のデータは上書きされます。`)) return;
+
+  // 現在の状態を自動バックアップ
+  const backup = {
+    id: Date.now(),
+    desc: `[自動バックアップ] 復元前の状態`,
+    savedAt: new Date().toISOString(),
+    year: currentYear,
+    DB: JSON.parse(JSON.stringify(DB)),
+    SIM_DATA: JSON.parse(JSON.stringify(SIM_DATA)),
+  };
+  versions.unshift(backup);
+
+  // 復元
+  if (ver.DB) {
+    if (ver.DB['2025']) DB['2025'] = ver.DB['2025'];
+    if (ver.DB['2026']) DB['2026'] = ver.DB['2026'];
+  }
+  if (ver.SIM_DATA) {
+    if (ver.SIM_DATA['2025']) SIM_DATA['2025'] = ver.SIM_DATA['2025'];
+    if (ver.SIM_DATA['2026']) SIM_DATA['2026'] = ver.SIM_DATA['2026'];
+  }
+
+  // 保存してUI更新
+  saveVersions(versions);
+  saveDB();
+  updateWeeklyKPIs();
+  renderPLCF();
+  buildSimPLTable();
+  buildSimCFTable();
+  renderVersionList();
+  closeVersionPanel();
+
+  alert(`✅ 「${ver.desc}」に戻しました。
+（復元前の状態は「自動バックアップ」として保存済みです）`);
+}
+
+// バージョンを削除
+function deleteVersion(id) {
+  const versions = getVersions();
+  const ver = versions.find(v => v.id === id);
+  if (!ver) return;
+  if (!confirm(`「${ver.desc}」を削除しますか？`)) return;
+  saveVersions(versions.filter(v => v.id !== id));
+  renderVersionList();
+}
+
+// ═══════════════════════════════════════════
+//  JSON エクスポート / インポート
+// ═══════════════════════════════════════════
+function exportJSON() {
+  const data = {
+    version: '2025-neo',
+    exportedAt: new Date().toISOString(),
+    DB: DB,
+    SIM_DATA: SIM_DATA,
+    BS_DATA: typeof BS_DATA !== 'undefined' ? BS_DATA : null,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `neo_dashboard_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importJSON() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data.DB) { alert('無効なファイルです（DB データが見つかりません）'); return; }
+      // DB / SIM_DATA を復元
+      if (data.DB['2025']) DB['2025'] = data.DB['2025'];
+      if (data.DB['2026']) DB['2026'] = data.DB['2026'];
+      if (data.SIM_DATA) {
+        if (data.SIM_DATA['2025']) SIM_DATA['2025'] = data.SIM_DATA['2025'];
+        if (data.SIM_DATA['2026']) SIM_DATA['2026'] = data.SIM_DATA['2026'];
+      }
+      if (data.BS_DATA && typeof BS_DATA !== 'undefined') {
+        Object.assign(BS_DATA, data.BS_DATA);
+      }
+      // localStorage にも保存
+      await saveDB();
+      await saveSimData();
+      // 画面を再描画
+      updateWeeklyKPIs();
+      renderPLCF();
+      buildSimPLTable();
+      buildSimCFTable();
+      alert(`✅ インポート完了（${data.exportedAt?.slice(0,10) || '不明'}のデータ）`);
+    } catch(err) {
+      alert('読み込みエラー: ' + err.message);
+    }
+  };
+  input.click();
 }
 
 // ═══════════════════════════════════════════
