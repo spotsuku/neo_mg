@@ -2921,42 +2921,81 @@ async function analyzeCSV() {
   const monthsStr = months.map(m => `${m}（${MONTH_LABELS[m]||m}）`).join('、');
 
   const prompt = `あなたはマネーフォワード クラウド会計のCSVデータを解析する専門家です。
-以下のCSVデータから、指定された各月の数値を**月ごとに個別に**抽出してください。
+以下のCSVから各月の数値を月ごとに個別に抽出し、指定のJSON形式で返してください。
 
-重要：マネーフォワードのCSVは月ごとに列が分かれています。各月の列から**その月固有の値**を読み取ってください。全月同じ値にしてはいけません。
-
-【CSVの内容】（最大200行）:
+【CSVの内容】:
 ${csvFull}
 
 【CSVタイプ】: ${csvType === 'pl' ? '損益計算書(PL)' : csvType === 'bs' ? '貸借対照表(BS)' : 'CF資金繰り'}
 【取込対象月】: ${monthsStr}
 【区分】: ${kind === 'actual' ? '実績' : '予算'}
 
-以下のJSON形式で、月ごとの数値を返してください（単位は万円・整数。CFのみ千円）:
+以下のJSON形式で返してください。PLは万円・整数、CF/BSは千円・整数:
 {
   "months": {
-    "YYMM": {
-      "rev": 売上合計（万円）,
-      "labor": 人件費合計（役員報酬＋給与＋賞与＋社保）（万円）,
-      "outsource": 業務委託費合計（万円）,
-      "adv": 広告販促費合計（万円）,
-      "gaichu": 外注費合計（万円）,
-      "other": その他販管費合計（万円）,
-      "cfOpen": 月初現金残高（千円）,
-      "cfIn": 売上入金（千円）,
-      "cfClose": 月末現金残高（千円）
+    "${months[0]}": {
+      "pl": {
+        "rev": 売上合計,
+        "labor": 人件費（役員報酬+給与+賞与+社保合計）,
+        "outsource": 業務委託費合計,
+        "adv": 広告販促費合計,
+        "gaichu": 外注費合計,
+        "other": その他販管費合計
+      },
+      "cf": {
+        "open": 月初現金残高,
+        "cfClose": 月末現金残高,
+        "cfIn": 売上入金合計,
+        "cfInFee": 会費入金,
+        "cfInTraining": 研修入金,
+        "cfInOther": その他入金,
+        "salaryPay": 給与・役員報酬・社保支払,
+        "devOutPay": 開発外注支払,
+        "bizComPay": 業務委託費支払,
+        "incentivePay": インセンティブ支払,
+        "expertPay": 専門家報酬支払,
+        "rentPay": 家賃・地代支払,
+        "expensePay": 経費精算・旅費・カード支払,
+        "telPay": 通信費,
+        "entertainPay": 交際費・会議費,
+        "taxPay": 租税公課・印紙代,
+        "toolsPay": ツール・サブスク費用,
+        "suppliesPay": 消耗品費,
+        "adSportsPay": 広告費・協賛金,
+        "eventCostPay": イベント運営外注費,
+        "recruitPay": 採用費・求人広告,
+        "annualFeePay": 年会費・会費支払,
+        "salesOtherPay": その他販管費支払,
+        "investPay": 設備投資・事業投資,
+        "loanIn": 借入金着金,
+        "loanOut": 借入金返済,
+        "capitalIn": 資本金払込,
+        "warrantPay": 新株予約権,
+        "finOtherPay": 財務その他
+      },
+      "bs": {
+        "cash": 現預金,
+        "receivable": 売掛金,
+        "other_ca": その他流動資産,
+        "fixed": 固定資産合計,
+        "payable": 買掛金・未払金,
+        "borrowing": 借入金合計,
+        "other_cl": その他流動負債,
+        "capital": 資本金・資本剰余金,
+        "retained": 利益剰余金（繰越利益）
+      }
     }
+    /* 他の月も同じ構造で続く */
   },
-  "summary": "取込内容の要約",
-  "warnings": ["注意事項"]
+  "summary": "取込内容の1〜2行要約",
+  "warnings": []
 }
 
-ルール:
-- YYMMは ${months.map(m=>`"${m}"`).join('、')} の形式
-- 各月の列（例：4月列、5月列）から個別に値を読み取る
-- 数値が見つからない場合は0
-- 月ごとに異なる値になるはず。全月同一値の場合は再確認すること
-- JSONのみ返す`;
+絶対守ること:
+1. monthsのキーは ${months.map(m => `"${m}"`).join('・')} を使う
+2. 各月の列から**その月の数値のみ**抽出（全月同一値は誤り）
+3. 該当科目がなければ0
+4. JSONのみ返す（前後の説明・コメント不要）`;
 
   try {
     const raw = await callAI(prompt, 3000);
@@ -2970,7 +3009,19 @@ ${csvFull}
 
     // 解析結果をプレビューに表示（DBにはまだ書き込まない）
     const monthsFound = Object.keys(parsed.months || {});
-    log.innerHTML += `<span class="log-ok">✓ ${monthsFound.length}ヶ月分の解析完了 — 下の確認テーブルで内容を確認してください</span>\n`;
+    if (monthsFound.length === 0) {
+      // AIが想定外の形式で返した場合
+      log.innerHTML += `<span class="log-err">✗ AIの返値にmonthsデータが見つかりません</span>\n`;
+      log.innerHTML += `<span class="log-warn">⚠ AIの返値（先頭300文字）: ${raw.slice(0,300)}</span>\n`;
+      btn.disabled = false; btn.textContent = '🤖 AIで解析';
+      return;
+    }
+    // 最初の月のキー一覧をログに表示（デバッグ用）
+    const firstMonth = monthsFound[0];
+    const firstData = parsed.months[firstMonth];
+    const hasNested = !!(firstData?.pl || firstData?.cf);
+    log.innerHTML += `<span class="log-ok">✓ ${monthsFound.length}ヶ月分の解析完了（形式: ${hasNested ? 'pl/cf/bs階層' : 'フラット'}）</span>\n`;
+    log.innerHTML += `<span class="log-info">下の確認テーブルで内容を確認してから「取込確定」してください</span>\n`;
 
     // グローバルに保持（commitCSVResult で使用）
     window._csvPendingResult = { parsed, months, kind, csvType };
@@ -3075,7 +3126,11 @@ function renderCSVConfirmTable(parsed, months, kind) {
     group.rows.forEach(row => {
       html += `<tr><td class="l" style="font-size:11px;padding-left:${row.key.startsWith('cfIn') && row.key !== 'cfIn' ? '20px' : '8px'}">${row.label}</td>`;
       months.forEach(m => {
-        const val = parsed.months?.[m]?.[row.section]?.[row.key] ?? 0;
+        // AIが返す形式に応じて2通りで取得（新形式: pl/cf/bs階層、旧形式: フラット）
+        const monthData = parsed.months?.[m] || {};
+        const val = (monthData[row.section]?.[row.key])
+                 ?? (row.section !== 'bs' ? monthData[row.key] : undefined)
+                 ?? 0;
         const bg = val > 0 ? (row.isRev ? 'background:rgba(39,174,96,0.08)' : 'background:rgba(226,75,74,0.07)') : '';
         const fullKey = `${row.section}.${row.key}`;
         html += `<td class="editable-cell" style="${bg}"
