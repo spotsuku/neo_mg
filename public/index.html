@@ -616,8 +616,44 @@ td.actual.editable-cell {
           <div id="csv-encoding-info" style="font-size:10px;color:var(--tc-blue);margin-top:4px"></div>
         </div>
         <div class="section-lbl" style="margin-top:.875rem">取込設定</div>
+
+        <!-- 対象月モード切り替え -->
+        <div style="margin-bottom:.75rem">
+          <div style="font-size:10px;color:var(--text3);font-weight:700;margin-bottom:6px">対象月の選択方法</div>
+          <div class="pa-toggle" style="margin:0 0 10px">
+            <button class="pa-btn active" id="csv-month-mode-single" onclick="setCsvMonthMode('single',this)">📅 特定の月</button>
+            <button class="pa-btn" id="csv-month-mode-multi"  onclick="setCsvMonthMode('multi',this)">📅 複数の月</button>
+            <button class="pa-btn" id="csv-month-mode-year"   onclick="setCsvMonthMode('year',this)">📆 年度一括</button>
+          </div>
+
+          <!-- 単月モード -->
+          <div id="csv-month-single">
+            <input type="text" id="csv-month" placeholder="例: 2604" style="padding:6px 10px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;width:160px;font-family:inherit">
+            <span style="font-size:10px;color:var(--text3);margin-left:8px">YYMM形式（例：2604 = 2026年4月）</span>
+          </div>
+
+          <!-- 複数月モード -->
+          <div id="csv-month-multi" style="display:none">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:6px">取り込む月にチェックを入れてください</div>
+            <div id="csv-month-checkboxes" style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px"></div>
+          </div>
+
+          <!-- 年度一括モード -->
+          <div id="csv-month-year" style="display:none">
+            <div style="display:flex;align-items:center;gap:12px">
+              <select id="csv-year-select" style="padding:6px 10px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-family:inherit">
+                <option value="2025">2025年度（2504〜2603）</option>
+                <option value="2026">2026年度（2604〜2703）</option>
+              </select>
+              <span style="font-size:11px;color:var(--tc-blue);font-weight:600">12ヶ月分を一括取込</span>
+            </div>
+            <div style="font-size:10px;color:var(--text3);margin-top:6px">
+              ⚠️ 既存データは上書きされます。事前にバージョン保存を推奨します。
+            </div>
+          </div>
+        </div>
+
         <div class="fg">
-          <div class="fl"><label>対象月（YYMM）</label><input type="text" id="csv-month" placeholder="例: 2604"></div>
           <div class="fl"><label>CSVタイプ</label>
             <select id="csv-type">
               <option value="pl">PL（損益計算書）</option>
@@ -2786,25 +2822,94 @@ function parseAndPreviewCSV(text) {
   document.getElementById('csv-preview-wrap').innerHTML = html;
 }
 
+// ═══════════════════════════════════════════
+//  CSV 対象月モード管理
+// ═══════════════════════════════════════════
+let _csvMonthMode = 'single'; // 'single' | 'multi' | 'year'
+
+const MONTHS_2025 = ['2504','2505','2506','2507','2508','2509','2510','2511','2512','2601','2602','2603'];
+const MONTHS_2026_LIST = ['2604','2605','2606','2607','2608','2609','2610','2611','2612','2701','2702','2703'];
+const ALL_MONTHS = { '2025': MONTHS_2025, '2026': MONTHS_2026_LIST };
+
+function setCsvMonthMode(mode, el) {
+  _csvMonthMode = mode;
+  document.querySelectorAll('#csv-month-single,#csv-month-multi,#csv-month-year')
+    .forEach(e => e.style.display = 'none');
+  document.getElementById('csv-month-' + mode).style.display = '';
+  document.querySelectorAll('#csv-month-mode-single,#csv-month-mode-multi,#csv-month-mode-year')
+    .forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+
+  // 複数月モードのチェックボックスを初期化
+  if (mode === 'multi') buildMonthCheckboxes();
+}
+
+function buildMonthCheckboxes() {
+  const yr = document.getElementById('csv-year-select')?.value || currentYear;
+  const months = ALL_MONTHS[yr] || MONTHS_2025;
+  const wrap = document.getElementById('csv-month-checkboxes');
+  wrap.innerHTML = months.map(m => {
+    const lbl = MONTH_LABELS[m] || m;
+    return `<label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;padding:4px 6px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg)">
+      <input type="checkbox" value="${m}" style="accent-color:var(--tc-blue)"> ${lbl}
+    </label>`;
+  }).join('');
+  // 全選択ボタン
+  wrap.insertAdjacentHTML('afterend', `
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button class="btn" style="font-size:10px;padding:3px 10px"
+        onclick="document.querySelectorAll('#csv-month-checkboxes input').forEach(c=>c.checked=true)">全選択</button>
+      <button class="btn" style="font-size:10px;padding:3px 10px"
+        onclick="document.querySelectorAll('#csv-month-checkboxes input').forEach(c=>c.checked=false)">全解除</button>
+    </div>`);
+}
+
+// 選択された月リストを取得（共通関数）
+function getSelectedMonths() {
+  if (_csvMonthMode === 'single') {
+    const m = document.getElementById('csv-month').value.trim();
+    if (!m) return [];
+    return [m];
+  } else if (_csvMonthMode === 'multi') {
+    return Array.from(document.querySelectorAll('#csv-month-checkboxes input:checked')).map(c => c.value);
+  } else { // year
+    const yr = document.getElementById('csv-year-select').value;
+    return ALL_MONTHS[yr] || MONTHS_2025;
+  }
+}
+
 async function analyzeCSV() {
-  const month = document.getElementById('csv-month').value;
+  const months = getSelectedMonths();
   const csvType = document.getElementById('csv-type').value;
   const kind = document.getElementById('csv-kind').value;
 
-  if (!month) { alert('対象月を入力してください（例: 2604）'); return; }
+  if (!months.length) {
+    if (_csvMonthMode === 'single') alert('対象月を入力してください（例: 2604）');
+    else if (_csvMonthMode === 'multi') alert('取り込む月を1つ以上チェックしてください');
+    else alert('年度を選択してください');
+    return;
+  }
   if (!csvRawText) { alert('CSVファイルを選択してください'); return; }
 
   const log = document.getElementById('import-log');
   log.style.display = 'block';
-  log.innerHTML = '<span class="log-info">🤖 AIがCSVを解析中...</span>\n';
 
   const btn = document.getElementById('csv-analyze-btn');
   btn.disabled = true;
-  btn.textContent = '解析中...';
 
   const csvPreview = csvParsed.slice(0, 50).map(r => r.join(',')).join('\n');
+  const monthLabel = _csvMonthMode === 'year'
+    ? `${document.getElementById('csv-year-select').value}年度（全12ヶ月）`
+    : months.length === 1 ? months[0]
+    : `${months.join('・')}（${months.length}ヶ月）`;
 
-  const prompt = `あなたはマネーフォワード クラウド会計のCSVデータを解析する専門家です。
+  // 月ごとにループ処理
+  let successCount = 0;
+  for (const month of months) {
+    log.innerHTML += `<span class="log-info">📅 ${MONTH_LABELS[month]||month} を解析中...</span>\n`;
+    btn.textContent = `解析中... (${months.indexOf(month)+1}/${months.length})`;
+
+    const prompt = `あなたはマネーフォワード クラウド会計のCSVデータを解析する専門家です。
 以下のCSVデータを解析して、NEO福岡の経営管理用データに変換してください。
 
 【CSVの内容】（最初の50行）:
@@ -2881,11 +2986,17 @@ ${csvPreview}
       updateWeeklyKPIs();
     }
   } catch (e) {
-    log.innerHTML += `<span class="log-err">✗ エラー: ${e.message}</span>\n`;
+    log.innerHTML += `<span class="log-err">✗ ${MONTH_LABELS[month]||month} エラー: ${e.message}</span>\n`;
+    log.innerHTML += `<span class="log-warn">⚠ VercelのEnvironment VariablesにANTHROPIC_API_KEYが設定されているか確認してください</span>\n`;
   }
+    successCount++;
+  } // end for month loop
 
   btn.disabled = false;
   btn.textContent = '🤖 AIで解析・取込';
+  if (months.length > 1) {
+    log.innerHTML += `<span class="log-ok">✅ ${months.length}ヶ月分の取込処理が完了しました</span>\n`;
+  }
 }
 
 function clearCSV() {
