@@ -2927,8 +2927,7 @@ async function analyzeCSV() {
   const csvFull = csvParsed.slice(0, 200).map(r => r.join(',')).join('\n');
   const monthsStr = months.map(m => `${m}（${MONTH_LABELS[m]||m}）`).join('、');
 
-  const prompt = `あなたはマネーフォワード クラウド会計のCSVデータを解析する専門家です。
-以下のCSVから各月の数値を月ごとに個別に抽出し、指定のJSON形式で返してください。
+  const prompt = `あなたはマネーフォワード クラウド会計のCSVを解析する経理専門家です。
 
 【CSVの内容】:
 ${csvFull}
@@ -2937,71 +2936,87 @@ ${csvFull}
 【取込対象月】: ${monthsStr}
 【区分】: ${kind === 'actual' ? '実績' : '予算'}
 
-以下のJSON形式で返してください。PLは万円・整数、CF/BSは千円・整数:
+★★★ 単位変換ルール（必ず守ること）★★★
+- マネーフォワードのCSVは【円単位】で出力される
+- PL・CF・BSすべての数値を【千円に変換して整数】で返す
+  （例：3,000,000円 → 3,000千円 → 3000、141,000円 → 141千円 → 141）
+- 小数は切り捨て
+- 万円に換算しないこと（PLも千円単位で返す）
+
+★★★ 販管費の分類ルール ★★★
+- labor（人件費）：役員報酬・給料賃金・給与手当・法定福利費・福利厚生費・賞与の合計
+- outsource（業務委託費）：業務委託料・業務委託費・外部委託費・フリーランス報酬の合計
+- adv（広告販促費）：広告宣伝費・販売促進費・WEB広告費・マーケティング費の合計
+- gaichu（外注費）：外注費・制作外注費・イベント外注費・支払報酬の合計
+- other（その他販管費）：上記4つに含まれない販管費すべての合計
+  （地代家賃・水道光熱費・通信費・旅費交通費・消耗品費・租税公課・減価償却費・雑費等）
+
+以下のJSON形式で月ごとの数値を返してください:
 {
   "months": {
     "${months[0]}": {
       "pl": {
-        "rev": 売上合計,
-        "labor": 人件費（役員報酬+給与+賞与+社保合計）,
-        "outsource": 業務委託費合計,
-        "adv": 広告販促費合計,
-        "gaichu": 外注費合計,
-        "other": その他販管費合計
+        "rev": 売上高合計（千円・整数）,
+        "labor": 人件費合計（千円・整数）,
+        "outsource": 業務委託費合計（千円・整数）,
+        "adv": 広告販促費合計（千円・整数）,
+        "gaichu": 外注費合計（千円・整数）,
+        "other": その他販管費合計（千円・整数）
       },
       "cf": {
-        "open": 月初現金残高,
-        "cfClose": 月末現金残高,
-        "cfIn": 売上入金合計,
-        "cfInFee": 会費入金,
-        "cfInTraining": 研修入金,
-        "cfInOther": その他入金,
-        "salaryPay": 給与・役員報酬・社保支払,
-        "devOutPay": 開発外注支払,
-        "bizComPay": 業務委託費支払,
-        "incentivePay": インセンティブ支払,
-        "expertPay": 専門家報酬支払,
-        "rentPay": 家賃・地代支払,
-        "expensePay": 経費精算・旅費・カード支払,
-        "telPay": 通信費,
-        "entertainPay": 交際費・会議費,
-        "taxPay": 租税公課・印紙代,
-        "toolsPay": ツール・サブスク費用,
-        "suppliesPay": 消耗品費,
-        "adSportsPay": 広告費・協賛金,
-        "eventCostPay": イベント運営外注費,
-        "recruitPay": 採用費・求人広告,
-        "annualFeePay": 年会費・会費支払,
-        "salesOtherPay": その他販管費支払,
-        "investPay": 設備投資・事業投資,
-        "loanIn": 借入金着金,
-        "loanOut": 借入金返済,
-        "capitalIn": 資本金払込,
-        "warrantPay": 新株予約権,
-        "finOtherPay": 財務その他
+        "open": 月初現金残高（千円・整数）,
+        "cfClose": 月末現金残高（千円・整数）,
+        "cfIn": 売上入金合計（千円・整数）,
+        "cfInFee": 会費入金（千円）,
+        "cfInTraining": 研修入金（千円）,
+        "cfInOther": その他入金（千円）,
+        "salaryPay": 給与・役員報酬・社保支払（千円）,
+        "devOutPay": 開発外注支払（千円）,
+        "bizComPay": 業務委託費支払（千円）,
+        "incentivePay": インセンティブ支払（千円）,
+        "expertPay": 専門家報酬支払（千円）,
+        "rentPay": 家賃・地代支払（千円）,
+        "expensePay": 経費精算・旅費・カード支払（千円）,
+        "telPay": 通信費（千円）,
+        "entertainPay": 交際費・会議費（千円）,
+        "taxPay": 租税公課・印紙代（千円）,
+        "toolsPay": ツール・サブスク費用（千円）,
+        "suppliesPay": 消耗品費（千円）,
+        "adSportsPay": 広告費・協賛金（千円）,
+        "eventCostPay": イベント運営外注費（千円）,
+        "recruitPay": 採用費・求人広告（千円）,
+        "annualFeePay": 年会費・会費支払（千円）,
+        "salesOtherPay": その他販管費支払（千円）,
+        "investPay": 設備投資・事業投資（千円）,
+        "loanIn": 借入金着金（千円）,
+        "loanOut": 借入金返済（千円）,
+        "capitalIn": 資本金払込（千円）,
+        "warrantPay": 新株予約権（千円）,
+        "finOtherPay": 財務その他（千円）
       },
       "bs": {
-        "cash": 現預金,
-        "receivable": 売掛金,
-        "other_ca": その他流動資産,
-        "fixed": 固定資産合計,
-        "payable": 買掛金・未払金,
-        "borrowing": 借入金合計,
-        "other_cl": その他流動負債,
-        "capital": 資本金・資本剰余金,
-        "retained": 利益剰余金（繰越利益）
+        "cash": 現預金（千円）,
+        "receivable": 売掛金（千円）,
+        "other_ca": その他流動資産（千円）,
+        "fixed": 固定資産合計（千円）,
+        "payable": 買掛金・未払金（千円）,
+        "borrowing": 借入金合計（千円）,
+        "other_cl": その他流動負債（千円）,
+        "capital": 資本金・資本剰余金（千円）,
+        "retained": 利益剰余金（千円）
       }
     }
   },
-  "summary": "取込内容の1〜2行要約",
-  "warnings": []
+  "summary": "取込内容の1〜2行要約（すべて千円単位で記載）",
+  "warnings": ["注意事項があれば記載"]
 }
 
 絶対守ること:
 1. monthsのキーは ${months.map(m => `"${m}"`).join('・')} を使う
-2. 各月の列から**その月の数値のみ**抽出（全月同一値は誤り）
-3. 該当科目がなければ0
-4. JSONのみ返す（前後の説明・コメント不要）`;
+2. 各月の列からその月の数値のみ抽出（全月同一値は誤り）
+3. 存在しない科目は0
+4. 単位変換を必ず行う（円→万円 または 円→千円）
+5. JSONのみ返す（前後の説明・コメント不要）`;
 
   try {
     const raw = await callAI(prompt, 4000);
@@ -3061,7 +3076,7 @@ function renderCSVConfirmTable(parsed, months, kind) {
   // グループ別に科目を定義（pl/cf/bsに対応）
   const groups = [
     {
-      title: '── PL（万円）', color: 'rgba(55,138,221,0.12)',
+      title: '── PL（千円）', color: 'rgba(55,138,221,0.12)',
       rows: [
         { section:'pl', key:'rev',       label:'売上合計',     isRev:true },
         { section:'pl', key:'labor',     label:'人件費',       isOut:true },
@@ -3221,12 +3236,16 @@ async function commitCSVResult() {
     // PL書き込み
     const pl_sec = pd.pl || pd; // 新形式(pd.pl)と旧形式(pd直下)の両対応
     const target = kind === 'actual' ? d.pl.actual : d.pl.budget;
-    const setpl = (key, src) => { if (src?.[key] !== undefined && src[key] !== 0) target[key][idx] = src[key]; };
+    // PLはDBが万円単位なので千円÷10して書き込む
+    const toMan = (v) => Math.round((Number(v) || 0) / 10);
+    const setpl = (key, src) => {
+      if (src?.[key] !== undefined && src[key] !== 0) target[key][idx] = toMan(src[key]);
+    };
     setpl('rev', pl_sec); setpl('labor', pl_sec); setpl('outsource', pl_sec);
     setpl('adv', pl_sec); setpl('other', pl_sec);
     if (pl_sec?.gaichu !== undefined && pl_sec.gaichu !== 0) {
       if (!target.gaichu) target.gaichu = [];
-      target.gaichu[idx] = pl_sec.gaichu;
+      target.gaichu[idx] = toMan(pl_sec.gaichu);
     }
 
     // CF書き込み（詳細科目すべて）
