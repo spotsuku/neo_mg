@@ -3494,6 +3494,10 @@ async function applyImportedToProd() {
 }
 
 function showApplyConfirmModal(filledMonths, monthLabels, d) {
+  // グローバルに保存（onclick から参照）
+  window._pendingApplyMonths = filledMonths;
+  window._pendingApplyYear   = currentYear;
+
   // 既存モーダルを削除
   const existing = document.getElementById('apply-prod-modal');
   if (existing) existing.remove();
@@ -3562,7 +3566,7 @@ function showApplyConfirmModal(filledMonths, monthLabels, d) {
         <button class="btn" style="font-size:11px" onclick="openVersionPanel();document.getElementById('apply-prod-modal').remove()">🕐 先にバックアップ</button>
         <button class="btn" style="font-size:11px" onclick="document.getElementById('apply-prod-modal').remove()">キャンセル</button>
         <button class="btn btn-g" style="font-weight:700;font-size:12px;padding:7px 18px"
-          onclick="commitImportedToProd(${JSON.stringify(filledMonths)})">
+          onclick="commitImportedToProd()">
           ✓ 反映する
         </button>
       </div>
@@ -3571,13 +3575,18 @@ function showApplyConfirmModal(filledMonths, monthLabels, d) {
   document.body.appendChild(modal);
 }
 
-async function commitImportedToProd(filledMonths) {
+async function commitImportedToProd() {
+  const filledMonths = window._pendingApplyMonths || [];
+  const applyYear    = window._pendingApplyYear   || currentYear;
+
+  if (!filledMonths.length) { alert('反映対象のデータがありません'); return; }
+
   // 反映前に自動バックアップ
   const autoVer = {
     id: Date.now(),
-    desc: `[自動バックアップ] 本番反映前 — ${currentYear}年度 ${filledMonths.map(m=>MONTH_LABELS[m]||m).join('・')}`,
+    desc: `[自動バックアップ] 本番反映前 — ${applyYear}年度 ${filledMonths.map(m=>MONTH_LABELS[m]||m).join('・')}`,
     savedAt: new Date().toISOString(),
-    year: currentYear,
+    year: applyYear,
     DB: JSON.parse(JSON.stringify(DB)),
     SIM_DATA: JSON.parse(JSON.stringify(SIM_DATA)),
   };
@@ -3586,26 +3595,40 @@ async function commitImportedToProd(filledMonths) {
   if (vers.length > 20) vers.splice(20);
   localStorage.setItem('neo_versions', JSON.stringify(vers));
 
-  // DB内のデータはすでにactualに入っているので、
-  // saveDB() して画面を再描画するだけでOK
-  // （取込済みデータ = DB.actual そのもの）
+  // DB.actual は commitCSVResult ですでに書き込み済み。
+  // 現在表示年度が取込年度と異なる場合は切り替えて再描画する。
+  if (currentYear !== applyYear) {
+    currentYear = applyYear;
+    // 年度タブUIを更新
+    document.querySelectorAll('.yr-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.yr === applyYear);
+    });
+  }
+
+  // 保存 & 画面全更新
   await saveDB();
 
-  // モーダルを閉じる
   const modal = document.getElementById('apply-prod-modal');
   if (modal) modal.remove();
 
-  // 画面更新
-  updateWeeklyKPIs();
+  // 月次PL/CFタブを強制再描画
   renderPLCF();
+  updateWeeklyKPIs();
   renderAnnualSummary();
+
+  // 月次PL/CFタブに自動遷移（見やすくする）
+  const plcfBtn = document.querySelector('[onclick*="pl-cf"]');
+  if (plcfBtn) plcfBtn.click();
 
   // 完了トースト
   const toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--bg-green);color:var(--tc-green);border:1px solid var(--tc-green);border-radius:var(--rl);padding:12px 20px;font-size:13px;font-weight:700;z-index:9999;transition:opacity .4s';
-  toast.textContent = `✓ ${filledMonths.length}ヶ月分のデータを本番に反映しました`;
+  toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--bg-green);color:var(--tc-green);border:1px solid var(--tc-green);border-radius:var(--rl);padding:12px 20px;font-size:13px;font-weight:700;z-index:9999';
+  toast.textContent = `✓ ${filledMonths.length}ヶ月分のデータを月次PL/CFに反映しました`;
   document.body.appendChild(toast);
-  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 500); }, 3000);
+  setTimeout(() => { toast.style.opacity='0'; toast.style.transition='opacity .4s'; setTimeout(()=>toast.remove(),500); }, 3000);
+
+  window._pendingApplyMonths = null;
+  window._pendingApplyYear   = null;
 }
 
 async function loadImportedList() {
