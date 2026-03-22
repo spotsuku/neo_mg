@@ -362,6 +362,7 @@ td.actual.editable-cell {
   <div class="metrics">
     <div class="mc"><div class="mc-l">現金残高</div><div class="mc-v" id="kpi-cash">—</div><div class="mc-s" id="kpi-cash-s"></div></div>
     <div class="mc"><div class="mc-l">累積売上</div><div class="mc-v" id="kpi-rev">—</div><div class="mc-s" id="kpi-rev-s"></div></div>
+    <div class="mc"><div class="mc-l">累積粗利</div><div class="mc-v" id="kpi-gp">—</div><div class="mc-s" id="kpi-gp-s"></div></div>
     <div class="mc"><div class="mc-l">累積販管費</div><div class="mc-v" id="kpi-opex">—</div><div class="mc-s" id="kpi-opex-s"></div></div>
     <div class="mc"><div class="mc-l">営業損益（累積）</div><div class="mc-v" id="kpi-op">—</div><div class="mc-s" id="kpi-op-s"></div></div>
     <div class="mc"><div class="mc-l">資金ショートリスク</div><div class="mc-v" id="kpi-risk">—</div><div class="mc-s" id="kpi-risk-s"></div></div>
@@ -1112,8 +1113,8 @@ let charts = {};
 const DEFAULT_2025 = {
   months: ['2504','2505','2506','2507','2508','2509','2510','2511','2512','2601','2602','2603'],
   pl: {
-    budget: { rev:[625,625,625,625,625,625,625,625,625,625,625,625], labor:[250,250,250,250,250,250,250,250,250,250,250,250], outsource:[400,400,400,400,400,400,400,400,400,400,400,400], adv:[167,167,167,167,167,167,167,167,167,167,167,167], gaichu:[200,200,200,200,200,200,200,200,200,200,200,200], other:[117,117,117,117,117,117,117,117,117,117,117,117] },
-    actual: { rev:[1203,1257,3015,1,605,3,771,29,82,322,450,0], labor:[141,141,140,498,153,138,183,263,263,308,302,0], outsource:[156,767,450,475,391,512,414,349,502,160,87,0], adv:[116,71,194,63,51,17,220,27,216,248,365,0], gaichu:[110,192,175,359,228,629,343,517,366,134,214,0], other:[110,192,174,359,227,628,342,516,366,133,214,0] }
+    budget: { rev:[625,625,625,625,625,625,625,625,625,625,625,625], cogs:[0,0,0,0,0,0,0,0,0,0,0,0], cogsHomeroom:[0,0,0,0,0,0,0,0,0,0,0,0], cogsHyogikai:[0,0,0,0,0,0,0,0,0,0,0,0], cogsOenKaigi:[0,0,0,0,0,0,0,0,0,0,0,0], cogsBigEvent:[0,0,0,0,0,0,0,0,0,0,0,0], cogsOther:[0,0,0,0,0,0,0,0,0,0,0,0], labor:[250,250,250,250,250,250,250,250,250,250,250,250], outsource:[400,400,400,400,400,400,400,400,400,400,400,400], adv:[167,167,167,167,167,167,167,167,167,167,167,167], gaichu:[200,200,200,200,200,200,200,200,200,200,200,200], other:[117,117,117,117,117,117,117,117,117,117,117,117] },
+    actual: { rev:[1203,1257,3015,1,605,3,771,29,82,322,450,0], cogs:[0,0,0,0,0,0,0,0,0,0,0,0], cogsHomeroom:[0,0,0,0,0,0,0,0,0,0,0,0], cogsHyogikai:[0,0,0,0,0,0,0,0,0,0,0,0], cogsOenKaigi:[0,0,0,0,0,0,0,0,0,0,0,0], cogsBigEvent:[0,0,0,0,0,0,0,0,0,0,0,0], cogsOther:[0,0,0,0,0,0,0,0,0,0,0,0], labor:[141,141,140,498,153,138,183,263,263,308,302,0], outsource:[156,767,450,475,391,512,414,349,502,160,87,0], adv:[116,71,194,63,51,17,220,27,216,248,365,0], gaichu:[110,192,175,359,228,629,343,517,366,134,214,0], other:[110,192,174,359,227,628,342,516,366,133,214,0] }
   },
   cf: {
     budget: {
@@ -1199,7 +1200,7 @@ const MONTH_LABELS = {
 };
 
 // DB (will be loaded from storage)
-let DB = { '2025': JSON.parse(JSON.stringify(DEFAULT_2025)), '2026': { months: MONTHS_2026, pl:{ budget:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]}, actual:{rev:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]} }, cf:{ budget:{open:[],cfIn:[],cfInMembership:[],cfInTraining:[],cfInOther:[],salaryPay:[],devOutPay:[],bizComPay:[],incentivePay:[],expertPay:[],rentPay:[],expensePay:[],telPay:[],entertainPay:[],taxPay:[],toolsPay:[],suppliesPay:[],adSportsPay:[],eventCostPay:[],recruitPay:[],annualFeePay:[],salesOtherPay:[],investPay:[],loanIn:[],loanOut:[],capitalIn:[],warrantPay:[],finOtherPay:[],funding:[]}, actual:{open:[],cfIn:[],cfClose:[],cfInMembership:[],cfInTraining:[],cfInOther:[],salaryPay:[],devOutPay:[],bizComPay:[],incentivePay:[],expertPay:[],rentPay:[],expensePay:[],telPay:[],entertainPay:[],taxPay:[],toolsPay:[],suppliesPay:[],adSportsPay:[],eventCostPay:[],recruitPay:[],annualFeePay:[],salesOtherPay:[],investPay:[],loanIn:[],loanOut:[],capitalIn:[],warrantPay:[],finOtherPay:[],funding:[]} }, reportData:{} } };
+let DB = { '2025': JSON.parse(JSON.stringify(DEFAULT_2025)), '2026': { months: MONTHS_2026, pl:{ budget:{rev:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]}, actual:{rev:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]} }, cf:{ budget:{open:[],cfIn:[],cfInMembership:[],cfInTraining:[],cfInOther:[],salaryPay:[],devOutPay:[],bizComPay:[],incentivePay:[],expertPay:[],rentPay:[],expensePay:[],telPay:[],entertainPay:[],taxPay:[],toolsPay:[],suppliesPay:[],adSportsPay:[],eventCostPay:[],recruitPay:[],annualFeePay:[],salesOtherPay:[],investPay:[],loanIn:[],loanOut:[],capitalIn:[],warrantPay:[],finOtherPay:[],funding:[]}, actual:{open:[],cfIn:[],cfClose:[],cfInMembership:[],cfInTraining:[],cfInOther:[],salaryPay:[],devOutPay:[],bizComPay:[],incentivePay:[],expertPay:[],rentPay:[],expensePay:[],telPay:[],entertainPay:[],taxPay:[],toolsPay:[],suppliesPay:[],adSportsPay:[],eventCostPay:[],recruitPay:[],annualFeePay:[],salesOtherPay:[],investPay:[],loanIn:[],loanOut:[],capitalIn:[],warrantPay:[],finOtherPay:[],funding:[]} }, reportData:{} } };
 
 // ═══════════════════════════════════════════
 //  NAV / TABS
@@ -1277,6 +1278,10 @@ function updateWeeklyKPIs() {
 
   // cumulative
   const cumRev = pl.actual.rev.slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
+  const cogsKpiKeys = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+  const cumCogs = cogsKpiKeys.reduce((t,k) => t + (pl.actual[k]||[]).slice(0, lastActualIdx+1).reduce((s,v)=>s+(Number(v)||0),0), 0);
+  const cumGP   = cumRev - cumCogs;
+  const gpRate  = cumRev > 0 ? Math.round(cumGP / cumRev * 100) : null;
   const cumLabor = pl.actual.labor.slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
   const cumOutsource = pl.actual.outsource.slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
   const cumAdv = pl.actual.adv.slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
@@ -1313,6 +1318,13 @@ function updateWeeklyKPIs() {
   document.getElementById('kpi-cash-s').innerHTML = lastCash ? `<span class="${riskClass(runway)}">残り約${runway}ヶ月</span>` : '<span class="badge ba">残り約7.5ヶ月</span>';
   document.getElementById('kpi-rev').textContent = cumRev ? fmt万(cumRev) + '万円' : '7,737万円';
   document.getElementById('kpi-rev-s').innerHTML = budRev ? `<span class="badge ${cumRev >= budRev ? 'bg' : 'br'}">予算比 ${Math.round(cumRev / budRev * 100)}%</span>` : '';
+  if (document.getElementById('kpi-gp')) {
+    document.getElementById('kpi-gp').innerHTML = cumGP >= 0
+      ? `<span class="g">${fmt万(cumGP)}万円</span>`
+      : `<span class="r">▲${fmt万(Math.abs(cumGP))}万円</span>`;
+    const gpEl = document.getElementById('kpi-gp-s');
+    if (gpEl && gpRate !== null) gpEl.innerHTML = `<span class="badge ${gpRate>=30?'bg':gpRate>=0?'ba':'br'}">${gpRate}% 粗利率</span>`;
+  }
   document.getElementById('kpi-opex').textContent = cumOpex ? fmt万(cumOpex) + '万円' : '12,259万円';
   document.getElementById('kpi-op').innerHTML = cumOp >= 0 ? `<span class="g">${fmt万(cumOp)}万円</span>` : `<span class="r">▲${fmt万(Math.abs(cumOp))}万円</span>`;
   document.getElementById('kpi-op-s').innerHTML = `<span class="badge ${cumOp >= 0 ? 'bg' : 'ba'}">累積損益</span>`;
@@ -1425,12 +1437,14 @@ function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete chart
 //  CF セクション折りたたみ管理
 // ═══════════════════════════════════════════
 const _cfSectionOpen = {
-  'cf-sec-revenue': false,  // デフォルト閉じる
+  'cf-sec-revenue': false,
+  'cf-sec-cogs':    true,   // 原価セクション
+  'cf-sec-cogs-d':  false,  // 原価明細
   'cf-sec-opex':    true,
-  'cf-sec-fixed':   false,  // 固定費明細 デフォルト閉じる
-  'cf-sec-var':     false,  // 変動費明細 デフォルト閉じる
-  'cf-sec-invest':  false,  // 事業投資明細 デフォルト閉じる
-  'cf-sec-fin':     false,  // 財務収支明細 デフォルト閉じる
+  'cf-sec-fixed':   false,
+  'cf-sec-var':     false,
+  'cf-sec-invest':  false,
+  'cf-sec-fin':     false,
 };
 
 function toggleCFSection(id) {
@@ -1496,9 +1510,17 @@ function renderAnnualPL(d) {
   const opA    = revA - opexA;
   const opB    = revB - opexB;
 
+  const cogsAnn = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+  const cogsAA = cogsAnn.reduce((t,k)=>t+sumA(d.pl.actual[k]||[]),0);
+  const cogsAB = cogsAnn.reduce((t,k)=>t+sumA(d.pl.budget[k]||[]),0);
+  const gpAA = revA - cogsAA;
+  const gpAB = revB - cogsAB;
+
   const rows = [
-    { label:'売上高',       a:revA,   b:revB,   isRev:true, isTot:true },
-    { label:'販管費合計',   a:opexA,  b:opexB,  isOut:true, isTot:true },
+    { label:'売上高',             a:revA,   b:revB,   isRev:true, isTot:true },
+    { label:'NEOプログラム原価',  a:cogsAA, b:cogsAB, isOut:true, isTot:true },
+    { label:'粗利',               a:gpAA,   b:gpAB,   isRev:true, isTot:true, isPL:true },
+    { label:'販管費合計',         a:opexA,  b:opexB,  isOut:true, isTot:true },
     { label:'　人件費',     a:laborA, b:laborB, isOut:true  },
     { label:'　業務委託費', a:outA,   b:outB,   isOut:true  },
     { label:'　広告販促費', a:advA,   b:advB,   isOut:true  },
@@ -1795,12 +1817,25 @@ function renderPLView(d) {
   })();
   const revB = d.pl.budget.rev.map(v => Number(v) || 0);
   const revA = d.pl.actual.rev.map(v => Number(v) || null);
+  // 原価（cogs）ヘルパー
+  const getCogs = (sec, key) => (d.pl[sec]?.[key] || []);
+  const cogsKeys = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+  const cogsB = d.pl.budget.rev.map((_, i) => cogsKeys.reduce((t,k) => t+(Number(getCogs('budget',k)[i])||0), 0));
+  const cogsA = d.pl.actual.rev.map((_, i) => {
+    const v = cogsKeys.reduce((t,k) => t+(Number(getCogs('actual',k)[i])||0), 0);
+    return v > 0 ? v : null;
+  });
+  // 粗利 = 売上 - 原価
+  const gpB = revB.map((r, i) => r - cogsB[i]);
+  const gpA = revA.map((r, i) => r !== null ? r - (cogsA[i] || 0) : null);
+  // 販管費
   const opexB = d.pl.budget.rev.map((_, i) => (Number(d.pl.budget.labor[i]) || 0) + (Number(d.pl.budget.outsource[i]) || 0) + (Number(d.pl.budget.adv[i]) || 0) + (Number(d.pl.budget.gaichu||[])[i] || 0) + (Number(d.pl.budget.other[i]) || 0));
   const opexA = d.pl.actual.rev.map((_, i) => {
     const v = (Number(d.pl.actual.labor[i]) || 0) + (Number(d.pl.actual.outsource[i]) || 0) + (Number(d.pl.actual.adv[i]) || 0) + (Number((d.pl.actual.gaichu||[])[i]) || 0) + (Number(d.pl.actual.other[i]) || 0);
     return v > 0 ? v : null;
   });
-  const profA = revA.map((r, i) => r !== null ? (r - (opexA[i] || 0)) : null);
+  // 営業利益 = 粗利 - 販管費
+  const profA = gpA.map((g, i) => g !== null ? g - (opexA[i] || 0) : null);
 
   // インライン編集ヘルパー
   function editCell(tdEl, key, kind, idx) {
@@ -1832,9 +1867,11 @@ function renderPLView(d) {
     data: {
       labels: months,
       datasets: [
-        { label: '売上予算', data: revB, backgroundColor: 'rgba(55,138,221,0.25)', borderRadius: 3, order: 2 },
-        { label: '売上実績', data: revA, backgroundColor: '#378ADD', borderRadius: 3, order: 1 },
-        { label: '販管費実績', data: opexA, backgroundColor: 'rgba(226,75,74,0.6)', borderRadius: 3, order: 1 },
+        { label: '売上予算', data: revB, backgroundColor: 'rgba(55,138,221,0.25)', borderRadius: 3, order: 3 },
+        { label: '売上実績', data: revA, backgroundColor: '#378ADD', borderRadius: 3, order: 2 },
+        { label: '原価実績', data: cogsA, backgroundColor: 'rgba(239,159,39,0.55)', borderRadius: 3, order: 2 },
+        { label: '販管費実績', data: opexA, backgroundColor: 'rgba(226,75,74,0.55)', borderRadius: 3, order: 2 },
+        { type: 'line', label: '粗利', data: gpA, borderColor: '#EF9F27', borderDash: [4,3], pointRadius: 2, tension: 0.3, yAxisID: 'y2', order: 0 },
         { type: 'line', label: '営業損益', data: profA, borderColor: '#3B6D11', pointRadius: 3, tension: 0.3, yAxisID: 'y2', order: 0 }
       ]
     },
@@ -1851,12 +1888,22 @@ function renderPLView(d) {
 
   // Table
   const rows = [
-    { key: 'rev', label: '売上合計', b: d.pl.budget.rev, a: d.pl.actual.rev },
-    { key: 'labor', label: '├ 人件費', b: d.pl.budget.labor, a: d.pl.actual.labor, indent: true },
-    { key: 'outsource', label: '├ 業務委託費', b: d.pl.budget.outsource, a: d.pl.actual.outsource, indent: true },
-    { key: 'adv', label: '├ 広告販促費', b: d.pl.budget.adv, a: d.pl.actual.adv, indent: true },
-    { key: 'gaichu', label: '├ 外注費', b: d.pl.budget.gaichu||[], a: d.pl.actual.gaichu||[], indent: true },
-    { key: 'other', label: '└ その他費用', b: d.pl.budget.other, a: d.pl.actual.other, indent: true },
+    { key: 'rev',          label: '売上合計',           b: d.pl.budget.rev,                    a: d.pl.actual.rev },
+    // ── 原価セクション ──
+    { key: '_cogsTotal',   label: 'NEOプログラム原価',  b: cogsB, a: cogsA, isTot: true, isOut: true },
+    { key: 'cogsHomeroom', label: '├ ホームルーム',     b: getCogs('budget','cogsHomeroom'),   a: getCogs('actual','cogsHomeroom'),   indent: true, isOut: true },
+    { key: 'cogsHyogikai', label: '├ 評議会',           b: getCogs('budget','cogsHyogikai'),   a: getCogs('actual','cogsHyogikai'),   indent: true, isOut: true },
+    { key: 'cogsOenKaigi', label: '├ 応援カイギ',       b: getCogs('budget','cogsOenKaigi'),   a: getCogs('actual','cogsOenKaigi'),   indent: true, isOut: true },
+    { key: 'cogsBigEvent', label: '├ 大型イベント',     b: getCogs('budget','cogsBigEvent'),   a: getCogs('actual','cogsBigEvent'),   indent: true, isOut: true },
+    { key: 'cogsOther',    label: '└ その他原価',       b: getCogs('budget','cogsOther'),      a: getCogs('actual','cogsOther'),      indent: true, isOut: true },
+    // ── 粗利 ──
+    { key: '_grossProfit', label: '粗利',               b: gpB,   a: gpA,   isTot: true, isRev: true, noEdit: true },
+    // ── 販管費セクション ──
+    { key: 'labor',        label: '├ 人件費',           b: d.pl.budget.labor,                  a: d.pl.actual.labor,                  indent: true, isOut: true },
+    { key: 'outsource',    label: '├ 業務委託費',       b: d.pl.budget.outsource,              a: d.pl.actual.outsource,              indent: true, isOut: true },
+    { key: 'adv',          label: '├ 広告販促費',       b: d.pl.budget.adv,                    a: d.pl.actual.adv,                    indent: true, isOut: true },
+    { key: 'gaichu',       label: '├ 外注費',           b: d.pl.budget.gaichu||[],             a: d.pl.actual.gaichu||[],             indent: true, isOut: true },
+    { key: 'other',        label: '└ その他費用',       b: d.pl.budget.other,                  a: d.pl.actual.other,                  indent: true, isOut: true },
   ];
 
   let html = `<table class="dt" style="min-width:${80 + d.months.length * 80}px"><thead><tr><th class="l" style="min-width:110px">科目</th><th class="l" style="width:40px">区分</th>`;
@@ -1921,25 +1968,26 @@ function renderPLView(d) {
   html += `<td class="${opexDiff > 0 ? 'diff-pos' : opexDiff < 0 ? 'diff-neg' : 'diff-zero'}" style="${opexStyle}font-weight:700">${opexDiff > 0 ? '+' : ''}${opexDiff !== 0 ? Math.round(opexDiff).toLocaleString() : '—'}</td></tr>`;
 
   // ── 営業損益行 ──
+  // 営業損益行（粗利 - 販管費）
   html += `<tr class="tot"><td class="l">営業損益</td><td class="l" style="font-size:9px">予算</td>`;
   let bOpSum = 0;
   d.months.forEach((_, i) => {
-    const bOp = (Number(d.pl.budget.rev[i]) || 0) - ((Number(d.pl.budget.labor[i]) || 0) + (Number(d.pl.budget.outsource[i]) || 0) + (Number(d.pl.budget.adv[i]) || 0) + (Number((d.pl.budget.gaichu||[])[i]) || 0) + (Number(d.pl.budget.other[i]) || 0));
+    const bOp = gpB[i] - ((Number(d.pl.budget.labor[i])||0)+(Number(d.pl.budget.outsource[i])||0)+(Number(d.pl.budget.adv[i])||0)+(Number((d.pl.budget.gaichu||[])[i])||0)+(Number(d.pl.budget.other[i])||0));
     bOpSum += bOp;
     html += `<td class="budget ${bOp >= 0 ? 'diff-pos' : 'diff-neg'}">${bOp >= 0 ? '' : '▲'}${Math.abs(Math.round(bOp)).toLocaleString()}</td>`;
   });
-  html += `<td class="budget ${bOpSum >= 0 ? 'diff-pos' : 'diff-neg'}">${bOpSum >= 0 ? '' : '▲'}${Math.abs(Math.round(bOpSum)).toLocaleString()}</td></tr>`;
+  html += `<td class="budget ${bOpSum >= 0 ? 'diff-pos' : 'diff-neg'}" style="background:rgba(55,138,221,0.12);border-left:2px solid rgba(55,138,221,0.3);font-weight:700">${bOpSum >= 0 ? '' : '▲'}${Math.abs(Math.round(bOpSum)).toLocaleString()}</td></tr>`;
 
   html += `<tr class="tot"><td class="l"></td><td class="l" style="font-size:9px">実績</td>`;
   let aOpSum = 0;
   d.months.forEach((_, i) => {
-    const ar = Number(d.pl.actual.rev[i]) || 0;
-    const ae = (Number(d.pl.actual.labor[i]) || 0) + (Number(d.pl.actual.outsource[i]) || 0) + (Number(d.pl.actual.adv[i]) || 0) + (Number((d.pl.actual.gaichu||[])[i]) || 0) + (Number(d.pl.actual.other[i]) || 0);
-    if (!ar && !ae) { html += `<td>—</td>`; return; }
-    const aOp = ar - ae; aOpSum += aOp;
+    const gp = gpA[i];
+    const ae = (Number(d.pl.actual.labor[i])||0)+(Number(d.pl.actual.outsource[i])||0)+(Number(d.pl.actual.adv[i])||0)+(Number((d.pl.actual.gaichu||[])[i])||0)+(Number(d.pl.actual.other[i])||0);
+    if (gp === null && !ae) { html += `<td>—</td>`; return; }
+    const aOp = (gp||0) - ae; aOpSum += aOp;
     html += `<td class="actual ${aOp >= 0 ? 'diff-pos' : 'diff-neg'}">${aOp >= 0 ? '' : '▲'}${Math.abs(Math.round(aOp)).toLocaleString()}</td>`;
   });
-  html += `<td class="actual ${aOpSum >= 0 ? 'diff-pos' : 'diff-neg'}">${aOpSum >= 0 ? '' : '▲'}${Math.abs(Math.round(aOpSum)).toLocaleString()}</td></tr>`;
+  html += `<td class="actual ${aOpSum >= 0 ? 'diff-pos' : 'diff-neg'}" style="background:rgba(39,174,96,0.10);border-left:2px solid rgba(39,174,96,0.25);font-weight:700">${aOpSum >= 0 ? '' : '▲'}${Math.abs(Math.round(aOpSum)).toLocaleString()}</td></tr>`;
   html += '</tbody></table>';
   window._plCFd = d;
   document.getElementById('pl-table-wrap').innerHTML = html;
@@ -2063,6 +2111,7 @@ function renderCFView(d) {
   const bFunding = cfArr('budget','funding');
   // 出金合計は詳細科目から計算（sumKeysはrows定義の前なので先に計算）
   const bAllOutKeys = [
+    'cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay',
     'salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
     'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
     'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay',
@@ -2243,6 +2292,15 @@ function renderCFView(d) {
     { label:'財務CF（融資等）', bArr:bFinCFd, aArr:aFinCFd, isTot:true, noDiff:true },
     { label:'月次純CF',         bArr:bNetCFd, aArr:aNetCFd, isTot:true, noDiff:true },
     { label:'月末残高',         bArr:bCloseCalc, aArr:aCloseCalc, noSum:true, edAKey:'actual.cfClose', isTot:true },
+
+    // ── NEOプログラム原価（折りたたみ）──
+    { label:'── NEOプログラム原価', section:true, colId:'cf-sec-cogs' },
+    { label:'原価合計', bArr:Array.from({length:N},(_,i)=>['cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'].reduce((t,k)=>t+(Number((cfArr('budget',k)||[])[i])||0),0)), aArr:Array.from({length:N},(_,i)=>['cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'].reduce((t,k)=>t+(Number((cfArr('actual',k)||[])[i])||0),0)), isTot:true, isOut:true, noDiff:false, subColId:'cf-sec-cogs-d' },
+    R('　　ホームルーム',  'cogsHomeroomPay', 'cogsHomeroomPay', {isSub:true, isOut:true, colGroup:'cf-sec-cogs-d'}),
+    R('　　評議会',        'cogsHyogikaiPay', 'cogsHyogikaiPay', {isSub:true, isOut:true, colGroup:'cf-sec-cogs-d'}),
+    R('　　応援カイギ',    'cogsOenKaigiPay', 'cogsOenKaigiPay', {isSub:true, isOut:true, colGroup:'cf-sec-cogs-d'}),
+    R('　　大型イベント',  'cogsBigEventPay', 'cogsBigEventPay', {isSub:true, isOut:true, colGroup:'cf-sec-cogs-d'}),
+    R('　　その他原価',    'cogsOtherPay',    'cogsOtherPay',    {isSub:true, isOut:true, colGroup:'cf-sec-cogs-d'}),
 
     // ── 収入（折りたたみ）──
     { label:'── 収入', section:true, sectionStyle:'revenue', colId:'cf-sec-revenue' },
@@ -3564,16 +3622,27 @@ const SIM_MONTHS = {
 // PL行定義
 // ── 固定行（変更不可）──
 const PL_ROWS_BASE = [
-  { key: 'rev',        label: '売上合計',         color: '#378ADD', isRev: true },
-  { key: 'fee',        label: 'NEO会費',           color: '#378ADD', indent: true, isRev: true },
-  { key: 'training',   label: '研修売上',           color: '#378ADD', indent: true, isRev: true },
-  { key: 'event',      label: 'イベント・その他',   color: '#378ADD', indent: true, isRev: true },
-  { key: 'labor',      label: '人件費（社保込）',   color: '#E24B4A', isCost: true },
-  { key: 'outsource',  label: '業務委託費',         color: '#D85A30', isCost: true },
-  { key: 'adv',        label: '広告販促費',         color: '#EF9F27', isCost: true },
-  { key: 'rent',       label: '賃料',              color: '#888780', isCost: true },
-  { key: 'gaichu',     label: '外注費',             color: '#D85A30', isCost: true },
-  { key: 'other',      label: 'その他費用',         color: '#B4B2A9', isCost: true },
+  // ── 売上 ──
+  { key: 'rev',            label: '売上合計',           color: '#378ADD', isRev: true },
+  { key: 'fee',            label: 'NEO会費',             color: '#378ADD', indent: true, isRev: true },
+  { key: 'training',       label: '研修売上',             color: '#378ADD', indent: true, isRev: true },
+  { key: 'event',          label: 'イベント・その他',     color: '#378ADD', indent: true, isRev: true },
+  // ── NEOプログラム原価 ──
+  { key: '_cogsHead',      label: 'NEOプログラム原価',   color: '#EF9F27', isCost: true, isSection: true },
+  { key: 'cogsHomeroom',   label: 'ホームルーム',         color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
+  { key: 'cogsHyogikai',   label: '評議会',               color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
+  { key: 'cogsOenKaigi',   label: '応援カイギ',           color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
+  { key: 'cogsBigEvent',   label: '大型イベント',         color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
+  { key: 'cogsOther',      label: 'その他原価',           color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
+  // ── 粗利（自動計算）──
+  { key: '_grossProfit',   label: '粗利',                 color: '#3B9', isCalc: true },
+  // ── 販管費 ──
+  { key: 'labor',          label: '人件費（社保込）',     color: '#E24B4A', isCost: true },
+  { key: 'outsource',      label: '業務委託費',           color: '#D85A30', isCost: true },
+  { key: 'adv',            label: '広告販促費',           color: '#EF9F27', isCost: true },
+  { key: 'rent',           label: '賃料',                 color: '#888780', isCost: true },
+  { key: 'gaichu',         label: '外注費',               color: '#D85A30', isCost: true },
+  { key: 'other',          label: 'その他費用',           color: '#B4B2A9', isCost: true },
 ];
 
 // ── ユーザーが追加した行（年度別・永続保存）──
@@ -3584,7 +3653,7 @@ function getCustomRows(year) {
 
 // 親行として選択できる行の定義
 const PARENT_OPTIONS_REV  = ['fee','training','event'];  // 売上の親候補
-const PARENT_OPTIONS_COST = ['labor','outsource','adv','rent','gaichu','other']; // 費用の親候補
+const PARENT_OPTIONS_COST = ['_cogsHead','labor','outsource','adv','rent','gaichu','other']; // 費用の親候補
 
 // 全行（固定 + カスタム）を parentKey に従って正しい位置に挿入して返す
 function getPLRows() {
@@ -3663,41 +3732,58 @@ let PL_ROWS = PL_ROWS_BASE;
 
 // CF行定義
 const CF_ROWS = [
-  { key: 'cfIn',       label: '売上入金',          color: '#378ADD' },
-  { key: 'laborPay',   label: '人件費支払',         color: '#E24B4A', isOut: true },
-  { key: 'outsourcePay',label: '業務委託支払',      color: '#D85A30', isOut: true },
-  { key: 'advPay',     label: '広告宣伝費',          color: '#EF9F27', isOut: true },
-  { key: 'eventPay',   label: '外注費(イベント運営等)',  color: '#D87D27', isOut: true },
-  { key: 'rentPay',    label: '賃料',              color: '#888780', isOut: true },
-  { key: 'gaichuPay',  label: '外注費支払',          color: '#D85A30', isOut: true },
-  { key: 'otherPay',   label: 'その他支出',         color: '#B4B2A9', isOut: true },
-  { key: 'funding',    label: '融資・調達（+）',    color: '#3B6D11' },
+  { key: 'cfIn',            label: '売上入金',                    color: '#378ADD' },
+  // ── NEOプログラム原価支払い ──
+  { key: 'cogsHomeroomPay', label: '原価：ホームルーム',          color: '#EF9F27', isOut: true },
+  { key: 'cogsHyogikaiPay', label: '原価：評議会',                color: '#EF9F27', isOut: true },
+  { key: 'cogsOenKaigiPay', label: '原価：応援カイギ',            color: '#EF9F27', isOut: true },
+  { key: 'cogsBigEventPay', label: '原価：大型イベント',          color: '#EF9F27', isOut: true },
+  { key: 'cogsOtherPay',    label: '原価：その他',                color: '#EF9F27', isOut: true },
+  // ── 販管費支払い ──
+  { key: 'laborPay',        label: '人件費支払',                  color: '#E24B4A', isOut: true },
+  { key: 'outsourcePay',    label: '業務委託支払',                color: '#D85A30', isOut: true },
+  { key: 'advPay',          label: '広告宣伝費',                  color: '#EF9F27', isOut: true },
+  { key: 'eventPay',        label: '外注費（イベント運営等）',    color: '#D87D27', isOut: true },
+  { key: 'rentPay',         label: '賃料',                        color: '#888780', isOut: true },
+  { key: 'gaichuPay',       label: '外注費支払',                  color: '#D85A30', isOut: true },
+  { key: 'otherPay',        label: 'その他支出',                  color: '#B4B2A9', isOut: true },
+  { key: 'funding',         label: '融資・調達（+）',             color: '#3B6D11' },
 ];
 
 // インメモリ シムデータ
 let SIM_DATA = {
   '2025': {
     pl: {
-      fee:       [900,900,900,1000,1000,1000,1100,1100,1100,1200,1200,1200],
-      training:  [100,100,200,200,300,300,400,400,500,500,500,500],
-      event:     [0,50,100,0,50,100,0,50,300,50,50,100],
-      labor:     [310,310,310,310,310,310,360,360,360,360,360,360],
-      outsource: [380,380,380,380,380,380,380,380,380,380,380,380],
-      adv:       [80,80,150,80,80,250,80,80,350,80,80,150],
-      rent:      [90,90,90,90,90,90,90,90,90,90,90,90],
-      gaichu:    [80,80,80,80,80,80,80,80,80,80,80,80],
-      other:     [50,50,50,50,50,50,50,50,50,50,50,50]
+      fee:            [900,900,900,1000,1000,1000,1100,1100,1100,1200,1200,1200],
+      training:       [100,100,200,200,300,300,400,400,500,500,500,500],
+      event:          [0,50,100,0,50,100,0,50,300,50,50,100],
+      cogsHomeroom:   [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsHyogikai:   [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsOenKaigi:   [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsBigEvent:   [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsOther:      [0,0,0,0,0,0,0,0,0,0,0,0],
+      labor:          [310,310,310,310,310,310,360,360,360,360,360,360],
+      outsource:      [380,380,380,380,380,380,380,380,380,380,380,380],
+      adv:            [80,80,150,80,80,250,80,80,350,80,80,150],
+      rent:           [90,90,90,90,90,90,90,90,90,90,90,90],
+      gaichu:         [80,80,80,80,80,80,80,80,80,80,80,80],
+      other:          [50,50,50,50,50,50,50,50,50,50,50,50]
     },
     cf: {
-      cfOpenFirst: 5371,
-      cfIn:        [900,900,900,1000,1000,1000,1100,1100,1100,1200,1200,1200],
-      laborPay:    [310,310,310,310,310,310,360,360,360,360,360,360],
-      outsourcePay:[380,380,380,380,380,380,380,380,380,380,380,380],
-      advPay:      [80,80,150,80,80,250,80,80,350,80,80,150],
-      eventPay:    [50,50,100,50,50,150,50,50,200,50,50,100],
-      rentPay:     [90,90,90,90,90,90,90,90,90,90,90,90],
-      gaichuPay:   [80,80,80,80,80,80,80,80,80,80,80,80],
-      otherPay:    [50,50,50,50,50,50,50,50,50,50,50,50]
+      cfOpenFirst:      5371,
+      cfIn:             [900,900,900,1000,1000,1000,1100,1100,1100,1200,1200,1200],
+      cogsHomeroomPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsHyogikaiPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsOenKaigiPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsBigEventPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsOtherPay:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      laborPay:         [310,310,310,310,310,310,360,360,360,360,360,360],
+      outsourcePay:     [380,380,380,380,380,380,380,380,380,380,380,380],
+      advPay:           [80,80,150,80,80,250,80,80,350,80,80,150],
+      eventPay:         [50,50,100,50,50,150,50,50,200,50,50,100],
+      rentPay:          [90,90,90,90,90,90,90,90,90,90,90,90],
+      gaichuPay:        [80,80,80,80,80,80,80,80,80,80,80,80],
+      otherPay:         [50,50,50,50,50,50,50,50,50,50,50,50]
     }
   },
   '2026': {
@@ -3766,7 +3852,7 @@ function buildSimPLTable() {
 
   const PL_ROWS_CUR = getPLRows();
   PL_ROWS_CUR.forEach(row => {
-    const isCalc = row.key === 'rev'; // 売上合計は計算行
+    const isCalc = row.key === 'rev' || row.key === '_grossProfit' || row.key === '_cogsHead'; // 計算行
     const rowBg = isCalc ? 'background:var(--bg3);font-weight:700;' : '';
     html += `<tr>`;
     const deleteBtn = row.isCustom
@@ -3777,21 +3863,25 @@ function buildSimPLTable() {
     const indentStyle = row.indent || row.depth === 2 ? `padding-left:${indentPx};color:var(--text3);font-size:${row.depth===2?'10px':'11px'};` : '';
     html += `<td style="${labelStyle}${rowBg}${indentStyle}">${row.label}${deleteBtn}</td>`;
     months.forEach((m, i) => {
-      if (isCalc) {
-        // 売上合計は fee + training + event の自動計算
+      if (row.key === 'rev') {
         html += `<td id="spl-rev-${i}" style="${cellStyle}${rowBg}text-align:right;padding:4px 5px;font-size:11px;"></td>`;
+      } else if (row.key === '_cogsHead') {
+        html += `<td id="spl-cogs-${i}" style="${cellStyle}${rowBg}text-align:right;padding:4px 5px;font-size:11px;color:var(--tc-amber)"></td>`;
+      } else if (row.key === '_grossProfit') {
+        html += `<td id="spl-gp-${i}" style="${cellStyle}${rowBg}text-align:right;padding:4px 5px;font-size:11px;font-weight:700;"></td>`;
       } else {
         const v = getSimVal('pl', row.key, i);
         html += `<td style="${cellStyle}"><input type="number" style="${inputStyle}" value="${v !== 0 ? v : ''}" placeholder="0" data-key="${row.key}" data-idx="${i}" oninput="onSimPLInput('${row.key}',${i},this.value)"></td>`;
       }
     });
-    html += `<td id="spl-sum-${row.key}" style="${cellStyle}${rowBg}text-align:right;padding:4px 5px;font-size:11px;font-weight:700;"></td>`;
+    const sumId = row.key === '_cogsHead' ? 'spl-sum-_cogsHead' : row.key === '_grossProfit' ? 'spl-sum-_grossProfit' : `spl-sum-${row.key}`;
+    html += `<td id="${sumId}" style="${cellStyle}${rowBg}text-align:right;padding:4px 5px;font-size:11px;font-weight:700;"></td>`;
     html += `</tr>`;
   });
 
   // 費用合計・損益行
   html += `<tr style="background:var(--bg3)">
-    <td style="${labelStyle}font-weight:700">費用合計</td>
+    <td style="${labelStyle}font-weight:700">販管費合計</td>
     ${months.map((_, i) => `<td id="spl-cost-${i}" style="${cellStyle}background:var(--bg3);text-align:right;padding:4px 5px;font-size:11px;font-weight:600;"></td>`).join('')}
     <td id="spl-sum-cost" style="${cellStyle}background:var(--bg3);text-align:right;padding:4px 5px;font-size:11px;font-weight:700;"></td>
   </tr>`;
@@ -3901,16 +3991,23 @@ function recalcSimPL() {
 
   // 売上合計 = 固定売上行 + カスタム売上行
   const plRowsCur = getPLRows();
-  const revKeys  = plRowsCur.filter(r => r.isRev  && r.key !== 'rev').map(r => r.key);
-  const costKeys = plRowsCur.filter(r => r.isCost).map(r => r.key);
+  const revKeys   = plRowsCur.filter(r => r.isRev  && r.key !== 'rev').map(r => r.key);
+  const cogsKeysSim = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+  const opexKeys  = plRowsCur.filter(r => r.isCost && !cogsKeysSim.includes(r.key)).map(r => r.key);
+  const allCostKeys = plRowsCur.filter(r => r.isCost).map(r => r.key);
+
   const revArr = Array.from({length: N}, (_, i) =>
     revKeys.reduce((sum, key) => sum + getSimVal('pl', key, i), 0)
   );
-  const costArr = Array.from({length: N}, (_, i) =>
-    costKeys.reduce((sum, key) => sum + getSimVal('pl', key, i), 0)
+  const cogsArr = Array.from({length: N}, (_, i) =>
+    cogsKeysSim.reduce((sum, key) => sum + getSimVal('pl', key, i), 0)
   );
-  // 月次損益
-  const profitArr = revArr.map((r, i) => r - costArr[i]);
+  const gpArr = revArr.map((r, i) => r - cogsArr[i]);
+  const costArr = Array.from({length: N}, (_, i) =>
+    allCostKeys.reduce((sum, key) => sum + getSimVal('pl', key, i), 0)
+  );
+  // 月次損益 = 粗利 - 販管費
+  const profitArr = gpArr.map((g, i) => g - (costArr[i] - cogsArr[i]));
   // 累積損益
   let cum = 0;
   const cumArr = profitArr.map(p => { cum += p; return cum; });
@@ -3925,8 +4022,23 @@ function recalcSimPL() {
 
     revEl.textContent = revArr[i] ? revArr[i].toLocaleString() : '—';
     revEl.className = revArr[i] > 0 ? 'diff-pos' : '';
-    costEl.textContent = costArr[i] ? costArr[i].toLocaleString() : '—';
-    costEl.style.color = costArr[i] > 0 ? 'var(--tc-red)' : '';
+
+    // 原価合計セル
+    const cogsEl = document.getElementById(`spl-cogs-${i}`);
+    if (cogsEl) {
+      cogsEl.textContent = cogsArr[i] ? cogsArr[i].toLocaleString() : '—';
+    }
+    // 粗利セル
+    const gpEl = document.getElementById(`spl-gp-${i}`);
+    if (gpEl) {
+      const gp = gpArr[i];
+      gpEl.textContent = gp > 0 ? `+${gp.toLocaleString()}` : gp < 0 ? `▲${Math.abs(gp).toLocaleString()}` : '—';
+      gpEl.style.color = gp >= 0 ? 'var(--tc-green)' : 'var(--tc-red)';
+    }
+
+    const opexVal = costArr[i] - cogsArr[i];
+    costEl.textContent = opexVal ? opexVal.toLocaleString() : '—';
+    costEl.style.color = opexVal > 0 ? 'var(--tc-red)' : '';
 
     const p = profitArr[i];
     profEl.textContent = p > 0 ? `+${p.toLocaleString()}` : p < 0 ? `▲${Math.abs(p).toLocaleString()}` : '—';
@@ -3940,14 +4052,23 @@ function recalcSimPL() {
   // 合計列
   const PL_ROWS_CUR = getPLRows();
   PL_ROWS_CUR.forEach(row => {
-    const el = document.getElementById(`spl-sum-${row.key}`);
+    const sumId = row.key === '_cogsHead' ? 'spl-sum-_cogsHead' : row.key === '_grossProfit' ? 'spl-sum-_grossProfit' : `spl-sum-${row.key}`;
+    const el = document.getElementById(sumId);
     if (!el) return;
     if (row.key === 'rev') {
-      const s = revArr.reduce((a, b) => a + b, 0);
-      el.textContent = s ? s.toLocaleString() : '—';
+      const sv = revArr.reduce((a, b) => a + b, 0);
+      el.textContent = sv ? sv.toLocaleString() : '—';
+    } else if (row.key === '_cogsHead') {
+      const sv = cogsArr.reduce((a, b) => a + b, 0);
+      el.textContent = sv ? sv.toLocaleString() : '—';
+      el.style.color = 'var(--tc-amber)';
+    } else if (row.key === '_grossProfit') {
+      const sv = gpArr.reduce((a, b) => a + b, 0);
+      el.textContent = sv > 0 ? `+${sv.toLocaleString()}` : sv < 0 ? `▲${Math.abs(sv).toLocaleString()}` : '—';
+      el.style.color = sv >= 0 ? 'var(--tc-green)' : 'var(--tc-red)';
     } else {
-      const s = months.reduce((acc, _, i) => acc + getSimVal('pl', row.key, i), 0);
-      el.textContent = s ? s.toLocaleString() : '—';
+      const sv = months.reduce((acc, _, i) => acc + getSimVal('pl', row.key, i), 0);
+      el.textContent = sv ? sv.toLocaleString() : '—';
     }
   });
   const costSum = costArr.reduce((a, b) => a + b, 0);
