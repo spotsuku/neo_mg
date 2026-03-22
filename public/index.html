@@ -2923,8 +2923,13 @@ async function analyzeCSV() {
   btn.disabled = true;
   btn.textContent = '解析中...';
 
+  // 月数が多い場合に警告
+  if (months.length > 6) {
+    log.innerHTML += `<span class="log-warn">⚠ ${months.length}ヶ月を一括解析します。失敗する場合は3〜6ヶ月ずつに分けて取込んでください</span>\n`;
+  }
+
   // CSVの全内容（最大200行）をAIに渡し、月ごとの数値を一括抽出
-  const csvFull = csvParsed.slice(0, 200).map(r => r.join(',')).join('\n');
+  const csvFull = csvParsed.slice(0, 150).map(r => r.join(',')).join('\n');
   const monthsStr = months.map(m => `${m}（${MONTH_LABELS[m]||m}）`).join('、');
 
   const prompt = `あなたはマネーフォワード クラウド会計のCSVを解析する経理専門家です。
@@ -3019,13 +3024,46 @@ ${csvFull}
 5. JSONのみ返す（前後の説明・コメント不要）`;
 
   try {
-    const raw = await callAI(prompt, 4000);
-    const clean = (typeof raw === 'string' ? raw : JSON.stringify(raw))
+    const raw = await callAI(prompt, 6000);
+    const rawStr = (typeof raw === 'string' ? raw : JSON.stringify(raw))
       .replace(/```json|```/g, '')
-      .replace(/\/\*[\s\S]*?\*\//g, '')   // /* コメント */ を除去
-      .replace(/\/\/.*$/gm, '')              // // 行コメントを除去
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '')
       .trim();
-    const parsed = JSON.parse(clean);
+
+    // JSON途中切れ対策：不完全なJSONを補完して再パース
+    let parsed;
+    try {
+      parsed = JSON.parse(rawStr);
+    } catch (jsonErr) {
+      log.innerHTML += `<span class="log-warn">⚠ JSONが不完全です。補完を試みます...</span>\n`;
+      // 開き括弧の数を数えて閉じ括弧を補完
+      let fixed = rawStr;
+      // 最後の完全なエントリまで切り取る（末尾の不完全オブジェクトを除去）
+      const lastComplete = fixed.lastIndexOf('"}');
+      if (lastComplete > 0) {
+        fixed = fixed.slice(0, lastComplete + 2);
+      }
+      // 開き括弧と閉じ括弧のバランスを合わせる
+      const opens  = (fixed.match(/{/g) || []).length;
+      const closes = (fixed.match(/}/g) || []).length;
+      const diff = opens - closes;
+      // 末尾のカンマを除去
+      fixed = fixed.replace(/,\s*$/, '');
+      // 不足分の閉じ括弧を補完
+      fixed += '}'.repeat(Math.max(0, diff));
+      try {
+        parsed = JSON.parse(fixed);
+        log.innerHTML += `<span class="log-ok">✓ JSON補完成功</span>\n`;
+      } catch (e2) {
+        // それでも失敗する場合はエラー表示
+        log.innerHTML += `<span class="log-err">✗ JSON解析失敗: ${jsonErr.message}</span>\n`;
+        log.innerHTML += `<span class="log-warn">💡 対処法: 取込月数を減らして（例: 3ヶ月ずつ）再試行してください</span>\n`;
+        log.innerHTML += `<span class="log-warn">⚠ AIの返値（先頭500文字）: ${rawStr.slice(0,500)}</span>\n`;
+        btn.disabled = false; btn.textContent = '🤖 AIで解析';
+        return;
+      }
+    }
 
     if (parsed.summary) log.innerHTML += `<span class="log-info">📊 ${parsed.summary}</span>\n`;
     if (parsed.warnings?.length) {
