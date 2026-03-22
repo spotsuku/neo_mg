@@ -698,7 +698,18 @@ td.actual.editable-cell {
     </div>
 
     <div class="card">
-      <div class="ct">取込済みデータ一覧</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
+        <div>
+          <div class="ct" style="margin-bottom:2px">取込済みデータ一覧</div>
+          <div style="font-size:10px;color:var(--text3)">DBに保存されている実績データ。確認後「本番に反映」で月次PL/CFに即反映されます</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-g" style="font-weight:700;font-size:12px;padding:7px 16px" onclick="applyImportedToProd()">
+            ✓ 本番に反映
+          </button>
+          <button class="btn" style="font-size:10px" onclick="openVersionPanel()">🕐 バックアップ</button>
+        </div>
+      </div>
       <div id="imported-list" style="font-size:11px;color:var(--text3)">取込済みデータはありません</div>
     </div>
   </div>
@@ -761,6 +772,8 @@ td.actual.editable-cell {
       <button class="btn" onclick="resetSimData()" style="font-size:11px">↩ リセット</button>
       <button class="btn btn-p" onclick="saveSimData()">💾 保存</button>
       <button class="btn btn-g" onclick="openBudgetModal()" style="font-weight:700">📌 予算に反映</button>
+      <button class="btn" onclick="openVersionPanel()" style="font-size:10px">🕐 バージョン履歴</button>
+      <span style="font-size:10px;color:var(--text3)">※ 予算反映時は自動バックアップされます</span>
       <span class="save-ok" id="sim-save-ok">✓ 保存しました</span>
     </div>
   </div>
@@ -3446,6 +3459,155 @@ function clearCSV() {
   document.getElementById('csv-analyze-btn').setAttribute('disabled', '');
 }
 
+// ═══════════════════════════════════════════
+//  取込済みデータ → 本番反映
+// ═══════════════════════════════════════════
+async function applyImportedToProd() {
+  const d = DB[currentYear];
+  if (!d) { alert('データが見つかりません'); return; }
+
+  // 反映対象月を確認
+  const plKeys  = ['rev','labor','outsource','adv','gaichu','other',
+                   'cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+  const cfKeys  = ['open','cfIn','cfClose','cfInFee','cfInTraining','cfInEvent','cfInOther',
+                   'salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
+                   'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
+                   'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay',
+                   'investPay','loanIn','loanOut','capitalIn','warrantPay','finOtherPay',
+                   'cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'];
+
+  // データが入っている月を特定
+  const filledMonths = d.months.filter((m, i) => {
+    return plKeys.some(k => Number(d.pl.actual[k]?.[i]) > 0) ||
+           cfKeys.some(k => Number(d.cf.actual[k]?.[i]) > 0);
+  });
+
+  if (filledMonths.length === 0) {
+    alert('反映できるデータがありません。まずCSVを取込んでください。');
+    return;
+  }
+
+  const monthLabels = filledMonths.map(m => MONTH_LABELS[m] || m).join('・');
+
+  // 確認モーダルを表示
+  showApplyConfirmModal(filledMonths, monthLabels, d);
+}
+
+function showApplyConfirmModal(filledMonths, monthLabels, d) {
+  // 既存モーダルを削除
+  const existing = document.getElementById('apply-prod-modal');
+  if (existing) existing.remove();
+
+  // PL/CF のプレビューサマリーを生成
+  const plKeys = ['rev','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther',
+                  'labor','outsource','adv','gaichu','other'];
+  const plLabels = {
+    rev:'売上', cogsHomeroom:'原価:HR', cogsHyogikai:'原価:評議会',
+    cogsOenKaigi:'原価:応援', cogsBigEvent:'原価:大型EV', cogsOther:'原価:他',
+    labor:'人件費', outsource:'業務委託', adv:'広告', gaichu:'外注費', other:'その他'
+  };
+
+  const previewRows = plKeys.map(key => {
+    const vals = filledMonths.map(m => {
+      const i = d.months.indexOf(m);
+      return Math.round(Number(d.pl.actual[key]?.[i]) || 0);
+    });
+    if (vals.every(v => v === 0)) return null;
+    return `<tr>
+      <td style="padding:3px 8px;font-size:10px;color:var(--text3)">${plLabels[key]||key}</td>
+      ${vals.map(v => `<td style="padding:3px 6px;font-size:10px;text-align:right">${v ? v.toLocaleString() : '—'}</td>`).join('')}
+    </tr>`;
+  }).filter(Boolean).join('');
+
+  const monthHeaders = filledMonths.map(m =>
+    `<th style="padding:3px 6px;font-size:10px;color:var(--text3)">${MONTH_LABELS[m]||m}</th>`
+  ).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'apply-prod-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--bg2);border-radius:var(--rl);padding:1.5rem;width:680px;max-width:95vw;max-height:85vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.4)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <div>
+          <div style="font-size:14px;font-weight:700">✓ 本番に反映</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">以下のデータを月次PL/CFに反映します</div>
+        </div>
+        <button class="btn" onclick="document.getElementById('apply-prod-modal').remove()" style="font-size:11px">✕</button>
+      </div>
+
+      <!-- 対象月 -->
+      <div style="background:var(--bg3);border-radius:var(--r);padding:8px 12px;margin-bottom:.875rem;font-size:11px">
+        <span style="color:var(--text3)">対象年度：</span><strong>${currentYear}年度</strong>
+        　<span style="color:var(--text3)">対象月：</span><strong>${monthLabels}</strong>
+        　<span style="color:var(--text3)">${filledMonths.length}ヶ月分</span>
+      </div>
+
+      <!-- PLプレビュー -->
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">PLデータ（万円）</div>
+      <div class="scroll-x" style="margin-bottom:.875rem">
+        <table style="border-collapse:collapse;min-width:${100+filledMonths.length*70}px">
+          <thead><tr><th style="padding:3px 8px;font-size:10px;color:var(--text3);text-align:left">科目</th>${monthHeaders}</tr></thead>
+          <tbody>${previewRows}</tbody>
+        </table>
+      </div>
+
+      <!-- 警告 -->
+      <div style="background:rgba(239,159,39,0.12);border:1px solid rgba(239,159,39,0.3);border-radius:var(--r);padding:8px 12px;font-size:10px;color:var(--tc-amber);margin-bottom:1rem">
+        ⚠ 反映すると月次PL/CFの該当月の実績データが上書きされます。<br>
+        事前に「🕐 バックアップ」でバージョン保存することを推奨します。
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" style="font-size:11px" onclick="openVersionPanel();document.getElementById('apply-prod-modal').remove()">🕐 先にバックアップ</button>
+        <button class="btn" style="font-size:11px" onclick="document.getElementById('apply-prod-modal').remove()">キャンセル</button>
+        <button class="btn btn-g" style="font-weight:700;font-size:12px;padding:7px 18px"
+          onclick="commitImportedToProd(${JSON.stringify(filledMonths)})">
+          ✓ 反映する
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+}
+
+async function commitImportedToProd(filledMonths) {
+  // 反映前に自動バックアップ
+  const autoVer = {
+    id: Date.now(),
+    desc: `[自動バックアップ] 本番反映前 — ${currentYear}年度 ${filledMonths.map(m=>MONTH_LABELS[m]||m).join('・')}`,
+    savedAt: new Date().toISOString(),
+    year: currentYear,
+    DB: JSON.parse(JSON.stringify(DB)),
+    SIM_DATA: JSON.parse(JSON.stringify(SIM_DATA)),
+  };
+  const vers = (() => { try { return JSON.parse(localStorage.getItem('neo_versions')||'[]'); } catch { return []; } })();
+  vers.unshift(autoVer);
+  if (vers.length > 20) vers.splice(20);
+  localStorage.setItem('neo_versions', JSON.stringify(vers));
+
+  // DB内のデータはすでにactualに入っているので、
+  // saveDB() して画面を再描画するだけでOK
+  // （取込済みデータ = DB.actual そのもの）
+  await saveDB();
+
+  // モーダルを閉じる
+  const modal = document.getElementById('apply-prod-modal');
+  if (modal) modal.remove();
+
+  // 画面更新
+  updateWeeklyKPIs();
+  renderPLCF();
+  renderAnnualSummary();
+
+  // 完了トースト
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--bg-green);color:var(--tc-green);border:1px solid var(--tc-green);border-radius:var(--rl);padding:12px 20px;font-size:13px;font-weight:700;z-index:9999;transition:opacity .4s';
+  toast.textContent = `✓ ${filledMonths.length}ヶ月分のデータを本番に反映しました`;
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 500); }, 3000);
+}
+
 async function loadImportedList() {
   const el = document.getElementById('imported-list');
   const d = DB[currentYear];
@@ -4638,24 +4800,83 @@ async function commitBudget() {
   if (!reason) { document.getElementById('budget-reason').style.borderColor='var(--tc-red)'; return; }
 
   const months = getSimMonths();
-  // Copy sim data → DB budget
+  // ── 予算反映前にバージョン自動バックアップ ──
+  const autoVer = {
+    id: Date.now(),
+    desc: `[自動バックアップ] 予算反映前 — ${reason}`,
+    savedAt: new Date().toISOString(),
+    year: currentSimYear,
+    DB: JSON.parse(JSON.stringify(DB)),
+    SIM_DATA: JSON.parse(JSON.stringify(SIM_DATA)),
+  };
+  const existingVers = (() => { try { return JSON.parse(localStorage.getItem('neo_versions') || '[]'); } catch { return []; } })();
+  existingVers.unshift(autoVer);
+  if (existingVers.length > 20) existingVers.splice(20);
+  localStorage.setItem('neo_versions', JSON.stringify(existingVers));
+
+  // ── Copy sim data → DB budget（原価科目を含む全科目） ──
   const d = DB[currentSimYear];
   months.forEach((m, i) => {
     const rev = getSimVal('pl','fee',i)+getSimVal('pl','training',i)+getSimVal('pl','event',i);
     const idx = d.months.indexOf(m);
     if (idx === -1) return;
+
+    // PL売上
     d.pl.budget.rev[idx] = rev;
-    d.pl.budget.labor[idx] = getSimVal('pl','labor',i);
+
+    // PL原価（NEOプログラム原価）
+    const cogsSimKeys = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+    cogsSimKeys.forEach(key => {
+      if (!d.pl.budget[key]) d.pl.budget[key] = [];
+      d.pl.budget[key][idx] = getSimVal('pl', key, i);
+    });
+
+    // PL販管費
+    d.pl.budget.labor[idx]     = getSimVal('pl','labor',i);
     d.pl.budget.outsource[idx] = getSimVal('pl','outsource',i);
-    d.pl.budget.adv[idx] = getSimVal('pl','adv',i);
-    if (!d.pl.budget.gaichu) d.pl.budget.gaichu=[];
-    d.pl.budget.gaichu[idx] = getSimVal('pl','gaichu',i);
-    d.pl.budget.other[idx] = getSimVal('pl','rent',i) + getSimVal('pl','other',i);
+    d.pl.budget.adv[idx]       = getSimVal('pl','adv',i);
+    if (!d.pl.budget.gaichu) d.pl.budget.gaichu = [];
+    d.pl.budget.gaichu[idx]    = getSimVal('pl','gaichu',i);
+    d.pl.budget.other[idx]     = getSimVal('pl','rent',i) + getSimVal('pl','other',i);
+
+    // CF入金
     if (!d.cf.budget.cfIn) d.cf.budget.cfIn = [];
     d.cf.budget.cfIn[idx] = getSimVal('cf','cfIn',i);
+
+    // CF原価支払い
+    const cogsCFMap = {
+      cogsHomeroomPay: 'cogsHomeroomPay',
+      cogsHyogikaiPay: 'cogsHyogikaiPay',
+      cogsOenKaigiPay: 'cogsOenKaigiPay',
+      cogsBigEventPay: 'cogsBigEventPay',
+      cogsOtherPay:    'cogsOtherPay',
+    };
+    Object.keys(cogsCFMap).forEach(cfKey => {
+      if (!d.cf.budget[cfKey]) d.cf.budget[cfKey] = [];
+      d.cf.budget[cfKey][idx] = getSimVal('cf', cfKey, i);
+    });
+
+    // CF販管費支払い
+    const cfPayMap = {
+      salaryPay:   'laborPay',
+      bizComPay:   'outsourcePay',
+      adSportsPay: 'advPay',
+      eventCostPay:'eventPay',
+      rentPay:     'rentPay',
+      investPay:   'gaichuPay',
+      salesOtherPay:'otherPay',
+    };
+    Object.entries(cfPayMap).forEach(([dbKey, simKey]) => {
+      if (!d.cf.budget[dbKey]) d.cf.budget[dbKey] = [];
+      d.cf.budget[dbKey][idx] = getSimVal('cf', simKey, i);
+    });
   });
 
-  // Save budget history entry
+  // ── 予算変更履歴を保存（localStorage使用）──
+  const cogsTot = months.map((_,i) =>
+    ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther']
+      .reduce((t,k) => t + getSimVal('pl',k,i), 0)
+  );
   const entry = {
     id: Date.now(),
     ts: new Date().toISOString(),
@@ -4663,19 +4884,19 @@ async function commitBudget() {
     author: author || '—',
     reason,
     snapshot: {
-      rev: months.map((_,i) => getSimVal('pl','fee',i)+getSimVal('pl','training',i)+getSimVal('pl','event',i)),
+      rev:  months.map((_,i) => getSimVal('pl','fee',i)+getSimVal('pl','training',i)+getSimVal('pl','event',i)),
+      cogs: cogsTot,
       cost: months.map((_,i) => getSimVal('pl','labor',i)+getSimVal('pl','outsource',i)+getSimVal('pl','adv',i)+getSimVal('pl','rent',i)+getSimVal('pl','other',i))
     }
   };
 
   let history = [];
-  try {
-    const r = await window.storage.get('neo_budget_history');
-    if (r) history = JSON.parse(r.value);
-  } catch(e){}
+  try { history = JSON.parse(localStorage.getItem('neo_budget_history') || '[]'); } catch(e){}
   history.unshift(entry);
+  if (history.length > 30) history.splice(30);
+  localStorage.setItem('neo_budget_history', JSON.stringify(history));
+
   try {
-    await window.storage.set('neo_budget_history', JSON.stringify(history));
     await saveDB();
     closeBudgetModal();
     showBudgetToast();
@@ -4702,10 +4923,7 @@ async function renderBudgetHistory() {
   const el = document.getElementById('budget-history-list');
   if (!el) return;
   let history = [];
-  try {
-    const r = await window.storage.get('neo_budget_history');
-    if (r) history = JSON.parse(r.value);
-  } catch(e){}
+  try { history = JSON.parse(localStorage.getItem('neo_budget_history') || '[]'); } catch(e){}
   if (!history.length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3)">変更履歴はまだありません</div>'; return; }
   el.innerHTML = history.slice(0, 20).map(h => {
     const dt = new Date(h.ts).toLocaleString('ja-JP', {year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
