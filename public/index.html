@@ -2774,16 +2774,16 @@ function onFileSelect(e) {
 }
 
 function handleFile(file) {
-  // まずバイナリで読み込んでエンコーディングを自動判定
+  // バイナリで読み込んで TextDecoder で確実にデコード
   const binReader = new FileReader();
   binReader.onload = ev => {
     const arr = new Uint8Array(ev.target.result);
 
     // BOM チェック
-    const isUtf8Bom  = arr[0]===0xEF && arr[1]===0xBB && arr[2]===0xBF;
+    const isUtf8Bom    = arr[0]===0xEF && arr[1]===0xBB && arr[2]===0xBF;
     const isUtf16LEBom = arr[0]===0xFF && arr[1]===0xFE;
 
-    // Shift-JIS 判定：0x81-0x9F または 0xE0-0xFC のバイトがあればSJIS
+    // CP932（Windows-31J）判定：0x81-0x9F または 0xE0-0xFC のバイトがあれば日本語SJiS系
     let looksLikeSjis = false;
     if (!isUtf8Bom && !isUtf16LEBom) {
       for (let i = 0; i < Math.min(arr.length, 4096); i++) {
@@ -2795,19 +2795,50 @@ function handleFile(file) {
       }
     }
 
-    const encoding = isUtf8Bom ? 'UTF-8' : isUtf16LEBom ? 'UTF-16LE' : looksLikeSjis ? 'Shift_JIS' : 'UTF-8';
+    let decodedText = '';
+    let detectedEncoding = 'UTF-8';
 
-    const textReader = new FileReader();
-    textReader.onload = ev2 => {
-      csvRawText = ev2.target.result;
-      parseAndPreviewCSV(csvRawText);
-      document.getElementById('csv-analyze-btn').removeAttribute('disabled');
+    if (isUtf8Bom) {
+      // UTF-8 BOM付き
+      detectedEncoding = 'UTF-8 (BOM)';
+      decodedText = new TextDecoder('utf-8').decode(arr.slice(3));
+    } else if (isUtf16LEBom) {
+      detectedEncoding = 'UTF-16LE';
+      decodedText = new TextDecoder('utf-16le').decode(arr.slice(2));
+    } else if (looksLikeSjis) {
+      // CP932（Windows版Shift-JIS）で試みる
+      // ブラウザの TextDecoder は 'shift_jis' より 'windows-1252' に近い場合があるので
+      // 'shift-jis' → 'sjis' → 'windows-31j' の順で試す
+      const sjisLabels = ['shift-jis', 'sjis', 'windows-31j', 'x-sjis', 'ms932'];
+      let decoded = null;
+      for (const label of sjisLabels) {
+        try {
+          const dec = new TextDecoder(label, { fatal: true });
+          decoded = dec.decode(arr);
+          detectedEncoding = label;
+          break;
+        } catch (e) {
+          // このラベルは未対応 → 次を試す
+        }
+      }
+      if (decoded === null) {
+        // fallback: fatal:false で強制デコード
+        decoded = new TextDecoder('shift-jis', { fatal: false }).decode(arr);
+        detectedEncoding = 'Shift_JIS (fallback)';
+      }
+      decodedText = decoded;
+    } else {
+      // UTF-8
+      detectedEncoding = 'UTF-8';
+      decodedText = new TextDecoder('utf-8').decode(arr);
+    }
 
-      // エンコーディングをUIに表示
-      const encInfo = document.getElementById('csv-encoding-info');
-      if (encInfo) encInfo.textContent = `📄 文字コード: ${encoding}`;
-    };
-    textReader.readAsText(file, encoding);
+    csvRawText = decodedText;
+    parseAndPreviewCSV(csvRawText);
+    document.getElementById('csv-analyze-btn').removeAttribute('disabled');
+
+    const encInfo = document.getElementById('csv-encoding-info');
+    if (encInfo) encInfo.textContent = `📄 文字コード: ${detectedEncoding}`;
   };
   binReader.readAsArrayBuffer(file);
 }
