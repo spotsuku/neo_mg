@@ -482,7 +482,7 @@ td.actual.editable-cell {
       <div class="ch" style="height:220px"><canvas id="pl-chart"></canvas></div>
     </div>
     <div class="card">
-      <div class="ct">PL詳細テーブル（万円）</div>
+      <div class="ct">PL詳細テーブル（千円）</div>
       <div class="scroll-x" id="pl-table-wrap"></div>
     </div>
   </div>
@@ -515,7 +515,7 @@ td.actual.editable-cell {
       <div class="fl"><label>区分</label><select id="mi-type"><option value="budget">予算</option><option value="actual">実績</option></select></div>
       <div class="fl"><label>記入者</label><input type="text" id="mi-author" placeholder="例: 三木智弘"></div>
     </div>
-    <div class="section-lbl">PL（万円）</div>
+    <div class="section-lbl">PL（千円）</div>
     <div class="fg">
       <div class="fl"><label>売上合計</label><input type="number" id="mi-rev" placeholder="0"></div>
       <div class="fl"><label>売上原価</label><input type="number" id="mi-cogs" placeholder="0"></div>
@@ -825,7 +825,7 @@ td.actual.editable-cell {
 
     <!-- 月次入力テーブル -->
     <div class="card">
-      <div class="ct">月次PL入力テーブル（万円）— テーブルかグラフのどちらからでも編集できます</div>
+      <div class="ct">月次PL入力テーブル（千円）— テーブルかグラフのどちらからでも編集できます</div>
       <div class="scroll-x">
         <table id="sim-pl-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%"></table>
       </div>
@@ -1126,8 +1126,8 @@ let charts = {};
 const DEFAULT_2025 = {
   months: ['2504','2505','2506','2507','2508','2509','2510','2511','2512','2601','2602','2603'],
   pl: {
-    budget: { rev:[625,625,625,625,625,625,625,625,625,625,625,625], cogs:[0,0,0,0,0,0,0,0,0,0,0,0], cogsHomeroom:[0,0,0,0,0,0,0,0,0,0,0,0], cogsHyogikai:[0,0,0,0,0,0,0,0,0,0,0,0], cogsOenKaigi:[0,0,0,0,0,0,0,0,0,0,0,0], cogsBigEvent:[0,0,0,0,0,0,0,0,0,0,0,0], cogsOther:[0,0,0,0,0,0,0,0,0,0,0,0], labor:[250,250,250,250,250,250,250,250,250,250,250,250], outsource:[400,400,400,400,400,400,400,400,400,400,400,400], adv:[167,167,167,167,167,167,167,167,167,167,167,167], gaichu:[200,200,200,200,200,200,200,200,200,200,200,200], other:[117,117,117,117,117,117,117,117,117,117,117,117] },
-    actual: { rev:[1203,1257,3015,1,605,3,771,29,82,322,450,0], cogs:[0,0,0,0,0,0,0,0,0,0,0,0], cogsHomeroom:[0,0,0,0,0,0,0,0,0,0,0,0], cogsHyogikai:[0,0,0,0,0,0,0,0,0,0,0,0], cogsOenKaigi:[0,0,0,0,0,0,0,0,0,0,0,0], cogsBigEvent:[0,0,0,0,0,0,0,0,0,0,0,0], cogsOther:[0,0,0,0,0,0,0,0,0,0,0,0], labor:[141,141,140,498,153,138,183,263,263,308,302,0], outsource:[156,767,450,475,391,512,414,349,502,160,87,0], adv:[116,71,194,63,51,17,220,27,216,248,365,0], gaichu:[110,192,175,359,228,629,343,517,366,134,214,0], other:[110,192,174,359,227,628,342,516,366,133,214,0] }
+    budget: { rev:[6250,6250,6250,6250,6250,6250,6250,6250,6250,6250,6250,6250], cogs:[0,0,0,0,0,0,0,0,0,0,0,0], cogsHomeroom:[0,0,0,0,0,0,0,0,0,0,0,0], cogsHyogikai:[0,0,0,0,0,0,0,0,0,0,0,0], cogsOenKaigi:[0,0,0,0,0,0,0,0,0,0,0,0], cogsBigEvent:[0,0,0,0,0,0,0,0,0,0,0,0], cogsOther:[0,0,0,0,0,0,0,0,0,0,0,0], labor:[2500,2500,2500,2500,2500,2500,2500,2500,2500,2500,2500,2500], outsource:[4000,4000,4000,4000,4000,4000,4000,4000,4000,4000,4000,4000], adv:[1670,1670,1670,1670,1670,1670,1670,1670,1670,1670,1670,1670], gaichu:[2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000], other:[1170,1170,1170,1170,1170,1170,1170,1170,1170,1170,1170,1170] },
+    actual: { rev:[12030,12570,30150,10,6050,30,7710,290,820,3220,4500,0], cogs:[0,0,0,0,0,0,0,0,0,0,0,0], cogsHomeroom:[0,0,0,0,0,0,0,0,0,0,0,0], cogsHyogikai:[0,0,0,0,0,0,0,0,0,0,0,0], cogsOenKaigi:[0,0,0,0,0,0,0,0,0,0,0,0], cogsBigEvent:[0,0,0,0,0,0,0,0,0,0,0,0], cogsOther:[0,0,0,0,0,0,0,0,0,0,0,0], labor:[1410,1410,1400,4980,1530,1380,1830,2630,2630,3080,3020,0], outsource:[1560,7670,4500,4750,3910,5120,4140,3490,5020,1600,870,0], adv:[1160,710,1940,630,510,170,2200,270,2160,2480,3650,0], gaichu:[1100,1920,1750,3590,2280,6290,3430,5170,3660,1340,2140,0], other:[1100,1920,1740,3590,2270,6280,3420,5160,3660,1330,2140,0] }
   },
   cf: {
     budget: {
@@ -1290,22 +1290,26 @@ function updateWeeklyKPIs() {
   }
 
   // cumulative
-  const cumRev = pl.actual.rev.slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
+  // PLはDB千円単位 → KPI表示は万円に÷10
+  const plK = (arr, end) => (arr||[]).slice(0, end+1).reduce((s,v) => s+(Number(v)||0), 0) / 10;
+  const cumRev = plK(pl.actual.rev, lastActualIdx);
   const cogsKpiKeys = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
-  const cumCogs = cogsKpiKeys.reduce((t,k) => t + (pl.actual[k]||[]).slice(0, lastActualIdx+1).reduce((s,v)=>s+(Number(v)||0),0), 0);
+  const cumCogs = cogsKpiKeys.reduce((t,k) => t + plK(pl.actual[k]||[], lastActualIdx), 0);
   const cumGP   = cumRev - cumCogs;
   const gpRate  = cumRev > 0 ? Math.round(cumGP / cumRev * 100) : null;
-  const cumLabor = pl.actual.labor.slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
-  const cumOutsource = pl.actual.outsource.slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
-  const cumAdv = pl.actual.adv.slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
-  const cumGaichu = pl.actual.gaichu ? pl.actual.gaichu.slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0) : 0;
-  const cumOther = pl.actual.other.slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
+  const cumLabor    = plK(pl.actual.labor,    lastActualIdx);
+  const cumOutsource= plK(pl.actual.outsource,lastActualIdx);
+  const cumAdv      = plK(pl.actual.adv,      lastActualIdx);
+  const cumGaichu   = plK(pl.actual.gaichu||[], lastActualIdx);
+  const cumOther    = plK(pl.actual.other,    lastActualIdx);
   const cumOpex = cumLabor + cumOutsource + cumAdv + cumGaichu + cumOther;
   const cumOp = cumRev - cumOpex;
 
-  // budget
-  const budRev = pl.budget.rev.reduce((s, v) => s + (Number(v) || 0), 0);
-  const budOpex = [...(pl.budget.labor||[]), ...(pl.budget.outsource||[]), ...(pl.budget.adv||[]), ...(pl.budget.gaichu||[]), ...(pl.budget.other||[])].reduce((s, v) => s + (Number(v) || 0), 0) / 4;
+  // budget（千円→万円に÷10）
+  const budRev  = pl.budget.rev.reduce((s,v) => s+(Number(v)||0), 0) / 10;
+  const budOpex = ['labor','outsource','adv','gaichu','other'].reduce((t, k) =>
+    t + (pl.budget[k]||[]).slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0), 0) / 10;
+  const opexRate = budOpex > 0 ? Math.round(cumOpex / budOpex * 100) : null;
 
   // cash
   // 現金残高：lastActualIdx月のcfClose、なければcfCloseの最新非ゼロ値を使用
@@ -1338,7 +1342,11 @@ function updateWeeklyKPIs() {
     const gpEl = document.getElementById('kpi-gp-s');
     if (gpEl && gpRate !== null) gpEl.innerHTML = `<span class="badge ${gpRate>=30?'bg':gpRate>=0?'ba':'br'}">${gpRate}% 粗利率</span>`;
   }
-  document.getElementById('kpi-opex').textContent = cumOpex ? fmt万(cumOpex) + '万円' : '12,259万円';
+  document.getElementById('kpi-opex').innerHTML = cumOpex
+    ? `<span class="r">${fmt万(cumOpex)}万円</span>` : '12,259万円';
+  const opexSEl = document.getElementById('kpi-opex-s');
+  if (opexSEl) opexSEl.innerHTML = opexRate !== null
+    ? `<span class="badge ${opexRate <= 100 ? 'bg' : 'br'}">${opexRate}% 予算比</span>` : '';
   document.getElementById('kpi-op').innerHTML = cumOp >= 0 ? `<span class="g">${fmt万(cumOp)}万円</span>` : `<span class="r">▲${fmt万(Math.abs(cumOp))}万円</span>`;
   document.getElementById('kpi-op-s').innerHTML = `<span class="badge ${cumOp >= 0 ? 'bg' : 'ba'}">累積損益</span>`;
 
@@ -1541,7 +1549,7 @@ function renderAnnualPL(d) {
     { label:'　その他',     a:otherA, b:otherB, isOut:true  },
     { label:'営業利益',     a:opA,    b:opB,    isRev:true, isTot:true, isPL:true },
   ];
-  document.getElementById('annual-pl-table').innerHTML = buildAnnualTable(rows, '万円');
+  document.getElementById('annual-pl-table').innerHTML = buildAnnualTable(rows, '千円');
 }
 
 function renderAnnualCF(d) {
@@ -1801,7 +1809,7 @@ function renderPLView(d) {
     const rateRev  = revB  > 0 ? Math.round(revA  / revB  * 100) : null;
     const rateOpex = opexB > 0 ? Math.round(opexA / opexB * 100) : null;
 
-    const fmt = (v) => Math.round(v).toLocaleString() + '万円';
+    const fmt = (v) => Math.round(v).toLocaleString() + '千円';
     const fmtP = (v) => v >= 0
       ? `<span class="g">+${fmt(v)}</span>`
       : `<span class="r">▲${fmt(Math.abs(v))}</span>`;
@@ -1893,8 +1901,8 @@ function renderPLView(d) {
       plugins: { legend: { labels: { font: { size: 10 }, color: tc, boxWidth: 10, padding: 8 } } },
       scales: {
         x: { ticks: { color: tc, font: { size: 10 } }, grid: { color: gc } },
-        y: { position: 'left', ticks: { color: tc, font: { size: 10 }, callback: v => v + '万' }, grid: { color: gc } },
-        y2: { position: 'right', ticks: { color: tc, font: { size: 10 }, callback: v => v + '万' }, grid: { display: false } }
+        y: { position: 'left', ticks: { color: tc, font: { size: 10 }, callback: v => { const a=Math.abs(v); return (v<0?'▲':'')+(a>=10000?(a/10000).toFixed(0)+'億':a>=1000?(a/1000).toFixed(0)+'千万':a.toLocaleString()+'千'); } }, grid: { color: gc } },
+        y2: { position: 'right', ticks: { color: tc, font: { size: 10 }, callback: v => { const a=Math.abs(v); return (v<0?'▲':'')+(a>=10000?(a/10000).toFixed(0)+'億':a>=1000?(a/1000).toFixed(0)+'千万':a.toLocaleString()+'千'); } }, grid: { display: false } }
       }
     }
   });
@@ -3048,15 +3056,24 @@ ${csvFull}
 - PL・CF・BSすべての数値を【千円に変換して整数】で返す
   （例：3,000,000円 → 3,000千円 → 3000、141,000円 → 141千円 → 141）
 - 小数は切り捨て
+- PL・CF・BSすべて円÷1000で千円に変換（例：3,000,000円→3,000千円→3000）
 - 万円に換算しないこと（PLも千円単位で返す）
 
-★★★ 販管費の分類ルール ★★★
-- labor（人件費）：役員報酬・給料賃金・給与手当・法定福利費・福利厚生費・賞与の合計
-- outsource（業務委託費）：業務委託料・業務委託費・外部委託費・フリーランス報酬の合計
-- adv（広告販促費）：広告宣伝費・販売促進費・WEB広告費・マーケティング費の合計
-- gaichu（外注費）：外注費・制作外注費・イベント外注費・支払報酬の合計
-- other（その他販管費）：上記4つに含まれない販管費すべての合計
-  （地代家賃・水道光熱費・通信費・旅費交通費・消耗品費・租税公課・減価償却費・雑費等）
+★★★ 販管費の分類ルール（厳守）★★★
+【重要】各科目は排他的に分類すること。1つの費用を複数科目に入れてはいけない（二重計上禁止）
+
+- labor（人件費）：役員報酬・給料賃金・給与手当・法定福利費・福利厚生費・賞与のみ
+- outsource（業務委託費）：業務委託料・業務委託費・外部委託費・フリーランス報酬のみ
+- adv（広告販促費）：広告宣伝費・販売促進費・WEB広告費・マーケティング費のみ
+- gaichu（外注費）：制作外注費・イベント外注費・支払報酬のみ（業務委託と重複させない）
+- other（その他販管費）：上記labor/outsource/adv/gaichuのどれにも該当しない販管費のみ
+  （地代家賃・通信費・旅費交通費・消耗品費・租税公課・減価償却費・雑費等）
+
+【厳禁】以下は販管費に含めない：
+- NEOプログラム原価（ホームルーム・評議会・応援カイギ・大型イベント等）→ pl.cogsXxx に入れる
+- 売上原価・仕入原価 → pl.cogsXxx に入れる
+
+【検算】labor + outsource + adv + gaichu + other = 販管費合計（売上原価を含めないこと）
 
 以下のJSON形式で月ごとの数値を返してください:
 {
@@ -3068,7 +3085,7 @@ ${csvFull}
         "outsource": 業務委託費合計（千円・整数）,
         "adv": 広告販促費合計（千円・整数）,
         "gaichu": 外注費合計（千円・整数）,
-        "other": その他販管費合計（千円・整数）
+        "other": その他販管費合計（千円・整数、labor/outsource/adv/gaichuに含まれないものだけ）
       },
       "cf": {
         "open": 月初現金残高（千円・整数）,
@@ -3218,12 +3235,18 @@ function renderCSVConfirmTable(parsed, months, kind) {
     {
       title: '── PL（千円）', color: 'rgba(55,138,221,0.12)',
       rows: [
-        { section:'pl', key:'rev',       label:'売上合計',     isRev:true },
-        { section:'pl', key:'labor',     label:'人件費',       isOut:true },
-        { section:'pl', key:'outsource', label:'業務委託費',   isOut:true },
-        { section:'pl', key:'adv',       label:'広告販促費',   isOut:true },
-        { section:'pl', key:'gaichu',    label:'外注費',       isOut:true },
-        { section:'pl', key:'other',     label:'その他販管費', isOut:true },
+        { section:'pl', key:'rev',        label:'売上合計',                       isRev:true },
+        { section:'pl', key:'labor',      label:'人件費',                         isOut:true },
+        { section:'pl', key:'outsource',  label:'業務委託費',                     isOut:true },
+        { section:'pl', key:'adv',        label:'広告販促費',                     isOut:true },
+        { section:'pl', key:'gaichu',     label:'外注費',                         isOut:true },
+        { section:'pl', key:'other',      label:'その他販管費',                   isOut:true },
+        { section:'pl', key:'_opexCheck', label:'▶ 販管費合計（検算）',           isCalc:true },
+        { section:'pl', key:'cogsHomeroom', label:'原価:ホームルーム',            isOut:true },
+        { section:'pl', key:'cogsHyogikai', label:'原価:評議会',                  isOut:true },
+        { section:'pl', key:'cogsOenKaigi', label:'原価:応援カイギ',              isOut:true },
+        { section:'pl', key:'cogsBigEvent', label:'原価:大型イベント',            isOut:true },
+        { section:'pl', key:'cogsOther',    label:'原価:その他',                  isOut:true },
       ]
     },
     {
@@ -3293,16 +3316,30 @@ function renderCSVConfirmTable(parsed, months, kind) {
       months.forEach(m => {
         // AIが返す形式に応じて2通りで取得（新形式: pl/cf/bs階層、旧形式: フラット）
         const monthData = parsed.months?.[m] || {};
-        const val = (monthData[row.section]?.[row.key])
-                 ?? (row.section !== 'bs' ? monthData[row.key] : undefined)
-                 ?? 0;
+        let val;
+        if (row.key === '_opexCheck') {
+          // 検算：labor+outsource+adv+gaichu+other の合計
+          const plD = monthData.pl || monthData;
+          val = ['labor','outsource','adv','gaichu','other'].reduce((t,k) => t+(Number(plD[k])||0), 0);
+        } else {
+          val = (monthData[row.section]?.[row.key])
+             ?? (row.section !== 'bs' ? monthData[row.key] : undefined)
+             ?? 0;
+        }
         const bg = val > 0 ? (row.isRev ? 'background:rgba(39,174,96,0.08)' : 'background:rgba(226,75,74,0.07)') : '';
         const fullKey = `${row.section}.${row.key}`;
-        html += `<td class="editable-cell" style="${bg}"
-          onclick="editCsvConfirmCell(this,'${m}','${fullKey}')"
-          data-month="${m}" data-key="${fullKey}">
-          ${val ? Number(val).toLocaleString() : '—'}
-        </td>`;
+        if (row.isCalc || row.key === '_opexCheck') {
+          // 検算行は編集不可・強調表示
+          html += `<td style="${bg};font-weight:700;border-top:1px solid var(--border2)">
+            ${val ? Number(val).toLocaleString() : '—'}
+          </td>`;
+        } else {
+          html += `<td class="editable-cell" style="${bg}"
+            onclick="editCsvConfirmCell(this,'${m}','${fullKey}')"
+            data-month="${m}" data-key="${fullKey}">
+            ${val ? Number(val).toLocaleString() : '—'}
+          </td>`;
+        }
       });
       html += '</tr>';
     });
@@ -3373,19 +3410,17 @@ async function commitCSVResult() {
     const idx = d.months.indexOf(month);
     if (idx === -1) continue;
 
-    // PL書き込み
+    // PL書き込み（DBが千円単位になったので変換不要）
     const pl_sec = pd.pl || pd; // 新形式(pd.pl)と旧形式(pd直下)の両対応
     const target = kind === 'actual' ? d.pl.actual : d.pl.budget;
-    // PLはDBが万円単位なので千円÷10して書き込む
-    const toMan = (v) => Math.round((Number(v) || 0) / 10);
     const setpl = (key, src) => {
-      if (src?.[key] !== undefined && src[key] !== 0) target[key][idx] = toMan(src[key]);
+      if (src?.[key] !== undefined && src[key] !== 0) target[key][idx] = Math.round(Number(src[key]) || 0);
     };
     setpl('rev', pl_sec); setpl('labor', pl_sec); setpl('outsource', pl_sec);
     setpl('adv', pl_sec); setpl('other', pl_sec);
     if (pl_sec?.gaichu !== undefined && pl_sec.gaichu !== 0) {
       if (!target.gaichu) target.gaichu = [];
-      target.gaichu[idx] = toMan(pl_sec.gaichu);
+      target.gaichu[idx] = Math.round(Number(pl_sec.gaichu) || 0);
     }
 
     // CF書き込み（詳細科目すべて）
@@ -3665,7 +3700,7 @@ async function loadImportedList() {
 
   // タブ切り替え
   const tabs = ['pl','cf','cf-out','cf-detail'];
-  const tabLabels = { pl:'PL（万円）', cf:'CF収入（千円）', 'cf-out':'CF出金（千円）', 'cf-detail':'CF詳細（千円）' };
+  const tabLabels = { pl:'PL（千円）', cf:'CF収入（千円）', 'cf-out':'CF出金（千円）', 'cf-detail':'CF詳細（千円）' };
   let currentTab = 'pl';
 
   const renderTab = (tab) => {
@@ -3973,26 +4008,36 @@ let SIM_DATA = {
   },
   '2026': {
     pl: {
-      fee:       [1000,1000,1000,1100,1100,1100,1200,1200,1200,1300,1300,1300],
-      training:  [200,200,300,300,400,400,500,500,500,500,500,500],
-      event:     [0,50,100,0,50,200,0,50,400,50,50,100],
-      labor:     [400,400,400,400,400,400,450,450,450,450,450,450],
-      outsource: [400,400,400,400,400,400,400,400,400,400,400,400],
-      adv:       [100,100,200,100,100,300,100,100,400,100,100,200],
-      rent:      [90,90,90,90,90,90,90,90,90,90,90,90],
-      gaichu:    [100,100,100,100,100,100,100,100,100,100,100,100],
-      other:     [60,60,60,60,60,60,60,60,60,60,60,60]
+      fee:            [1000,1000,1000,1100,1100,1100,1200,1200,1200,1300,1300,1300],
+      training:       [200,200,300,300,400,400,500,500,500,500,500,500],
+      event:          [0,50,100,0,50,200,0,50,400,50,50,100],
+      cogsHomeroom:   [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsHyogikai:   [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsOenKaigi:   [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsBigEvent:   [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsOther:      [0,0,0,0,0,0,0,0,0,0,0,0],
+      labor:          [400,400,400,400,400,400,450,450,450,450,450,450],
+      outsource:      [400,400,400,400,400,400,400,400,400,400,400,400],
+      adv:            [100,100,200,100,100,300,100,100,400,100,100,200],
+      rent:           [90,90,90,90,90,90,90,90,90,90,90,90],
+      gaichu:         [100,100,100,100,100,100,100,100,100,100,100,100],
+      other:          [60,60,60,60,60,60,60,60,60,60,60,60]
     },
     cf: {
-      cfOpenFirst: 7620,
-      cfIn:        [1000,1000,1000,1100,1100,1100,1200,1200,1200,1300,1300,1300],
-      laborPay:    [400,400,400,400,400,400,450,450,450,450,450,450],
-      outsourcePay:[400,400,400,400,400,400,400,400,400,400,400,400],
-      advPay:      [100,100,200,100,100,300,100,100,400,100,100,200],
-      eventPay:    [50,50,100,50,50,150,50,50,200,50,50,100],
-      rentPay:     [90,90,90,90,90,90,90,90,90,90,90,90],
-      gaichuPay:   [100,100,100,100,100,100,100,100,100,100,100,100],
-      otherPay:    [60,60,60,60,60,60,60,60,60,60,60,60]
+      cfOpenFirst:      7620,
+      cfIn:             [1000,1000,1000,1100,1100,1100,1200,1200,1200,1300,1300,1300],
+      cogsHomeroomPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsHyogikaiPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsOenKaigiPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsBigEventPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
+      cogsOtherPay:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      laborPay:         [400,400,400,400,400,400,450,450,450,450,450,450],
+      outsourcePay:     [400,400,400,400,400,400,400,400,400,400,400,400],
+      advPay:           [100,100,200,100,100,300,100,100,400,100,100,200],
+      eventPay:         [50,50,100,50,50,150,50,50,200,50,50,100],
+      rentPay:          [90,90,90,90,90,90,90,90,90,90,90,90],
+      gaichuPay:        [100,100,100,100,100,100,100,100,100,100,100,100],
+      otherPay:         [60,60,60,60,60,60,60,60,60,60,60,60]
     }
   }
 };
@@ -4304,8 +4349,12 @@ function drawSimPLChart(revArr, costArr, profitArr, cumArr) {
     return;
   }
   window._simPlDirty = false;
-  destroyChart('sim-pl-chart');
-  simPlChart = new Chart(plCanvas, {
+  // simPlChart は charts[] ではなく独自変数で管理されているため直接破棄
+  if (simPlChart) { try { simPlChart.destroy(); } catch(e){} simPlChart = null; }
+  // Canvas を完全リセット（Chart.js の内部状態をクリア）
+  const newPlCanvas = plCanvas.cloneNode(true);
+  plCanvas.parentNode.replaceChild(newPlCanvas, plCanvas);
+  simPlChart = new Chart(newPlCanvas, {
     type: 'bar',
     data: {
       labels,
@@ -4381,6 +4430,7 @@ function drawSimPLChart(revArr, costArr, profitArr, cumArr) {
 
   // Attach click handler to revenue bar (dataset 0) and cost bar (dataset 1)
   setTimeout(() => {
+    // simPlChart が再生成されていることがあるので最新インスタンスを使用
     if (!simPlChart) return;
     attachBarClickHandler(simPlChart, [
       { datasetIndex: 0, key: 'rev_bar',  label: '売上合計' },
@@ -4552,8 +4602,10 @@ function drawSimCFChart(months, netArr, balArr) {
     return;
   }
   window._simCfDirty = false;
-  destroyChart('sim-cf-chart');
-  simCfChart = new Chart(cfCanvas, {
+  if (simCfChart) { try { simCfChart.destroy(); } catch(e){} simCfChart = null; }
+  const newCfCanvas = cfCanvas.cloneNode(true);
+  cfCanvas.parentNode.replaceChild(newCfCanvas, cfCanvas);
+  simCfChart = new Chart(newCfCanvas, {
     type: 'bar',
     data: {
       labels,
@@ -4799,15 +4851,62 @@ function applyPreset(name) {
 function openBudgetModal() {
   const months = getSimMonths();
   const labels = getSimLabels();
-  // build preview
+  const cogsKeys = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+  const cogsLabels = { cogsHomeroom:'ホームルーム', cogsHyogikai:'評議会', cogsOenKaigi:'応援カイギ', cogsBigEvent:'大型イベント', cogsOther:'その他原価' };
+  const hasCogs = cogsKeys.some(k => months.some((_,i) => getSimVal('pl',k,i) > 0));
+
+  // 1月1行のシンプルテーブル
   let rows = '';
   labels.forEach((lbl, i) => {
-    const rev = getSimVal('pl','fee',i)+getSimVal('pl','training',i)+getSimVal('pl','event',i);
-    const cost = getSimVal('pl','labor',i)+getSimVal('pl','outsource',i)+getSimVal('pl','adv',i)+getSimVal('pl','rent',i)+getSimVal('pl','other',i);
-    const profit = rev - cost;
-    rows += `<tr><td style="padding:3px 6px;color:var(--text2)">${lbl}</td><td style="padding:3px 6px;text-align:right">${rev.toLocaleString()}</td><td style="padding:3px 6px;text-align:right;color:var(--tc-red)">${cost.toLocaleString()}</td><td style="padding:3px 6px;text-align:right;color:${profit>=0?'var(--tc-green)':'var(--tc-red)'}">${profit>=0?'+':'▲'}${Math.abs(profit).toLocaleString()}</td></tr>`;
+    const rev  = getSimVal('pl','fee',i)+getSimVal('pl','training',i)+getSimVal('pl','event',i);
+    const cogs = cogsKeys.reduce((t,k) => t+getSimVal('pl',k,i), 0);
+    const gp   = rev - cogs;
+    const opex = getSimVal('pl','labor',i)+getSimVal('pl','outsource',i)+getSimVal('pl','adv',i)+getSimVal('pl','rent',i)+getSimVal('pl','other',i);
+    const profit = (hasCogs ? gp : rev) - opex;
+    const profColor = profit>=0 ? 'var(--tc-green)' : 'var(--tc-red)';
+    const cogsCell = hasCogs
+      ? `<td style="padding:4px 8px;text-align:right;color:var(--tc-amber)">${cogs>0?cogs.toLocaleString():'—'}</td>
+         <td style="padding:4px 8px;text-align:right;color:var(--tc-green)">${gp.toLocaleString()}</td>`
+      : '';
+    rows += `<tr style="border-top:1px solid var(--border)">
+      <td style="padding:4px 8px;color:var(--text2);font-weight:600">${lbl}</td>
+      <td style="padding:4px 8px;text-align:right;color:var(--tc-blue)">${rev.toLocaleString()}</td>
+      ${cogsCell}
+      <td style="padding:4px 8px;text-align:right;color:var(--tc-red)">${opex.toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right;color:${profColor};font-weight:700">${profit>=0?'+':'▲'}${Math.abs(profit).toLocaleString()}</td>
+    </tr>`;
+
+    // 入力済みの原価明細を折りたたみで表示
+    if (hasCogs && cogs > 0) {
+      cogsKeys.forEach(k => {
+        const v = getSimVal('pl',k,i);
+        if (v > 0) {
+          rows += `<tr style="background:rgba(239,159,39,0.05)">
+            <td style="padding:2px 8px 2px 20px;font-size:10px;color:var(--text3)">└ ${cogsLabels[k]}</td>
+            <td></td>
+            <td style="padding:2px 8px;text-align:right;font-size:10px;color:var(--tc-amber)">${v.toLocaleString()}</td>
+            <td colspan="3"></td>
+          </tr>`;
+        }
+      });
+    }
   });
-  document.getElementById('budget-preview').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr><th style="text-align:left;padding:3px 6px;color:var(--text3)">月</th><th style="text-align:right;padding:3px 6px;color:var(--text3)">売上</th><th style="text-align:right;padding:3px 6px;color:var(--text3)">費用</th><th style="text-align:right;padding:3px 6px;color:var(--text3)">損益</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+  const cogsCols = hasCogs
+    ? `<th style="text-align:right;padding:4px 8px;color:var(--tc-amber)">原価計</th>
+       <th style="text-align:right;padding:4px 8px;color:var(--tc-green)">粗利</th>`
+    : '';
+
+  document.getElementById('budget-preview').innerHTML =
+    `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr style="background:var(--bg3)">
+        <th style="text-align:left;padding:4px 8px;color:var(--text3)">月</th>
+        <th style="text-align:right;padding:4px 8px;color:var(--text3)">売上</th>
+        ${cogsCols}
+        <th style="text-align:right;padding:4px 8px;color:var(--tc-red)">販管費</th>
+        <th style="text-align:right;padding:4px 8px;color:var(--text3)">損益</th>
+      </tr></thead><tbody>${rows}</tbody>
+    </table></div>`;
   const overlay = document.getElementById('budget-modal-overlay');
   overlay.style.display = 'flex'; overlay.style.alignItems = 'center'; overlay.style.justifyContent = 'center';
   document.getElementById('budget-reason').focus();
@@ -4823,6 +4922,10 @@ async function commitBudget() {
   if (!reason) { document.getElementById('budget-reason').style.borderColor='var(--tc-red)'; return; }
 
   const months = getSimMonths();
+  // デバッグ: 反映前の値を確認
+  console.log('[commitBudget] currentSimYear:', currentSimYear);
+  console.log('[commitBudget] SIM_DATA.pl.fee:', SIM_DATA[currentSimYear]?.pl?.fee);
+  console.log('[commitBudget] SIM_DATA.pl.labor:', SIM_DATA[currentSimYear]?.pl?.labor);
   // ── 予算反映前にバージョン自動バックアップ ──
   const autoVer = {
     id: Date.now(),
@@ -4844,23 +4947,24 @@ async function commitBudget() {
     const idx = d.months.indexOf(m);
     if (idx === -1) return;
 
-    // PL売上
-    d.pl.budget.rev[idx] = rev;
+    // PL売上（シミュレーションは万円→DBは千円なので×10）
+    const simTo千 = (v) => Math.round(v * 10);
+    d.pl.budget.rev[idx] = simTo千(rev);
 
     // PL原価（NEOプログラム原価）
     const cogsSimKeys = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
     cogsSimKeys.forEach(key => {
       if (!d.pl.budget[key]) d.pl.budget[key] = [];
-      d.pl.budget[key][idx] = getSimVal('pl', key, i);
+      d.pl.budget[key][idx] = simTo千(getSimVal('pl', key, i));
     });
 
     // PL販管費
-    d.pl.budget.labor[idx]     = getSimVal('pl','labor',i);
-    d.pl.budget.outsource[idx] = getSimVal('pl','outsource',i);
-    d.pl.budget.adv[idx]       = getSimVal('pl','adv',i);
+    d.pl.budget.labor[idx]     = simTo千(getSimVal('pl','labor',i));
+    d.pl.budget.outsource[idx] = simTo千(getSimVal('pl','outsource',i));
+    d.pl.budget.adv[idx]       = simTo千(getSimVal('pl','adv',i));
     if (!d.pl.budget.gaichu) d.pl.budget.gaichu = [];
-    d.pl.budget.gaichu[idx]    = getSimVal('pl','gaichu',i);
-    d.pl.budget.other[idx]     = getSimVal('pl','rent',i) + getSimVal('pl','other',i);
+    d.pl.budget.gaichu[idx]    = simTo千(getSimVal('pl','gaichu',i));
+    d.pl.budget.other[idx]     = simTo千(getSimVal('pl','rent',i) + getSimVal('pl','other',i));
 
     // CF入金
     if (!d.cf.budget.cfIn) d.cf.budget.cfIn = [];
@@ -4922,11 +5026,31 @@ async function commitBudget() {
   try {
     await saveDB();
     closeBudgetModal();
+
+    // saveDB後にDBが書き換わっていないか確認してから再描画
+    console.log('[commitBudget] after saveDB, DB rev[0]:', DB[currentSimYear]?.pl?.budget?.rev?.[0]);
+
+    // 現在表示中の年度をシミュレーション年度に合わせて再描画
+    if (currentYear !== currentSimYear) {
+      currentYear = currentSimYear;
+      document.querySelectorAll('.yr-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.yr === currentSimYear);
+      });
+    }
+
     showBudgetToast();
     renderBudgetHistory();
     updateWeeklyKPIs();
     renderPLCF();
-  } catch(e) { alert('保存エラー: ' + e.message); }
+
+    // 月次PL/CFタブへ自動遷移して反映を確認しやすくする
+    const plcfTab = document.querySelector('[onclick*="pl-cf"]');
+    if (plcfTab) plcfTab.click();
+
+  } catch(e) {
+    console.error('[commitBudget] error:', e);
+    alert('保存エラー: ' + e.message);
+  }
 }
 
 function showBudgetToast() {
@@ -4994,6 +5118,7 @@ async function loadSimData() {
       const r = await res.json();
       if (r.ok && r.data) {
         for (const yr of ['2025', '2026']) { if (r.data[yr]) SIM_DATA[yr] = r.data[yr]; }
+        migrateSIMDataCogs();
         return;
       }
     }
@@ -5002,6 +5127,22 @@ async function loadSimData() {
     const r26 = localStorage.getItem('neo_sim_2026');
     if (r26) SIM_DATA['2026'] = JSON.parse(r26);
   } catch (e) { console.warn('loadSimData failed:', e); }
+  migrateSIMDataCogs();
+}
+
+// SIM_DATAに原価キーが欠けている場合に補完（マイグレーション）
+function migrateSIMDataCogs() {
+  const cogsPlKeys = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+  const cogsCFKeys = ['cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'];
+  for (const yr of ['2025','2026']) {
+    if (!SIM_DATA[yr]) continue;
+    cogsPlKeys.forEach(k => {
+      if (!SIM_DATA[yr].pl[k]) SIM_DATA[yr].pl[k] = Array(12).fill(0);
+    });
+    cogsCFKeys.forEach(k => {
+      if (!SIM_DATA[yr].cf[k]) SIM_DATA[yr].cf[k] = Array(12).fill(0);
+    });
+  }
 }
 
 function resetSimData() {
@@ -5849,6 +5990,21 @@ function copyText(id) {
 // ═══════════════════════════════════════════
 window.addEventListener('load', async () => {
   try { await loadDB(); } catch(e) { console.warn('loadDB:', e); }
+  // PLデータ単位チェック（万円→千円マイグレーション）
+  // 売上予算が1000未満ならまだ万円単位のデータ → ×10変換
+  for (const yr of ['2025','2026']) {
+    const plb = DB[yr]?.pl?.budget?.rev || [];
+    const pla = DB[yr]?.pl?.actual?.rev || [];
+    const maxBudget = Math.max(...plb.filter(v=>v>0), 0);
+    if (maxBudget > 0 && maxBudget < 1000) {
+      console.log('PLデータを万円→千円に移行:', yr, 'maxBudget:', maxBudget);
+      ['rev','labor','outsource','adv','gaichu','other',
+       'cogs','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'].forEach(k => {
+        if (DB[yr].pl.budget[k]) DB[yr].pl.budget[k] = DB[yr].pl.budget[k].map(v => Math.round((Number(v)||0)*10));
+        if (DB[yr].pl.actual[k]) DB[yr].pl.actual[k] = DB[yr].pl.actual[k].map(v => Math.round((Number(v)||0)*10));
+      });
+    }
+  }
   try { await loadSimData(); } catch(e) { console.warn('loadSimData:', e); }
   updateWeeklyKPIs();
   loadImportedList();
