@@ -3012,6 +3012,169 @@ function getSelectedMonths() {
   }
 }
 
+// ═══════════════════════════════════════════
+//  マネーフォワード CSV 直接パーサー
+//  AIを使わず確定的に科目・月・金額を取り出す
+// ═══════════════════════════════════════════
+
+// CSVテキストから月別データを直接抽出
+function parseMFCsvDirect(csvText, targetMonths) {
+  // 行をパース（クォート対応）
+  function parseRow(line) {
+    const result = [];
+    let inQuote = false, cur = '';
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQuote = !inQuote; continue; }
+      if (c === ',' && !inQuote) { result.push(cur.trim()); cur = ''; continue; }
+      cur += c;
+    }
+    result.push(cur.trim());
+    return result;
+  }
+
+  const lines = csvText.split(/\r?\n/).filter(l => l.trim());
+  const rows = lines.map(parseRow);
+  if (!rows.length) return null;
+
+  // ヘッダー行から月列インデックスを取得
+  const header = rows[0];
+  const monthCols = {};
+  const jpMonths = ['4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月'];
+  header.forEach((h, i) => {
+    if (jpMonths.includes(h)) monthCols[h] = i;
+  });
+
+  const availableMonths = Object.keys(monthCols);
+  if (!availableMonths.length) return null;
+
+  function getVal(row, month) {
+    const col = monthCols[month];
+    if (col === undefined || col >= row.length) return 0;
+    const v = row[col].replace(/,/g, '');
+    const n = parseFloat(v);
+    return isNaN(n) ? 0 : Math.round(n);
+  }
+
+  // 科目マッピング（マネーフォワード勘定科目 → DBキー）
+  const ACCOUNT_MAP = {
+    // PL: labor
+    '役員報酬':   { key:'labor',     type:'pl' },
+    '給料賃金':   { key:'labor',     type:'pl' },
+    '給与手当':   { key:'labor',     type:'pl' },
+    '賞与':       { key:'labor',     type:'pl' },
+    '法定福利費': { key:'labor',     type:'pl' },
+    '福利厚生費': { key:'labor',     type:'pl' },
+    // PL: outsource
+    '業務委託料':        { key:'outsource', type:'pl' },
+    '業務委託料（開発費）': { key:'outsource', type:'pl' },
+    '業務委託費':        { key:'outsource', type:'pl' },
+    // PL: adv
+    '広告宣伝費': { key:'adv',       type:'pl' },
+    '販売促進費': { key:'adv',       type:'pl' },
+    // PL: gaichu
+    '支払報酬':   { key:'gaichu',    type:'pl' },
+    '外注費':     { key:'gaichu',    type:'pl' },
+    // PL: other（上記以外の販管費）
+    '旅費交通費': { key:'other',     type:'pl' },
+    '通信費':     { key:'other',     type:'pl' },
+    '水道光熱費': { key:'other',     type:'pl' },
+    '備品・消耗品費': { key:'other', type:'pl' },
+    '消耗品費':   { key:'other',     type:'pl' },
+    '地代家賃':   { key:'other',     type:'pl' },
+    '租税公課':   { key:'other',     type:'pl' },
+    '支払手数料': { key:'other',     type:'pl' },
+    'システム利用料': { key:'other', type:'pl' },
+    '接待交際費': { key:'other',     type:'pl' },
+    '会議費':     { key:'other',     type:'pl' },
+    '研修採用費': { key:'other',     type:'pl' },
+    '採用費':     { key:'other',     type:'pl' },
+    '保険料':     { key:'other',     type:'pl' },
+    '新聞図書費': { key:'other',     type:'pl' },
+    '諸会費':     { key:'other',     type:'pl' },
+    '荷造運賃':   { key:'other',     type:'pl' },
+    '雑費':       { key:'other',     type:'pl' },
+    '減価償却費': { key:'other',     type:'pl' },
+  };
+
+  // 月別累積集計
+  const acc = {}; // { month: { pl: {labor:0,...}, rev:0, opexTotal:0 } }
+  availableMonths.forEach(m => {
+    acc[m] = { rev:0, opexTotal:0, pl:{ labor:0,outsource:0,adv:0,gaichu:0,other:0 } };
+  });
+
+  let inOpex = false;
+  for (const row of rows) {
+    const label = row[0] || '';
+    const sub   = row[1] || '';
+
+    // 売上合計
+    if (label === '売上高合計') {
+      availableMonths.forEach(m => { acc[m].rev = getVal(row, m); });
+    }
+    // 販管費セクション検出
+    if (label === '販売費及び一般管理費') { inOpex = true; continue; }
+    if (label === '販売費及び一般管理費合計') {
+      availableMonths.forEach(m => { acc[m].opexTotal = getVal(row, m); });
+      inOpex = false; continue;
+    }
+    if (label === '営業利益') { inOpex = false; continue; }
+
+    // 販管費明細（label=空、sub=科目名）
+    if (inOpex && !label && sub) {
+      const hasSubSub = row[2] && row[2].trim(); // 補助科目の補助科目（飲食費など）は除外
+      if (!hasSubSub && ACCOUNT_MAP[sub]) {
+        const { key } = ACCOUNT_MAP[sub];
+        availableMonths.forEach(m => {
+          acc[m].pl[key] = (acc[m].pl[key] || 0) + getVal(row, m);
+        });
+      }
+    }
+  }
+
+  // 対象月のみに絞り込み、千円に変換
+  const result = {};
+  const useMonths = targetMonths.filter(m => availableMonths.includes(m));
+  useMonths.forEach(m => {
+    const a = acc[m];
+    result[m] = {
+      rev:       Math.round(a.rev / 1000),
+      labor:     Math.round(a.pl.labor / 1000),
+      outsource: Math.round(a.pl.outsource / 1000),
+      adv:       Math.round(a.pl.adv / 1000),
+      gaichu:    Math.round(a.pl.gaichu / 1000),
+      other:     Math.round(a.pl.other / 1000),
+      opexTotal: Math.round(a.opexTotal / 1000),
+    };
+  });
+
+  return { months: useMonths, data: result, availableMonths };
+}
+
+// analyzeCSV が呼ばれたとき、まず直接パースを試みる
+// 成功すればAIを使わず即反映、失敗時のみAIにフォールバック
+async function tryDirectParse() {
+  if (!csvRawText || !csvParsed.length) return null;
+  if (document.getElementById('csv-type').value !== 'pl') return null; // PLのみ対応
+
+  const months = getSelectedMonths();
+  if (!months.length) return null;
+
+  try {
+    const parsed = parseMFCsvDirect(csvRawText, months);
+    if (!parsed || !Object.keys(parsed.data).length) return null;
+
+    // 全対象月のデータが取れているか確認
+    const found = months.filter(m => m in parsed.data);
+    if (found.length === 0) return null;
+
+    return parsed;
+  } catch(e) {
+    console.warn('直接パース失敗:', e);
+    return null;
+  }
+}
+
 async function analyzeCSV() {
   const months = getSelectedMonths();
   const csvType = document.getElementById('csv-type').value;
@@ -3027,11 +3190,53 @@ async function analyzeCSV() {
 
   const log = document.getElementById('import-log');
   log.style.display = 'block';
-  log.innerHTML = '<span class="log-info">🤖 AIがCSVを解析中...</span>\n';
 
   const btn = document.getElementById('csv-analyze-btn');
   btn.disabled = true;
   btn.textContent = '解析中...';
+
+  // ── 直接パースを先に試みる（マネーフォワード損益計算書CSV対応） ──
+  if (csvType === 'pl') {
+    log.innerHTML = '<span class="log-info">📊 CSVを直接パース中...</span>\n';
+    const direct = await tryDirectParse();
+    if (direct && Object.keys(direct.data).length > 0) {
+      log.innerHTML += `<span class="log-ok">✓ ${direct.months.length}ヶ月分を直接パース完了（AI不使用・高精度）</span>\n`;
+      log.innerHTML += `<span class="log-info">対象月: ${direct.months.map(m=>MONTH_LABELS[m]||m).join('・')}</span>\n`;
+
+      // parsed形式に変換してプレビュー表示
+      const parsedForPreview = {
+        months: {},
+        summary: `マネーフォワード損益計算書から${direct.months.length}ヶ月分を直接抽出しました`,
+        warnings: []
+      };
+      direct.months.forEach(m => {
+        const d = direct.data[m];
+        const otherCalc = d.opexTotal - d.labor - d.outsource - d.adv - d.gaichu;
+        parsedForPreview.months[m] = {
+          pl: {
+            rev:       d.rev,
+            labor:     d.labor,
+            outsource: d.outsource,
+            adv:       d.adv,
+            gaichu:    d.gaichu,
+            other:     Math.max(0, otherCalc), // CSV合計からの逆算で残りをotherに
+          }
+        };
+        log.innerHTML += `<span class="log-info">${MONTH_LABELS[m]||m}: 売上${d.rev.toLocaleString()}千円 / 人件費${d.labor.toLocaleString()}千円 / 委託${d.outsource.toLocaleString()}千円 / 広告${d.adv.toLocaleString()}千円</span>\n`;
+      });
+
+      window._csvPendingResult = { parsed: parsedForPreview, months: direct.months, kind, csvType };
+      renderCSVConfirmTable(parsedForPreview, direct.months, kind);
+      document.getElementById('csv-confirm-card').style.display = '';
+      document.getElementById('csv-confirm-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      btn.disabled = false;
+      btn.textContent = '🤖 AIで解析';
+      return;
+    }
+    log.innerHTML = '<span class="log-warn">⚠ 直接パース非対応のCSV形式 → AIで解析します</span>\n';
+  }
+
+  log.innerHTML += '<span class="log-info">🤖 AIがCSVを解析中...</span>\n';
 
   // 月数が多い場合に警告
   if (months.length > 6) {
@@ -3060,20 +3265,26 @@ ${csvFull}
 - 万円に換算しないこと（PLも千円単位で返す）
 
 ★★★ 販管費の分類ルール（厳守）★★★
-【重要】各科目は排他的に分類すること。1つの費用を複数科目に入れてはいけない（二重計上禁止）
+【重要①】各科目は排他的に分類すること。1つの費用を複数科目に入れてはいけない（二重計上禁止）
+【重要②】CSVに「販売費及び一般管理費合計」「費用合計」などの合計行がある場合は無視すること
+         必ず内訳の個別科目行の数値だけを使って積み上げること（合計行+内訳行の二重計上禁止）
+【重要③】「小計」「合計」「計」が含まれる行名の数値は使わない
 
 - labor（人件費）：役員報酬・給料賃金・給与手当・法定福利費・福利厚生費・賞与のみ
 - outsource（業務委託費）：業務委託料・業務委託費・外部委託費・フリーランス報酬のみ
 - adv（広告販促費）：広告宣伝費・販売促進費・WEB広告費・マーケティング費のみ
 - gaichu（外注費）：制作外注費・イベント外注費・支払報酬のみ（業務委託と重複させない）
 - other（その他販管費）：上記labor/outsource/adv/gaichuのどれにも該当しない販管費のみ
-  （地代家賃・通信費・旅費交通費・消耗品費・租税公課・減価償却費・雑費等）
+  例：地代家賃・通信費・旅費交通費・消耗品費・租税公課・減価償却費・雑費・保険料・リース料等
 
 【厳禁】以下は販管費に含めない：
 - NEOプログラム原価（ホームルーム・評議会・応援カイギ・大型イベント等）→ pl.cogsXxx に入れる
-- 売上原価・仕入原価 → pl.cogsXxx に入れる
+- 売上原価・仕入原価・製造原価 → pl.cogsXxx に入れる
+- 「〜合計」「〜小計」行の数値
 
-【検算】labor + outsource + adv + gaichu + other = 販管費合計（売上原価を含めないこと）
+【自己検算】返す前に必ず確認：
+  labor + outsource + adv + gaichu + other の合計 ＝ CSVの「販管費合計」行の値
+  もし一致しない場合は内訳のみで再計算して合わせること
 
 以下のJSON形式で月ごとの数値を返してください:
 {
@@ -3139,7 +3350,7 @@ ${csvFull}
 1. monthsのキーは ${months.map(m => `"${m}"`).join('・')} を使う
 2. 各月の列からその月の数値のみ抽出（全月同一値は誤り）
 3. 存在しない科目は0
-4. 単位変換を必ず行う（円→万円 または 円→千円）
+4. 単位変換を必ず行う（すべて円→千円。万円には変換しない）
 5. JSONのみ返す（前後の説明・コメント不要）`;
 
   try {
@@ -3241,7 +3452,7 @@ function renderCSVConfirmTable(parsed, months, kind) {
         { section:'pl', key:'adv',        label:'広告販促費',                     isOut:true },
         { section:'pl', key:'gaichu',     label:'外注費',                         isOut:true },
         { section:'pl', key:'other',      label:'その他販管費',                   isOut:true },
-        { section:'pl', key:'_opexCheck', label:'▶ 販管費合計（検算）',           isCalc:true },
+        { section:'pl', key:'_opexCheck', label:'✅ 販管費合計（検算）※この値がCSVの販管費合計と一致するか確認',isCalc:true },
         { section:'pl', key:'cogsHomeroom', label:'原価:ホームルーム',            isOut:true },
         { section:'pl', key:'cogsHyogikai', label:'原価:評議会',                  isOut:true },
         { section:'pl', key:'cogsOenKaigi', label:'原価:応援カイギ',              isOut:true },
@@ -3329,8 +3540,8 @@ function renderCSVConfirmTable(parsed, months, kind) {
         const bg = val > 0 ? (row.isRev ? 'background:rgba(39,174,96,0.08)' : 'background:rgba(226,75,74,0.07)') : '';
         const fullKey = `${row.section}.${row.key}`;
         if (row.isCalc || row.key === '_opexCheck') {
-          // 検算行は編集不可・強調表示
-          html += `<td style="${bg};font-weight:700;border-top:1px solid var(--border2)">
+          // 検算行は編集不可・赤背景で強調
+          html += `<td style="background:rgba(226,75,74,0.10);font-weight:700;border-top:2px solid rgba(226,75,74,0.3);text-align:right;padding:4px 6px">
             ${val ? Number(val).toLocaleString() : '—'}
           </td>`;
         } else {
