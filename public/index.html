@@ -4534,49 +4534,40 @@ function recalcSimPL() {
 
   const plRowsCur = getPLRows();
 
-  // ── キー分類 ──
-  // 計算行・セクション行（値を持たない行）
-  const CALC_KEYS = new Set(['rev','_cogsHead','_grossProfit']);
+  // ── キー分類（シンプル版）──
+  const FIXED_COGS_KEYS = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+  const SKIP_ROW_KEYS   = new Set(['rev','_cogsHead','_grossProfit']);
 
-  // 原価の実データ行（_cogsHeadの直接の子行）
-  const COGS_DIRECT_CHILDREN = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+  const topRevKeys  = [];
+  const cogsKeys    = [];
+  const topOpexKeys = [];
 
-  // 売上トップ行：isRevでparentKeyなし（rev本体と計算行を除く）
-  const topRevKeys = plRowsCur
-    .filter(r => r.isRev && !CALC_KEYS.has(r.key) && !r.parentKey)
-    .map(r => r.key);
+  for (const r of plRowsCur) {
+    // スキップ（セクション行・計算行）
+    if (SKIP_ROW_KEYS.has(r.key) || r.isSection || r.isCalc) continue;
 
-  // 原価行：固定5科目 ＋ 原価系の親を持つカスタム行（isCogs）
-  const COGS_PARENT_KEYS_SET = new Set(['_cogsHead','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther']);
-  const cogsKeys = plRowsCur
-    .filter(r =>
-      COGS_DIRECT_CHILDREN.includes(r.key) ||
-      r.parentKey === '_cogsHead' ||
-      r.isCogs === true
-    )
-    .map(r => r.key);
+    if (r.isRev) {
+      // 売上：トップ行（parentKeyなし）のみ集計
+      if (!r.parentKey) topRevKeys.push(r.key);
 
-  // 販管費トップ行：isCostでparentKeyなし、かつ原価行・計算行・セクション行・isCogs行を除く
-  const topOpexKeys = plRowsCur
-    .filter(r =>
-      r.isCost &&
-      !CALC_KEYS.has(r.key) &&
-      !r.isSection &&
-      !r.parentKey &&
-      !cogsKeys.includes(r.key) &&
-      !r.isCogs
-    )
-    .map(r => r.key);
+    } else if (FIXED_COGS_KEYS.includes(r.key) || r.isCogs === true) {
+      // 原価：固定5科目 ＋ isCogs付きカスタム行
+      cogsKeys.push(r.key);
+
+    } else if (r.isCost && !r.parentKey) {
+      // 販管費：parentKeyなしのトップ行
+      topOpexKeys.push(r.key);
+    }
+  }
 
   // 集計
   const revArr = Array.from({length: N}, (_, i) =>
     topRevKeys.reduce((sum, k) => sum + getEffectiveSimVal(k, i), 0)
   );
-  // 原価：子行を直接合計（_cogsHeadのgetEffectiveSimValと同等）
   const cogsArr = Array.from({length: N}, (_, i) =>
     cogsKeys.reduce((sum, k) => sum + getSimVal('pl', k, i), 0)
   );
-  const gpArr = revArr.map((r, i) => r - cogsArr[i]);
+  const gpArr  = revArr.map((r, i) => r - cogsArr[i]);
   const costArr = Array.from({length: N}, (_, i) =>
     topOpexKeys.reduce((sum, k) => sum + getEffectiveSimVal(k, i), 0) + cogsArr[i]
   );
