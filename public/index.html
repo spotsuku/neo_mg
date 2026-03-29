@@ -1700,6 +1700,20 @@ function buildAnnualTable(rows, unit) {
 // ═══════════════════════════════════════════
 let _plCfDirty = false;
 
+// ── リアルタイム自動保存（変更から3秒後にSupabaseへ保存） ──
+let _autoSaveTimer = null;
+function scheduleAutoSave(label) {
+  if (_autoSaveTimer) clearTimeout(_autoSaveTimer);
+  const ss = document.getElementById('save-status');
+  if (ss) { ss.textContent = '編集中...'; ss.style.display = 'inline'; ss.style.color = 'var(--text3)'; }
+  _autoSaveTimer = setTimeout(async () => {
+    await saveDB();
+    await saveSimData();
+    _autoSaveTimer = null;
+    console.log('[autoSave]', label || '自動保存完了');
+  }, 3000);
+}
+
 function showPlCfSaveBar() {
   _plCfDirty = true;
   const bar = document.getElementById('pl-cf-save-bar');
@@ -1873,6 +1887,7 @@ function renderPLView(d) {
       (kind === 'budget' ? d.pl.budget[key] : d.pl.actual[key])[idx] = val;
       DB[currentYear] = d;
       showPlCfSaveBar();
+      scheduleAutoSave('PLセル編集');
       renderPLView(d); // 再描画
     }
     inp.addEventListener('blur', commit);
@@ -3143,11 +3158,21 @@ function parseMFCsvDirect(csvText, targetMonths) {
   }
 
   // 対象月のみに絞り込み、千円に変換
+  // targetMonths は '2504' 形式なので日本語月名に変換して照合
   const result = {};
-  const useMonths = targetMonths.filter(m => availableMonths.includes(m));
-  useMonths.forEach(m => {
-    const a = acc[m];
-    result[m] = {
+  const MLABELS = typeof MONTH_LABELS !== 'undefined' ? MONTH_LABELS : {};
+  // 逆引きマップ: '4月' → '2504' など（複数年度対応のため最後に一致したものを使用）
+  const labelToCode = {};
+  targetMonths.forEach(code => {
+    const jpLabel = MLABELS[code] || code;
+    labelToCode[jpLabel] = code;
+  });
+
+  availableMonths.forEach(jpMonth => {
+    const code = labelToCode[jpMonth];
+    if (!code) return; // 対象月でない
+    const a = acc[jpMonth];
+    result[code] = {
       rev:       Math.round(a.rev / 1000),
       labor:     Math.round(a.pl.labor / 1000),
       outsource: Math.round(a.pl.outsource / 1000),
@@ -3158,6 +3183,8 @@ function parseMFCsvDirect(csvText, targetMonths) {
     };
   });
 
+  const useMonths = Object.keys(result);
+  console.log('[parseMFCsvDirect] useMonths:', useMonths, 'data:', result);
   return { months: useMonths, data: result, availableMonths };
 }
 
@@ -3859,10 +3886,11 @@ async function commitImportedToProd() {
     DB: JSON.parse(JSON.stringify(DB)),
     SIM_DATA: JSON.parse(JSON.stringify(SIM_DATA)),
   };
-  const vers = (() => { try { return JSON.parse(localStorage.getItem('neo_versions')||'[]'); } catch { return []; } })();
+  const vers = getVersions();
   vers.unshift(autoVer);
-  if (vers.length > 20) vers.splice(20);
-  localStorage.setItem('neo_versions', JSON.stringify(vers));
+  if (vers.length > VER_MAX) vers.splice(VER_MAX);
+  saveVersions(vers);
+  saveVersionToCloud(autoVer); // Supabaseにも保存
 
   // DB.actual は commitCSVResult ですでに書き込み済み。
   // 現在表示年度が取込年度と異なる場合は切り替えて再描画する。
@@ -4109,6 +4137,24 @@ function getCustomRows(year) {
 const PARENT_OPTIONS_REV  = ['fee','training','event'];  // 売上の親候補
 const PARENT_OPTIONS_COST = ['_cogsHead','labor','outsource','adv','rent','gaichu','other']; // 費用の親候補
 
+// ── 親行の実効値を計算（子行がある場合は子行の合計、なければ直接入力） ──
+function getEffectiveSimVal(key, idx) {
+  const plRowsCur = getPLRows();
+  // このキーを親に持つ子行を探す
+  const children = plRowsCur.filter(r => r.parentKey === key && r.key !== key);
+  if (children.length > 0) {
+    // 子行の合計を返す（親の直接入力は無視）
+    return children.reduce((sum, child) => sum + getSimVal('pl', child.key, idx), 0);
+  }
+  // 子行なし → 直接入力値
+  return getSimVal('pl', key, idx);
+}
+
+// 指定キーに子行があるか
+function hasChildren(key) {
+  return getPLRows().some(r => r.parentKey === key);
+}
+
 // 全行（固定 + カスタム）を parentKey に従って正しい位置に挿入して返す
 function getPLRows() {
   const customRows = getCustomRows(currentSimYear);
@@ -4333,6 +4379,9 @@ function buildSimPLTable() {
         html += `<td id="spl-cogs-${i}" style="${cellStyle}${rowBg}text-align:right;padding:4px 5px;font-size:11px;color:var(--tc-amber)"></td>`;
       } else if (row.key === '_grossProfit') {
         html += `<td id="spl-gp-${i}" style="${cellStyle}${rowBg}text-align:right;padding:4px 5px;font-size:11px;font-weight:700;"></td>`;
+      } else if (hasChildren(row.key)) {
+        // 子行がある親行は計算値表示（編集不可）
+        html += `<td id="spl-parent-${row.key}-${i}" style="${cellStyle}background:var(--bg3);text-align:right;padding:4px 5px;font-size:11px;color:var(--text3)" title="内訳の合計が自動表示されます"></td>`;
       } else {
         const v = getSimVal('pl', row.key, i);
         html += `<td style="${cellStyle}"><input type="number" style="${inputStyle}" value="${v !== 0 ? v : ''}" placeholder="0" data-key="${row.key}" data-idx="${i}" oninput="onSimPLInput('${row.key}',${i},this.value)"></td>`;
@@ -4447,6 +4496,7 @@ function buildSimCFTable() {
 function onSimPLInput(key, idx, val) {
   setSimVal('pl', key, idx, val);
   recalcSimPL();
+  scheduleAutoSave('シミュレーション編集');
 }
 
 function recalcSimPL() {
@@ -4460,15 +4510,38 @@ function recalcSimPL() {
   const opexKeys  = plRowsCur.filter(r => r.isCost && !cogsKeysSim.includes(r.key)).map(r => r.key);
   const allCostKeys = plRowsCur.filter(r => r.isCost).map(r => r.key);
 
+  // 子行がある親行は親の直接入力を無視、子行の合計のみ使う
+  // 子行そのものは直接合計（子行に更に子行はない前提）
+  // → 親行 + 子行 の二重計上を防ぐため、子行を持つ親行を revKeys から除外
+  const parentKeysWithChildren = revKeys.filter(k => hasChildren(k));
+  const leafRevKeys = revKeys.filter(k => !parentKeysWithChildren.includes(k));
+
+  const cogsParentKeys = cogsKeysSim.filter(k => hasChildren(k));
+  const leafCogsKeys   = cogsKeysSim.filter(k => !cogsParentKeys.includes(k));
+
+  const opexParentKeys  = opexKeys.filter(k => hasChildren(k));
+  const leafOpexKeys    = opexKeys.filter(k => !opexParentKeys.includes(k));
+
+  // 子行を持つ親行は子行の合計で代替
+  const parentRevSums = Array.from({length: N}, (_, i) =>
+    parentKeysWithChildren.reduce((sum, key) => sum + getEffectiveSimVal(key, i), 0)
+  );
+  const parentCogsSums = Array.from({length: N}, (_, i) =>
+    cogsParentKeys.reduce((sum, key) => sum + getEffectiveSimVal(key, i), 0)
+  );
+  const parentOpexSums = Array.from({length: N}, (_, i) =>
+    opexParentKeys.reduce((sum, key) => sum + getEffectiveSimVal(key, i), 0)
+  );
+
   const revArr = Array.from({length: N}, (_, i) =>
-    revKeys.reduce((sum, key) => sum + getSimVal('pl', key, i), 0)
+    leafRevKeys.reduce((sum, key) => sum + getSimVal('pl', key, i), 0) + parentRevSums[i]
   );
   const cogsArr = Array.from({length: N}, (_, i) =>
-    cogsKeysSim.reduce((sum, key) => sum + getSimVal('pl', key, i), 0)
+    leafCogsKeys.reduce((sum, key) => sum + getSimVal('pl', key, i), 0) + parentCogsSums[i]
   );
   const gpArr = revArr.map((r, i) => r - cogsArr[i]);
   const costArr = Array.from({length: N}, (_, i) =>
-    allCostKeys.reduce((sum, key) => sum + getSimVal('pl', key, i), 0)
+    leafOpexKeys.reduce((sum, key) => sum + getSimVal('pl', key, i), 0) + parentOpexSums[i] + cogsArr[i]
   );
   // 月次損益 = 粗利 - 販管費
   const profitArr = gpArr.map((g, i) => g - (costArr[i] - cogsArr[i]));
@@ -4518,6 +4591,18 @@ function recalcSimPL() {
   PL_ROWS_CUR.forEach(row => {
     const sumId = row.key === '_cogsHead' ? 'spl-sum-_cogsHead' : row.key === '_grossProfit' ? 'spl-sum-_grossProfit' : `spl-sum-${row.key}`;
     const el = document.getElementById(sumId);
+
+    // 親行（子あり）の月別セルを更新
+    if (hasChildren(row.key)) {
+      months.forEach((_, i) => {
+        const parentEl = document.getElementById(`spl-parent-${row.key}-${i}`);
+        if (parentEl) {
+          const v = getEffectiveSimVal(row.key, i);
+          parentEl.textContent = v ? v.toLocaleString() : '—';
+        }
+      });
+    }
+
     if (!el) return;
     if (row.key === 'rev') {
       const sv = revArr.reduce((a, b) => a + b, 0);
@@ -4530,6 +4615,10 @@ function recalcSimPL() {
       const sv = gpArr.reduce((a, b) => a + b, 0);
       el.textContent = sv > 0 ? `+${sv.toLocaleString()}` : sv < 0 ? `▲${Math.abs(sv).toLocaleString()}` : '—';
       el.style.color = sv >= 0 ? 'var(--tc-green)' : 'var(--tc-red)';
+    } else if (hasChildren(row.key)) {
+      // 親行の合計列は子行の合計
+      const sv = months.reduce((acc, _, i) => acc + getEffectiveSimVal(row.key, i), 0);
+      el.textContent = sv ? sv.toLocaleString() : '—';
     } else {
       const sv = months.reduce((acc, _, i) => acc + getSimVal('pl', row.key, i), 0);
       el.textContent = sv ? sv.toLocaleString() : '—';
@@ -5092,10 +5181,19 @@ function openBudgetModal() {
   // 1月1行のシンプルテーブル
   let rows = '';
   labels.forEach((lbl, i) => {
-    const rev  = getSimVal('pl','fee',i)+getSimVal('pl','training',i)+getSimVal('pl','event',i);
-    const cogs = cogsKeys.reduce((t,k) => t+getSimVal('pl',k,i), 0);
+    // 子行がある親行は子行の合計を使用（二重計上防止）
+    const _revKeys = getPLRows().filter(r => r.isRev && r.key !== 'rev');
+    const _parentRevKeys = _revKeys.filter(r => hasChildren(r.key));
+    const _leafRevKeys = _revKeys.filter(r => !hasChildren(r.key));
+    const rev = _leafRevKeys.reduce((s,r)=>s+getSimVal('pl',r.key,i),0)
+              + _parentRevKeys.reduce((s,r)=>s+getEffectiveSimVal(r.key,i),0);
+    const cogs = cogsKeys.reduce((t,k) => t+(hasChildren(k)?getEffectiveSimVal(k,i):getSimVal('pl',k,i)), 0);
     const gp   = rev - cogs;
-    const opex = getSimVal('pl','labor',i)+getSimVal('pl','outsource',i)+getSimVal('pl','adv',i)+getSimVal('pl','rent',i)+getSimVal('pl','other',i);
+    const _opexKeys = getPLRows().filter(r => r.isCost && !cogsKeys.includes(r.key));
+    const _parentOpex = _opexKeys.filter(r => hasChildren(r.key));
+    const _leafOpex = _opexKeys.filter(r => !hasChildren(r.key));
+    const opex = _leafOpex.reduce((s,r)=>s+getSimVal('pl',r.key,i),0)
+               + _parentOpex.reduce((s,r)=>s+getEffectiveSimVal(r.key,i),0);
     const profit = (hasCogs ? gp : rev) - opex;
     const profColor = profit>=0 ? 'var(--tc-green)' : 'var(--tc-red)';
     const cogsCell = hasCogs
@@ -5169,15 +5267,19 @@ async function commitBudget() {
     DB: JSON.parse(JSON.stringify(DB)),
     SIM_DATA: JSON.parse(JSON.stringify(SIM_DATA)),
   };
-  const existingVers = (() => { try { return JSON.parse(localStorage.getItem('neo_versions') || '[]'); } catch { return []; } })();
+  const existingVers = getVersions();
   existingVers.unshift(autoVer);
-  if (existingVers.length > 20) existingVers.splice(20);
-  localStorage.setItem('neo_versions', JSON.stringify(existingVers));
+  if (existingVers.length > VER_MAX) existingVers.splice(VER_MAX);
+  saveVersions(existingVers);
+  saveVersionToCloud(autoVer); // Supabaseにも保存
 
   // ── Copy sim data → DB budget（原価科目を含む全科目） ──
   const d = DB[currentSimYear];
   months.forEach((m, i) => {
-    const rev = getSimVal('pl','fee',i)+getSimVal('pl','training',i)+getSimVal('pl','event',i);
+    // 子行がある親行は子行の合計を使用
+    const _cb_revRows = getPLRows().filter(r => r.isRev && r.key !== 'rev');
+    const rev = _cb_revRows.reduce((s,r) =>
+      s + (hasChildren(r.key) ? getEffectiveSimVal(r.key,i) : getSimVal('pl',r.key,i)), 0);
     const idx = d.months.indexOf(m);
     if (idx === -1) return;
 
@@ -5193,12 +5295,17 @@ async function commitBudget() {
     });
 
     // PL販管費
-    d.pl.budget.labor[idx]     = simTo千(getSimVal('pl','labor',i));
-    d.pl.budget.outsource[idx] = simTo千(getSimVal('pl','outsource',i));
-    d.pl.budget.adv[idx]       = simTo千(getSimVal('pl','adv',i));
+    // 販管費も子行がある親行は子行の合計を使用
+    const _getpl = (k) => simTo千(hasChildren(k) ? getEffectiveSimVal(k,i) : getSimVal('pl',k,i));
+    d.pl.budget.labor[idx]     = _getpl('labor');
+    d.pl.budget.outsource[idx] = _getpl('outsource');
+    d.pl.budget.adv[idx]       = _getpl('adv');
     if (!d.pl.budget.gaichu) d.pl.budget.gaichu = [];
-    d.pl.budget.gaichu[idx]    = simTo千(getSimVal('pl','gaichu',i));
-    d.pl.budget.other[idx]     = simTo千(getSimVal('pl','rent',i) + getSimVal('pl','other',i));
+    d.pl.budget.gaichu[idx]    = _getpl('gaichu');
+    d.pl.budget.other[idx]     = simTo千(
+      (hasChildren('rent') ? getEffectiveSimVal('rent',i) : getSimVal('pl','rent',i)) +
+      (hasChildren('other') ? getEffectiveSimVal('other',i) : getSimVal('pl','other',i))
+    );
 
     // CF入金
     if (!d.cf.budget.cfIn) d.cf.budget.cfIn = [];
@@ -5251,6 +5358,21 @@ async function commitBudget() {
     }
   };
 
+  // 予算変更履歴をSupabaseに保存
+  if (!IS_LOCAL) {
+    try {
+      await fetch('/api/db?action=add_history', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fiscal_year: currentSimYear,
+          author: entry.author,
+          reason: entry.reason,
+          snapshot: entry.snapshot,
+        })
+      });
+    } catch(e) { console.warn('budget history save failed:', e); }
+  }
+  // localStorageにもバックアップ
   let history = [];
   try { history = JSON.parse(localStorage.getItem('neo_budget_history') || '[]'); } catch(e){}
   history.unshift(entry);
@@ -5912,24 +6034,35 @@ const IS_LOCAL = window.location.protocol === 'file:' || window.location.hostnam
 
 async function saveDB() {
   try {
-    // 常に localStorage にも保存（バックアップ）
+    // localStorage にも保存（オフラインバックアップ）
     localStorage.setItem('neo_db_2025', JSON.stringify(DB['2025']));
     localStorage.setItem('neo_db_2026', JSON.stringify(DB['2026']));
 
     if (!IS_LOCAL) {
-      // Vercel環境: Supabaseにも保存
-      for (const yr of ['2025', '2026']) {
+      // Supabaseに保存（並列実行で高速化）
+      await Promise.all(['2025', '2026'].map(yr => {
         const d = DB[yr];
-        await fetch(`/api/db?action=save_fiscal`, {
+        return fetch(`/api/db?action=save_fiscal`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fiscal_year: yr, months: d.months, pl: d.pl, cf: d.cf, reportData: d.reportData || {} })
         });
-      }
+      }));
     }
     // 保存済みインジケーター
-    const ss = document.getElementById('save-status');
-    if (ss) { ss.style.display = 'inline'; setTimeout(() => ss.style.display = 'none', 2000); }
-  } catch (e) { console.error('saveDB error:', e); }
+    showSaveIndicator('✓ 保存済み');
+  } catch (e) {
+    console.error('saveDB error:', e);
+    showSaveIndicator('⚠ 保存失敗', true);
+  }
+}
+
+function showSaveIndicator(msg, isError = false) {
+  const ss = document.getElementById('save-status');
+  if (!ss) return;
+  ss.textContent = msg;
+  ss.style.display = 'inline';
+  ss.style.color = isError ? 'var(--tc-red)' : 'var(--tc-green)';
+  setTimeout(() => { ss.style.display = 'none'; }, 2500);
 }
 
 async function loadDB() {
@@ -5966,6 +6099,47 @@ function getVersions() {
 }
 function saveVersions(arr) {
   localStorage.setItem(VER_KEY, JSON.stringify(arr));
+}
+
+// Supabaseにバージョンを保存（非同期・失敗しても続行）
+async function saveVersionToCloud(ver) {
+  if (IS_LOCAL) return;
+  try {
+    await fetch('/api/db?action=save_version', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        version_id:   ver.id,
+        description:  ver.desc,
+        saved_at:     ver.savedAt,
+        fiscal_year:  ver.year || null,
+        db_snapshot:  ver.DB,
+        sim_snapshot: ver.SIM_DATA,
+      })
+    });
+  } catch(e) { console.warn('saveVersionToCloud failed:', e); }
+}
+
+// Supabaseからバージョン一覧を取得
+async function loadVersionsFromCloud() {
+  if (IS_LOCAL) return null;
+  try {
+    const res = await fetch('/api/db?action=load_versions');
+    const r = await res.json();
+    if (!r.ok || !r.data) return null;
+    // Supabaseの形式をローカル形式に変換
+    return r.data.map(v => ({
+      id:       v.version_id,
+      desc:     v.description,
+      savedAt:  v.saved_at,
+      year:     v.fiscal_year,
+      DB:       v.db_snapshot,
+      SIM_DATA: v.sim_snapshot,
+    }));
+  } catch(e) {
+    console.warn('loadVersionsFromCloud failed:', e);
+    return null;
+  }
 }
 
 // バージョンパネルを開く
@@ -6224,6 +6398,14 @@ function copyText(id) {
 // ═══════════════════════════════════════════
 window.addEventListener('load', async () => {
   try { await loadDB(); } catch(e) { console.warn('loadDB:', e); }
+  // バージョン履歴をクラウドからlocalStorageに同期
+  try {
+    const cloudVers = await loadVersionsFromCloud();
+    if (cloudVers && cloudVers.length > 0) {
+      saveVersions(cloudVers);
+      console.log(`[init] ${cloudVers.length}件のバージョン履歴をクラウドから読み込みました`);
+    }
+  } catch(e) { console.warn('version sync failed:', e); }
   // PLデータ単位チェック（万円→千円マイグレーション）
   // 売上予算が1000未満ならまだ万円単位のデータ → ×10変換
   for (const yr of ['2025','2026']) {
