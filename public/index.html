@@ -1316,8 +1316,8 @@ function updateWeeklyKPIs() {
   }
 
   // cumulative
-  // PLはDB千円単位 → KPI表示は万円に÷10
-  const plK = (arr, end) => (arr||[]).slice(0, end+1).reduce((s,v) => s+(Number(v)||0), 0) / 10;
+  // PLはDB千円単位 → そのまま千円で表示
+  const plK = (arr, end) => (arr||[]).slice(0, end+1).reduce((s,v) => s+(Number(v)||0), 0);
   const cumRev = plK(pl.actual.rev, lastActualIdx);
   const cogsKpiKeys = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
   const cumCogs = cogsKpiKeys.reduce((t,k) => t + plK(pl.actual[k]||[], lastActualIdx), 0);
@@ -1332,9 +1332,9 @@ function updateWeeklyKPIs() {
   const cumOp = cumRev - cumOpex;
 
   // budget（千円→万円に÷10）
-  const budRev  = pl.budget.rev.reduce((s,v) => s+(Number(v)||0), 0) / 10;
+  const budRev  = pl.budget.rev.reduce((s,v) => s+(Number(v)||0), 0);
   const budOpex = ['labor','outsource','adv','gaichu','other'].reduce((t, k) =>
-    t + (pl.budget[k]||[]).slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0), 0) / 10;
+    t + (pl.budget[k]||[]).slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0), 0);
   const opexRate = budOpex > 0 ? Math.round(cumOpex / budOpex * 100) : null;
 
   // cash
@@ -1355,9 +1355,9 @@ function updateWeeklyKPIs() {
   const months12Labor = pl.actual.labor.slice(Math.max(0, lastActualIdx - 2), lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
   const countMonths = Math.min(lastActualIdx + 1, 3);
   const burnrate = countMonths > 0 ? Math.round((cumOpex / (lastActualIdx + 1))) : 1022;
-  const runway = lastCash ? (lastCash / 10 / burnrate).toFixed(1) : '—'; // lastCash:千円→÷10→万円, burnrate:万円/月
+  const runway = lastCash ? (lastCash / burnrate).toFixed(1) : '—'; // lastCash:千円, burnrate:千円/月
 
-  document.getElementById('kpi-cash').textContent = lastCash ? fmt万(lastCash / 10) + '千円' : '5,371千円';
+  document.getElementById('kpi-cash').textContent = lastCash ? fmt万(lastCash) + '千円' : '5,371千円';
   document.getElementById('kpi-cash-s').innerHTML = lastCash ? `<span class="${riskClass(runway)}">残り約${runway}ヶ月</span>` : '<span class="badge ba">残り約7.5ヶ月</span>';
   document.getElementById('kpi-rev').textContent = cumRev ? fmt万(cumRev) + '千円' : '7,737千円';
   document.getElementById('kpi-rev-s').innerHTML = budRev ? `<span class="badge ${cumRev >= budRev ? 'bg' : 'br'}">予算比 ${Math.round(cumRev / budRev * 100)}%</span>` : '';
@@ -1822,6 +1822,7 @@ function plCellClick(td, d) {
     target[key][idx] = val;
     DB[currentYear] = d;
     showPlCfSaveBar();
+    scheduleAutoSave('PL実績入力');
     renderPLView(d);
   }
   inp.addEventListener('blur', commit);
