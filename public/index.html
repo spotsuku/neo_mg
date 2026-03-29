@@ -212,6 +212,8 @@ td.actual { color: var(--text) !important; }
 .yoyo-total .yoyo-label,.yoyo-total .yoyo-cell{background:var(--bg3);font-weight:700}
 
 .save-ok{font-size:11px;color:var(--tc-green);font-weight:700;display:none}
+#save-bar{transition:background .3s,border-color .3s;cursor:default}
+#save-icon{display:inline-block;width:14px;text-align:center;font-style:normal}
 
 /* ── インライン編集セル ── */
 .editable-cell {
@@ -350,7 +352,13 @@ td.actual.editable-cell {
       <button class="btn" style="font-size:10px;padding:4px 10px" onclick="exportJSON()" title="データをJSONファイルに書き出し">⬇ エクスポート</button>
       <button class="btn" style="font-size:10px;padding:4px 10px" onclick="importJSON()" title="JSONファイルからデータを読み込み">⬆ インポート</button>
       <button class="btn" style="font-size:10px;padding:4px 10px" onclick="openVersionPanel()" title="保存したバージョンに戻す">🕐 バージョン履歴</button>
-      <span id="save-status" style="font-size:10px;color:var(--text3);display:none">✓ 保存済み</span>
+      <div id="save-bar" style="display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;font-size:10px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.25);transition:all .3s">
+        <span id="save-icon" style="font-size:11px">✓</span>
+        <span id="save-text" style="color:var(--tc-green);font-weight:600">Supabase同期済み</span>
+        <span id="save-time" style="color:var(--text3);font-size:9px"></span>
+        <button onclick="forceSave()" id="save-retry-btn" style="display:none;font-size:9px;padding:2px 6px;background:var(--tc-red);color:#fff;border:none;border-radius:4px;cursor:pointer">再保存</button>
+      </div>
+      <span id="save-status" style="display:none"></span>
     </div>
   </div>
 </div>
@@ -1774,21 +1782,107 @@ function buildAnnualTable(rows, unit) {
 // ═══════════════════════════════════════════
 let _plCfDirty = false;
 
-// ── リアルタイム自動保存（変更から3秒後にSupabaseへ保存） ──
-let _autoSaveTimer = null;
-function scheduleAutoSave(label) {
-  if (_autoSaveTimer) clearTimeout(_autoSaveTimer);
-  const ss = document.getElementById('save-status');
-  if (ss) { ss.textContent = '編集中...'; ss.style.display = 'inline'; ss.style.color = 'var(--text3)'; }
-  _autoSaveTimer = setTimeout(async () => {
-    await saveDB();
-    await saveSimData();
-    _autoSaveTimer = null;
-    console.log('[autoSave]', label || '自動保存完了');
-  }, 3000);
+// ════════════════════════════════════════════
+//  保存状態管理システム
+//  状態: idle(同期済み) | pending(未保存) | saving(保存中) | error(失敗)
+// ════════════════════════════════════════════
+let _saveState = 'idle';   // 現在の保存状態
+let _autoSaveTimer = null; // debounceタイマー
+let _lastSaveTime = null;  // 最終保存時刻
+let _pendingSave = false;  // 保存中に変更があった場合のフラグ
+
+const SAVE_DEBOUNCE_MS = 2000; // 2秒後に自動保存
+
+function setSaveState(state, detail) {
+  _saveState = state;
+  const bar   = document.getElementById('save-bar');
+  const icon  = document.getElementById('save-icon');
+  const text  = document.getElementById('save-text');
+  const time  = document.getElementById('save-time');
+  const retry = document.getElementById('save-retry-btn');
+  if (!bar) return;
+
+  retry.style.display = 'none';
+
+  if (state === 'idle') {
+    bar.style.background  = 'rgba(39,174,96,0.12)';
+    bar.style.borderColor = 'rgba(39,174,96,0.25)';
+    icon.textContent      = '✓';
+    text.style.color      = 'var(--tc-green)';
+    text.textContent      = 'Supabase同期済み';
+    if (_lastSaveTime) {
+      const d = new Date(_lastSaveTime);
+      time.textContent = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ' 保存';
+    }
+  } else if (state === 'pending') {
+    bar.style.background  = 'rgba(239,159,39,0.12)';
+    bar.style.borderColor = 'rgba(239,159,39,0.35)';
+    icon.textContent      = '●';
+    text.style.color      = 'var(--tc-amber)';
+    text.textContent      = detail ? `編集中 — ${detail}` : '未保存の変更あり';
+    time.textContent      = '';
+  } else if (state === 'saving') {
+    bar.style.background  = 'rgba(55,138,221,0.12)';
+    bar.style.borderColor = 'rgba(55,138,221,0.35)';
+    icon.textContent      = '↑';
+    text.style.color      = 'var(--chart-blue)';
+    text.textContent      = 'Supabaseに保存中…';
+    time.textContent      = '';
+  } else if (state === 'error') {
+    bar.style.background  = 'rgba(226,75,74,0.12)';
+    bar.style.borderColor = 'rgba(226,75,74,0.35)';
+    icon.textContent      = '⚠';
+    text.style.color      = 'var(--tc-red)';
+    text.textContent      = '保存失敗 — ローカルのみ';
+    time.textContent      = detail || '';
+    retry.style.display   = 'inline';
+  }
 }
 
+// 変更発生時に呼ぶ（debounce付き自動保存をスケジュール）
+function scheduleAutoSave(label) {
+  setSaveState('pending', label);
+  if (_autoSaveTimer) clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(async () => {
+    _autoSaveTimer = null;
+    await forceSave();
+  }, SAVE_DEBOUNCE_MS);
+}
+
+// 即時強制保存（リトライボタン・commitBudget等から呼ぶ）
+async function forceSave() {
+  if (_saveState === 'saving') {
+    _pendingSave = true;
+    return;
+  }
+  setSaveState('saving');
+  try {
+    await saveDB();
+    await saveSimData();
+    _lastSaveTime = new Date();
+    setSaveState('idle');
+    // 保存中に変更があった場合は再保存
+    if (_pendingSave) {
+      _pendingSave = false;
+      scheduleAutoSave('変更再検出');
+    }
+  } catch(e) {
+    setSaveState('error', e.message?.slice(0,30));
+    console.error('[forceSave]', e);
+  }
+}
+
+// ページ離脱前に未保存があれば警告
+window.addEventListener('beforeunload', (e) => {
+  if (_saveState === 'pending' || _autoSaveTimer) {
+    e.preventDefault();
+    e.returnValue = '未保存の変更があります。ページを離れますか？';
+    return e.returnValue;
+  }
+});
+
 function showPlCfSaveBar() {
+  scheduleAutoSave('PLデータ編集');
   _plCfDirty = true;
   const bar = document.getElementById('pl-cf-save-bar');
   if (bar) bar.classList.add('visible');
@@ -6142,56 +6236,103 @@ async function genAI(type) {
 const IS_LOCAL = window.location.protocol === 'file:' || window.location.hostname === '';
 
 async function saveDB() {
+  // localStorage に必ず保存（オフラインバックアップ）
   try {
-    // localStorage にも保存（オフラインバックアップ）
     localStorage.setItem('neo_db_2025', JSON.stringify(DB['2025']));
     localStorage.setItem('neo_db_2026', JSON.stringify(DB['2026']));
+  } catch(e) { console.warn('localStorage save failed:', e); }
 
-    if (!IS_LOCAL) {
-      // Supabaseに保存（並列実行で高速化）
-      await Promise.all(['2025', '2026'].map(yr => {
-        const d = DB[yr];
-        return fetch(`/api/db?action=save_fiscal`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fiscal_year: yr, months: d.months, pl: d.pl, cf: d.cf, reportData: d.reportData || {} })
-        });
-      }));
+  if (IS_LOCAL) return; // ローカルはlocalStorageのみ
+
+  // Supabaseに直列保存（確実性優先）
+  for (const yr of ['2025', '2026']) {
+    const d = DB[yr];
+    if (!d) continue;
+    const res = await fetch('/api/db?action=save_fiscal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fiscal_year: yr,
+        months: d.months,
+        pl: d.pl,
+        cf: d.cf,
+        reportData: d.reportData || {}
+      })
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`[${yr}] ${res.status}: ${txt.slice(0,80)}`);
     }
-    // 保存済みインジケーター
-    showSaveIndicator('✓ 保存済み');
-  } catch (e) {
-    console.error('saveDB error:', e);
-    showSaveIndicator('⚠ 保存失敗', true);
+    console.log(`[saveDB] ✓ ${yr} → Supabase  rev[0]=${d.pl?.budget?.rev?.[0]}`);
   }
 }
 
+// 互換性のために残す（直接呼んでも動作する）
 function showSaveIndicator(msg, isError = false) {
-  const ss = document.getElementById('save-status');
-  if (!ss) return;
-  ss.textContent = msg;
-  ss.style.display = 'inline';
-  ss.style.color = isError ? 'var(--tc-red)' : 'var(--tc-green)';
-  setTimeout(() => { ss.style.display = 'none'; }, 2500);
+  setSaveState(isError ? 'error' : 'idle', isError ? msg : null);
 }
 
 async function loadDB() {
+  const REQUIRED_PL_KEYS = ['rev','labor','outsource','adv','gaichu','other',
+    'cogs','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+
+  // DBオブジェクトの整合性を補完（空配列を12要素に拡張など）
+  function sanitizeYear(data, yr) {
+    if (!data) return;
+    const months12 = (yr === '2025') ? MONTHS_2025 : MONTHS_2026;
+    if (!data.months || data.months.length === 0) data.months = months12;
+    const N = data.months.length;
+    if (!data.pl) data.pl = { budget: {}, actual: {} };
+    if (!data.pl.budget) data.pl.budget = {};
+    if (!data.pl.actual) data.pl.actual = {};
+    if (!data.cf) data.cf = { budget: {}, actual: {} };
+    if (!data.reportData) data.reportData = {};
+    // 各PLキーが空配列なら12個の空文字列配列で初期化
+    REQUIRED_PL_KEYS.forEach(k => {
+      if (!data.pl.budget[k] || data.pl.budget[k].length === 0)
+        data.pl.budget[k] = Array(N).fill('');
+      if (!data.pl.actual[k] || data.pl.actual[k].length === 0)
+        data.pl.actual[k] = Array(N).fill('');
+    });
+  }
+
   try {
     if (!IS_LOCAL) {
-      // Vercel環境: Supabaseから読み込み
       const res = await fetch('/api/db?action=load_fiscal');
       const r = await res.json();
+      console.log('[loadDB] Supabase response:', r.ok, Object.keys(r.data || {}));
       if (r.ok && r.data) {
         for (const yr of ['2025', '2026']) {
-          if (r.data[yr]) DB[yr] = { months: r.data[yr].months, pl: r.data[yr].pl, cf: r.data[yr].cf, reportData: r.data[yr].reportData || {} };
+          if (r.data[yr]) {
+            DB[yr] = {
+              months: r.data[yr].months,
+              pl: r.data[yr].pl,
+              cf: r.data[yr].cf,
+              reportData: r.data[yr].reportData || {}
+            };
+            sanitizeYear(DB[yr], yr);
+            console.log(`[loadDB] ${yr} loaded from Supabase, rev budget[0]:`, DB[yr].pl.budget.rev?.[0]);
+          }
         }
-        return; // Supabaseから取得できたらlocalStorageは不要
+        // Supabaseから取得後、26年度データが実質空なら初期化してSupabaseに保存
+        if (!r.data['2026'] || !r.data['2026'].pl?.budget?.rev?.length) {
+          console.log('[loadDB] 2026 missing or empty, saving initial structure');
+          sanitizeYear(DB['2026'], '2026');
+          setTimeout(() => saveDB(), 500);
+        }
+        return;
       }
     }
-    // ローカルまたはSupabase失敗時: localStorage から読み込み
-    const r25 = localStorage.getItem('neo_db_2025');
-    if (r25) DB['2025'] = JSON.parse(r25);
-    const r26 = localStorage.getItem('neo_db_2026');
-    if (r26) DB['2026'] = JSON.parse(r26);
+    // localStorage フォールバック
+    for (const yr of ['2025', '2026']) {
+      const raw = localStorage.getItem(`neo_db_${yr}`);
+      if (raw) {
+        try {
+          DB[yr] = JSON.parse(raw);
+          sanitizeYear(DB[yr], yr);
+        } catch(e) { console.warn(`localStorage parse failed for ${yr}`, e); }
+      }
+    }
   } catch (e) {
     console.warn('loadDB failed, using defaults:', e);
   }
@@ -6530,17 +6671,23 @@ window.addEventListener('load', async () => {
         if (DB[yr].pl.actual[k]) DB[yr].pl.actual[k] = DB[yr].pl.actual[k].map(v => Math.round((Number(v)||0)*10));
       });
     } else if (maxBudget > 500000) {
-      // 予算売上が50万千円（=5億円）超 → 10倍されている可能性 → ÷10して修正
-      console.log('[migrate] 10倍超過データ→÷10:', yr, 'max:', maxBudget);
+      // 予算売上が500,000千円（=5億円）超 → 以前の×10バグで10倍されている → ÷10修正
+      // NEO福岡の月次売上は最大でも数百万千円程度なので500,000超は異常値
+      console.log('[migrate] 10倍超過→÷10:', yr, 'max:', maxBudget);
       PL_KEYS.forEach(k => {
-        if (DB[yr].pl.budget[k]) DB[yr].pl.budget[k] = DB[yr].pl.budget[k].map(v => Math.round((Number(v)||0)/10));
-        if (DB[yr].pl.actual[k]) DB[yr].pl.actual[k] = DB[yr].pl.actual[k].map(v => Math.round((Number(v)||0)/10));
+        if (DB[yr].pl.budget[k]?.length > 0)
+          DB[yr].pl.budget[k] = DB[yr].pl.budget[k].map(v => Math.round((Number(v)||0)/10));
+        if (DB[yr].pl.actual[k]?.length > 0)
+          DB[yr].pl.actual[k] = DB[yr].pl.actual[k].map(v => Math.round((Number(v)||0)/10));
       });
-      // 修正後にSupabaseへ即保存
-      setTimeout(() => saveDB(), 1000);
+      // 修正後にSupabaseへ即保存（2秒後）
+      setTimeout(() => saveDB(), 2000);
     }
   }
   try { await loadSimData(); } catch(e) { console.warn('loadSimData:', e); }
+  // 初期化完了後に保存状態を「同期済み」に設定
+  _lastSaveTime = new Date();
+  setSaveState('idle');
   updateWeeklyKPIs();
   loadImportedList();
   renderReportTabs();
