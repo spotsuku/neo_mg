@@ -971,7 +971,7 @@ td.actual.editable-cell {
       <div id="cf-scenario-note" style="font-size:11px;color:var(--text3)">データを入力するとシナリオ比較が表示されます</div>
     </div>
     <div class="card">
-      <div class="ct">月次CF入力テーブル（万円）</div>
+      <div class="ct">月次CF入力テーブル（千円）</div>
       <div class="scroll-x">
         <table id="sim-cf-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%"></table>
       </div>
@@ -4561,7 +4561,7 @@ function buildSimCFTable() {
   const labelStyle = 'background:var(--bg2);color:var(--text2);font-size:10px;padding:5px 8px;border:1px solid var(--border);white-space:nowrap;position:sticky;left:0;z-index:2;';
   const thLabelStyleCf = thStyle + 'position:sticky;left:0;z-index:3;text-align:left;';
 
-  let html = `<thead><tr><th style="${thLabelStyleCf}min-width:140px;">科目（万円）</th>`;
+  let html = `<thead><tr><th style="${thLabelStyleCf}min-width:140px;">科目（千円）</th>`;
   labels.forEach(l => { html += `<th style="${thStyle}">${l}</th>`; });
   html += `<th style="${thStyle}">合計</th></tr></thead><tbody>`;
 
@@ -4749,11 +4749,11 @@ function recalcSimPL() {
   const annualProfit = annualRev - annualCost;
   const beMonth = profitArr.findIndex(p => p > 0);
 
-  document.getElementById('spl-annual-rev').textContent = annualRev ? annualRev.toLocaleString() + '万円' : '—';
-  document.getElementById('spl-annual-cost').innerHTML = annualCost ? `<span class="r">${annualCost.toLocaleString()}万円</span>` : '—';
+  document.getElementById('spl-annual-rev').textContent = annualRev ? annualRev.toLocaleString() + '千円' : '—';
+  document.getElementById('spl-annual-cost').innerHTML = annualCost ? `<span class="r">${annualCost.toLocaleString()}千円</span>` : '—';
   document.getElementById('spl-annual-profit').innerHTML = annualProfit >= 0
-    ? `<span class="g">+${annualProfit.toLocaleString()}万円</span>`
-    : `<span class="r">▲${Math.abs(annualProfit).toLocaleString()}万円</span>`;
+    ? `<span class="g">+${annualProfit.toLocaleString()}千円</span>`
+    : `<span class="r">▲${Math.abs(annualProfit).toLocaleString()}千円</span>`;
   document.getElementById('spl-breakeven').textContent = beMonth >= 0 ? `${getSimLabels()[beMonth]}（${beMonth+1}ヶ月目）` : '未達';
   document.getElementById('spl-cum-profit').innerHTML = cum >= 0
     ? `<span class="g">+${cum.toLocaleString()}万円</span>`
@@ -5391,33 +5391,31 @@ async function commitBudget() {
     const idx = d.months.indexOf(m);
     if (idx === -1) return;
 
-    // PL売上（シミュレーションは万円→DBは千円なので×10）
-    const simTo千 = (v) => Math.round(v * 10);
-    d.pl.budget.rev[idx] = simTo千(rev);
+    // PL売上（シミュレーションも千円なのでそのまま書き込む）
+    d.pl.budget.rev[idx] = Math.round(rev);
 
     // PL原価（NEOプログラム原価）- 固定5科目のみ書き込み
     const cogsSimKeys = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
     cogsSimKeys.forEach(key => {
       if (!d.pl.budget[key]) d.pl.budget[key] = [];
-      d.pl.budget[key][idx] = simTo千(getEffectiveSimVal(key, i));
+      d.pl.budget[key][idx] = Math.round(getEffectiveSimVal(key, i));
     });
 
-    // PL販管費
-    // 販管費も子行がある親行は子行の合計を使用
-    const _getpl = (k) => simTo千(hasChildren(k) ? getEffectiveSimVal(k,i) : getSimVal('pl',k,i));
+    // PL販管費（子行がある親行は子行の合計を使用）
+    const _getpl = (k) => Math.round(hasChildren(k) ? getEffectiveSimVal(k,i) : getSimVal('pl',k,i));
     d.pl.budget.labor[idx]     = _getpl('labor');
     d.pl.budget.outsource[idx] = _getpl('outsource');
     d.pl.budget.adv[idx]       = _getpl('adv');
     if (!d.pl.budget.gaichu) d.pl.budget.gaichu = [];
     d.pl.budget.gaichu[idx]    = _getpl('gaichu');
-    d.pl.budget.other[idx]     = simTo千(
+    d.pl.budget.other[idx]     = Math.round(
       (hasChildren('rent') ? getEffectiveSimVal('rent',i) : getSimVal('pl','rent',i)) +
       (hasChildren('other') ? getEffectiveSimVal('other',i) : getSimVal('pl','other',i))
     );
 
-    // CF入金
+    // CF入金（千円のままDB書き込み）
     if (!d.cf.budget.cfIn) d.cf.budget.cfIn = [];
-    d.cf.budget.cfIn[idx] = getSimVal('cf','cfIn',i);
+    d.cf.budget.cfIn[idx] = Math.round(getSimVal('cf','cfIn',i));
 
     // CF原価支払い
     const cogsCFMap = {
