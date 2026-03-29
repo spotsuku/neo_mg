@@ -1346,17 +1346,39 @@ function updateWeeklyKPIs() {
   const opexRate = budOpex > 0 ? Math.round(cumOpex / budOpex * 100) : null;
 
   // cash
-  // 現金残高：lastActualIdx月のcfClose、なければcfCloseの最新非ゼロ値を使用
+  // 優先順位:
+  //   1. 当年度 cfClose の最新非ゼロ値
+  //   2. 当年度 cf.budget.open[0]（予算期初残高）
+  //   3. 前年度 cfClose の最終非ゼロ値（前年度末残高を引き継ぎ）
   let lastCash = null;
   if (cf.actual.cfClose) {
     const cv = cf.actual.cfClose[lastActualIdx];
     if (cv && Number(cv) > 0) {
       lastCash = Number(cv);
     } else {
-      // cfCloseの後ろから最新の非ゼロ値を検索
       for (let i = n - 1; i >= 0; i--) {
         const v = cf.actual.cfClose[i];
         if (v && Number(v) > 0) { lastCash = Number(v); break; }
+      }
+    }
+  }
+  // 当年度に残高がない場合、前年度末残高を引き継ぎ
+  if (!lastCash) {
+    // まず当年度の予算期初残高（open[0]）を確認
+    const openVal = (cf.budget?.open?.[0]) || (cf.actual?.open?.[0]);
+    if (openVal && Number(openVal) > 0) {
+      lastCash = Number(openVal);
+    } else {
+      // 前年度の cfClose 最終値を取得
+      const prevYr = currentYear === '2026' ? '2025' : null;
+      if (prevYr && DB[prevYr]?.cf?.actual?.cfClose) {
+        const prevClose = DB[prevYr].cf.actual.cfClose;
+        for (let i = prevClose.length - 1; i >= 0; i--) {
+          if (prevClose[i] && Number(prevClose[i]) > 0) {
+            lastCash = Number(prevClose[i]);
+            break;
+          }
+        }
       }
     }
   }
@@ -1365,33 +1387,52 @@ function updateWeeklyKPIs() {
   const burnrate = countMonths > 0 ? Math.round((cumOpex / (lastActualIdx + 1))) : 1022;
   const runway = lastCash ? (lastCash / burnrate).toFixed(1) : '—'; // lastCash:千円, burnrate:千円/月
 
-  document.getElementById('kpi-cash').textContent = lastCash ? fmt万(lastCash) + '千円' : '5,371千円';
-  document.getElementById('kpi-cash-s').innerHTML = lastCash ? `<span class="${riskClass(runway)}">残り約${runway}ヶ月</span>` : '<span class="badge ba">残り約7.5ヶ月</span>';
-  document.getElementById('kpi-rev').textContent = cumRev ? fmt万(cumRev) + '千円' : '7,737千円';
-  document.getElementById('kpi-rev-s').innerHTML = budRev ? `<span class="badge ${cumRev >= budRev ? 'bg' : 'br'}">予算比 ${Math.round(cumRev / budRev * 100)}%</span>` : '';
-  if (document.getElementById('kpi-gp')) {
-    document.getElementById('kpi-gp').innerHTML = cumGP >= 0
-      ? `<span class="g">${fmt万(cumGP)}千円</span>`
-      : `<span class="r">▲${fmt万(Math.abs(cumGP))}千円</span>`;
-    const gpEl = document.getElementById('kpi-gp-s');
-    if (gpEl && gpRate !== null) gpEl.innerHTML = `<span class="badge ${gpRate>=30?'bg':gpRate>=0?'ba':'br'}">${gpRate}% 粗利率</span>`;
-  }
-  document.getElementById('kpi-opex').innerHTML = cumOpex
-    ? `<span class="r">${fmt万(cumOpex)}千円</span>` : '12,259千円';
-  const opexSEl = document.getElementById('kpi-opex-s');
-  if (opexSEl) opexSEl.innerHTML = opexRate !== null
-    ? `<span class="badge ${opexRate <= 100 ? 'bg' : 'br'}">${opexRate}% 予算比</span>` : '';
-  document.getElementById('kpi-op').innerHTML = cumOp >= 0 ? `<span class="g">${fmt万(cumOp)}千円</span>` : `<span class="r">▲${fmt万(Math.abs(cumOp))}千円</span>`;
-  document.getElementById('kpi-op-s').innerHTML = `<span class="badge ${cumOp >= 0 ? 'bg' : 'ba'}">累積損益</span>`;
+  // 実績なし（lastActualIdx=-1）の場合は「—」表示（ハードコードのデフォルト値を使わない）
+  const hasActual = lastActualIdx >= 0;
 
-  const rwy = lastCash ? parseFloat(runway) : 7.5;
-  const riskTxt = rwy >= 12 ? '🟢 安全' : rwy >= 6 ? '🟡 注意' : rwy >= 3 ? '🟠 警戒' : '🔴 危険';
-  const riskCls = rwy >= 12 ? 'bg' : rwy >= 6 ? 'ba' : 'br';
+  document.getElementById('kpi-cash').textContent =
+    lastCash ? fmt万(lastCash) + '千円' : '—';
+  document.getElementById('kpi-cash-s').innerHTML =
+    lastCash ? `<span class="${riskClass(runway)}">残り約${runway}ヶ月</span>` : '';
+
+  document.getElementById('kpi-rev').textContent =
+    hasActual ? fmt万(cumRev) + '千円' : '—';
+  document.getElementById('kpi-rev-s').innerHTML =
+    (hasActual && budRev)
+      ? `<span class="badge ${cumRev >= budRev ? 'bg' : 'br'}">予算比 ${Math.round(cumRev / budRev * 100)}%</span>`
+      : '';
+
+  if (document.getElementById('kpi-gp')) {
+    document.getElementById('kpi-gp').innerHTML = !hasActual ? '—'
+      : cumGP >= 0 ? `<span class="g">${fmt万(cumGP)}千円</span>`
+                   : `<span class="r">▲${fmt万(Math.abs(cumGP))}千円</span>`;
+    const gpEl = document.getElementById('kpi-gp-s');
+    if (gpEl) gpEl.innerHTML = (hasActual && gpRate !== null)
+      ? `<span class="badge ${gpRate>=30?'bg':gpRate>=0?'ba':'br'}">${gpRate}% 粗利率</span>` : '';
+  }
+
+  document.getElementById('kpi-opex').innerHTML = !hasActual ? '—'
+    : `<span class="r">${fmt万(cumOpex)}千円</span>`;
+  const opexSEl = document.getElementById('kpi-opex-s');
+  if (opexSEl) opexSEl.innerHTML = (hasActual && opexRate !== null)
+    ? `<span class="badge ${opexRate <= 100 ? 'bg' : 'br'}">${opexRate}% 予算比</span>` : '';
+
+  document.getElementById('kpi-op').innerHTML = !hasActual ? '—'
+    : cumOp >= 0 ? `<span class="g">${fmt万(cumOp)}千円</span>`
+                 : `<span class="r">▲${fmt万(Math.abs(cumOp))}千円</span>`;
+  document.getElementById('kpi-op-s').innerHTML = hasActual
+    ? `<span class="badge ${cumOp >= 0 ? 'bg' : 'ba'}">累積損益</span>` : '';
+
+  // ランウェイ・リスク（実績なしの場合はCF残高ベースで判定）
+  const rwy = lastCash ? parseFloat(runway) : null;
+  const riskTxt = !rwy ? '⚪ データなし'
+    : rwy >= 12 ? '🟢 安全' : rwy >= 6 ? '🟡 注意' : rwy >= 3 ? '🟠 警戒' : '🔴 危険';
+  const riskCls = !rwy ? 'ba' : rwy >= 12 ? 'bg' : rwy >= 6 ? 'ba' : 'br';
   document.getElementById('kpi-risk').textContent = riskTxt;
   document.getElementById('risk-badge').textContent = riskTxt;
   document.getElementById('risk-badge').className = `badge ${riskCls}`;
-  document.getElementById('runway-val').textContent = `約${rwy}ヶ月`;
-  document.getElementById('burnrate-val').textContent = burnrate.toLocaleString();
+  document.getElementById('runway-val').textContent = rwy ? `約${rwy}ヶ月` : '—';
+  document.getElementById('burnrate-val').textContent = hasActual ? burnrate.toLocaleString() : '—';
 
   // charts
   initWeeklyCharts(d, lastActualIdx);
