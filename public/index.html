@@ -4510,38 +4510,30 @@ function recalcSimPL() {
   const opexKeys  = plRowsCur.filter(r => r.isCost && !cogsKeysSim.includes(r.key)).map(r => r.key);
   const allCostKeys = plRowsCur.filter(r => r.isCost).map(r => r.key);
 
-  // 子行がある親行は親の直接入力を無視、子行の合計のみ使う
-  // 子行そのものは直接合計（子行に更に子行はない前提）
-  // → 親行 + 子行 の二重計上を防ぐため、子行を持つ親行を revKeys から除外
-  const parentKeysWithChildren = revKeys.filter(k => hasChildren(k));
-  const leafRevKeys = revKeys.filter(k => !parentKeysWithChildren.includes(k));
+  // 集計ルール：
+  //   トップレベル行（parentKeyなし）を基本単位として集計
+  //   子行（parentKeyあり）は親行の getEffectiveSimVal で自動集計されるため個別加算しない
+  //   子行を持つ親行 → getEffectiveSimVal = 子行の合計
+  //   子行のない親行 → getEffectiveSimVal = 直接入力値
 
-  const cogsParentKeys = cogsKeysSim.filter(k => hasChildren(k));
-  const leafCogsKeys   = cogsKeysSim.filter(k => !cogsParentKeys.includes(k));
-
-  const opexParentKeys  = opexKeys.filter(k => hasChildren(k));
-  const leafOpexKeys    = opexKeys.filter(k => !opexParentKeys.includes(k));
-
-  // 子行を持つ親行は子行の合計で代替
-  const parentRevSums = Array.from({length: N}, (_, i) =>
-    parentKeysWithChildren.reduce((sum, key) => sum + getEffectiveSimVal(key, i), 0)
-  );
-  const parentCogsSums = Array.from({length: N}, (_, i) =>
-    cogsParentKeys.reduce((sum, key) => sum + getEffectiveSimVal(key, i), 0)
-  );
-  const parentOpexSums = Array.from({length: N}, (_, i) =>
-    opexParentKeys.reduce((sum, key) => sum + getEffectiveSimVal(key, i), 0)
-  );
-
+  // 売上：トップレベル行のみ（parentKeyなし、rev本体を除く）
+  const topRevKeys  = revKeys.filter(k => !plRowsCur.find(r => r.key === k)?.parentKey);
   const revArr = Array.from({length: N}, (_, i) =>
-    leafRevKeys.reduce((sum, key) => sum + getSimVal('pl', key, i), 0) + parentRevSums[i]
+    topRevKeys.reduce((sum, key) => sum + getEffectiveSimVal(key, i), 0)
   );
+
+  // 原価：トップレベル行のみ
+  const topCogsKeys = cogsKeysSim.filter(k => !plRowsCur.find(r => r.key === k)?.parentKey);
   const cogsArr = Array.from({length: N}, (_, i) =>
-    leafCogsKeys.reduce((sum, key) => sum + getSimVal('pl', key, i), 0) + parentCogsSums[i]
+    topCogsKeys.reduce((sum, key) => sum + getEffectiveSimVal(key, i), 0)
   );
+
   const gpArr = revArr.map((r, i) => r - cogsArr[i]);
+
+  // 販管費：トップレベル行のみ
+  const topOpexKeys = opexKeys.filter(k => !plRowsCur.find(r => r.key === k)?.parentKey);
   const costArr = Array.from({length: N}, (_, i) =>
-    leafOpexKeys.reduce((sum, key) => sum + getSimVal('pl', key, i), 0) + parentOpexSums[i] + cogsArr[i]
+    topOpexKeys.reduce((sum, key) => sum + getEffectiveSimVal(key, i), 0) + cogsArr[i]
   );
   // 月次損益 = 粗利 - 販管費
   const profitArr = gpArr.map((g, i) => g - (costArr[i] - cogsArr[i]));
@@ -5181,19 +5173,14 @@ function openBudgetModal() {
   // 1月1行のシンプルテーブル
   let rows = '';
   labels.forEach((lbl, i) => {
-    // 子行がある親行は子行の合計を使用（二重計上防止）
-    const _revKeys = getPLRows().filter(r => r.isRev && r.key !== 'rev');
-    const _parentRevKeys = _revKeys.filter(r => hasChildren(r.key));
-    const _leafRevKeys = _revKeys.filter(r => !hasChildren(r.key));
-    const rev = _leafRevKeys.reduce((s,r)=>s+getSimVal('pl',r.key,i),0)
-              + _parentRevKeys.reduce((s,r)=>s+getEffectiveSimVal(r.key,i),0);
+    // トップレベル行（parentKeyなし）のみ集計してgetEffectiveSimValで子行合計を取得
+    const _allRows = getPLRows();
+    const _revRows = _allRows.filter(r => r.isRev && r.key !== 'rev' && !r.parentKey);
+    const rev = _revRows.reduce((s,r) => s + getEffectiveSimVal(r.key, i), 0);
     const cogs = cogsKeys.reduce((t,k) => t+(hasChildren(k)?getEffectiveSimVal(k,i):getSimVal('pl',k,i)), 0);
     const gp   = rev - cogs;
-    const _opexKeys = getPLRows().filter(r => r.isCost && !cogsKeys.includes(r.key));
-    const _parentOpex = _opexKeys.filter(r => hasChildren(r.key));
-    const _leafOpex = _opexKeys.filter(r => !hasChildren(r.key));
-    const opex = _leafOpex.reduce((s,r)=>s+getSimVal('pl',r.key,i),0)
-               + _parentOpex.reduce((s,r)=>s+getEffectiveSimVal(r.key,i),0);
+    const _opexRows = getPLRows().filter(r => r.isCost && !cogsKeys.includes(r.key) && !r.parentKey);
+    const opex = _opexRows.reduce((s,r) => s + getEffectiveSimVal(r.key, i), 0);
     const profit = (hasCogs ? gp : rev) - opex;
     const profColor = profit>=0 ? 'var(--tc-green)' : 'var(--tc-red)';
     const cogsCell = hasCogs
@@ -5276,10 +5263,9 @@ async function commitBudget() {
   // ── Copy sim data → DB budget（原価科目を含む全科目） ──
   const d = DB[currentSimYear];
   months.forEach((m, i) => {
-    // 子行がある親行は子行の合計を使用
-    const _cb_revRows = getPLRows().filter(r => r.isRev && r.key !== 'rev');
-    const rev = _cb_revRows.reduce((s,r) =>
-      s + (hasChildren(r.key) ? getEffectiveSimVal(r.key,i) : getSimVal('pl',r.key,i)), 0);
+    // トップレベル行のみ集計（子行は getEffectiveSimVal で自動集計）
+    const _cb_revRows = getPLRows().filter(r => r.isRev && r.key !== 'rev' && !r.parentKey);
+    const rev = _cb_revRows.reduce((s,r) => s + getEffectiveSimVal(r.key, i), 0);
     const idx = d.months.indexOf(m);
     if (idx === -1) return;
 
