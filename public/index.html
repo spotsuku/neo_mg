@@ -1237,7 +1237,13 @@ function sw(id, el) {
   document.getElementById('sec-' + id).classList.add('on');
   if (el) el.classList.add('active');
   if (id === 'pl-cf') renderPLCF();
-  if (id === 'sim') { setTimeout(() => { buildSimPLTable(); buildSimCFTable(); if (_qsOpen) drawQSChart(); }, 50); }
+  if (id === 'sim') {
+    // タブ切替時に現在の年度に同期
+    currentSimYear = currentYear;
+    const simSel = document.getElementById('sim-year-sel');
+    if (simSel) simSel.value = currentYear;
+    setTimeout(() => { buildSimPLTable(); buildSimCFTable(); if (_qsOpen) drawQSChart(); }, 50);
+  }
   if (id === 'report') renderReportTabs();
   if (id === 'weekly') updateWeeklyKPIs();
 }
@@ -1247,8 +1253,15 @@ function setYear(y, el) {
   document.querySelectorAll('.yt').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('nav-sub').textContent = y === '2025' ? '2025年度 ｜ 最終更新：2026年2月末' : '2026年度（2604〜2703）';
+
+  // シミュレーション年度を自動同期
+  currentSimYear = y;
+  const simSel = document.getElementById('sim-year-sel');
+  if (simSel) simSel.value = y;
+
   updateWeeklyKPIs();
   renderPLCF();
+  renderAnnualSummary();
   renderReportTabs();
   loadImportedList();
 }
@@ -2003,24 +2016,30 @@ function renderPLView(d) {
     { key: 'other',        label: '└ その他費用',       b: d.pl.budget.other,                  a: d.pl.actual.other,                  indent: true, isOut: true },
   ];
 
-  let html = `<table class="dt" style="min-width:${80 + d.months.length * 80}px"><thead><tr><th class="l" style="min-width:110px">科目</th><th class="l" style="width:40px">区分</th>`;
+  let html = `<table class="dt" style="min-width:${80 + d.months.length * 80}px;border-collapse:separate;border-spacing:0"><thead><tr>
+    <th class="l" style="min-width:130px;position:sticky;left:0;z-index:3;background:var(--bg2)">科目</th>
+    <th class="l" style="width:40px;position:sticky;left:130px;z-index:3;background:var(--bg2)">区分</th>`;
   d.months.forEach(m => { html += `<th>${MONTH_LABELS[m]}</th>`; });
   html += '<th>合計</th></tr></thead><tbody>';
 
   rows.forEach(row => {
     const isRev = row.key === 'rev';
+     // sticky helpers for label col
+     const _sb  = `position:sticky;left:0;z-index:1;background:var(--bg2)`;
+     const _sb2 = `position:sticky;left:130px;z-index:1;background:var(--bg2)`;
+     const _ind = row.indent ? `padding-left:14px;font-size:10px;color:var(--text3);${_sb}` : _sb;
     // budget row
     const bSum = (row.b || []).reduce((s, v) => s + (Number(v) || 0), 0);
-    html += `<tr><td class="l${row.indent ? '" style="padding-left:14px;font-size:10px;color:var(--text3)' : ''}">${row.label}</td><td class="l" style="font-size:9px;color:var(--text3)">予算</td>`;
+     html += `<tr><td class="l" style="${_ind}">${row.label}</td><td class="l" style="font-size:9px;color:var(--text3);${_sb2}">予算</td>`;
     (row.b || Array(d.months.length).fill('')).forEach((v, i) => { html += `<td class="budget editable-cell" data-key="${row.key}" data-kind="budget" data-idx="${i}" onclick="plCellClick(this,window._plCFd)">${v !== '' && v !== undefined ? Number(v).toLocaleString() : '—'}</td>`; });
     html += `<td class="budget">${bSum.toLocaleString()}</td></tr>`;
     // actual row
     const aSum = (row.a || []).reduce((s, v) => s + (Number(v) || 0), 0);
-    html += `<tr><td class="l${row.indent ? '" style="padding-left:14px;font-size:10px;color:var(--text3)' : ''}"></td><td class="l" style="font-size:9px;font-weight:700;color:var(--text)">実績</td>`;
+     html += `<tr><td class="l" style="${_ind}"></td><td class="l" style="font-size:9px;font-weight:700;color:var(--text);${_sb2}">実績</td>`;
     (row.a || Array(d.months.length).fill('')).forEach((v, i) => { html += `<td class="actual editable-cell" data-key="${row.key}" data-kind="actual" data-idx="${i}" onclick="plCellClick(this,window._plCFd)">${v !== '' && v !== undefined && v !== null ? Number(v).toLocaleString() : '—'}</td>`; });
     html += `<td class="actual">${aSum ? aSum.toLocaleString() : '—'}</td></tr>`;
     // diff row
-    html += `<tr><td class="l${row.indent ? '" style="padding-left:14px;font-size:10px;color:var(--text3)' : ''}"></td><td class="l" style="font-size:9px;color:var(--text3)">差異</td>`;
+     html += `<tr><td class="l" style="${_ind}"></td><td class="l" style="font-size:9px;color:var(--text3);${_sb2}">差異</td>`;
     (row.b || Array(d.months.length).fill('')).forEach((bv, i) => {
       const av = row.a ? row.a[i] : '';
       if (bv === '' || bv === undefined || av === '' || av === undefined || av === null) { html += `<td class="diff-zero">—</td>`; return; }
@@ -2033,7 +2052,7 @@ function renderPLView(d) {
 
   // ── 販管費合計行 ──
   const opexStyle = 'background:var(--bg3);';
-  html += `<tr class="tot" style="${opexStyle}"><td class="l" style="font-weight:700">販管費合計</td><td class="l" style="font-size:9px;color:var(--text3)">予算</td>`;
+  html += `<tr class="tot" style="${opexStyle}"><td class="l" style="font-weight:700;position:sticky;left:0;z-index:1;${opexStyle}">販管費合計</td><td class="l" style="font-size:9px;color:var(--text3);position:sticky;left:130px;z-index:1;${opexStyle}">予算</td>`;
   let bOpexSum = 0;
   d.months.forEach((_, i) => {
     const bOpex = (Number(d.pl.budget.labor[i]) || 0) + (Number(d.pl.budget.outsource[i]) || 0) + (Number(d.pl.budget.adv[i]) || 0) + (Number((d.pl.budget.gaichu||[])[i]) || 0) + (Number(d.pl.budget.other[i]) || 0);
@@ -2042,7 +2061,7 @@ function renderPLView(d) {
   });
   html += `<td class="budget" style="${opexStyle}color:var(--tc-red);font-weight:700">${bOpexSum ? bOpexSum.toLocaleString() : '—'}</td></tr>`;
 
-  html += `<tr class="tot" style="${opexStyle}"><td class="l"></td><td class="l" style="font-size:9px;font-weight:700;color:var(--text)">実績</td>`;
+  html += `<tr class="tot" style="${opexStyle}"><td class="l" style="position:sticky;left:0;z-index:1;${opexStyle}"></td><td class="l" style="font-size:9px;font-weight:700;color:var(--text);position:sticky;left:130px;z-index:1;${opexStyle}">実績</td>`;
   let aOpexSum = 0;
   d.months.forEach((_, i) => {
     const ae = (Number(d.pl.actual.labor[i]) || 0) + (Number(d.pl.actual.outsource[i]) || 0) + (Number(d.pl.actual.adv[i]) || 0) + (Number((d.pl.actual.gaichu||[])[i]) || 0) + (Number(d.pl.actual.other[i]) || 0);
@@ -2066,7 +2085,7 @@ function renderPLView(d) {
 
   // ── 営業損益行 ──
   // 営業損益行（粗利 - 販管費）
-  html += `<tr class="tot"><td class="l">営業損益</td><td class="l" style="font-size:9px">予算</td>`;
+  html += `<tr class="tot"><td class="l" style="position:sticky;left:0;z-index:1;background:var(--bg3)">営業損益</td><td class="l" style="font-size:9px;position:sticky;left:130px;z-index:1;background:var(--bg3)">予算</td>`;
   let bOpSum = 0;
   d.months.forEach((_, i) => {
     const bOp = gpB[i] - ((Number(d.pl.budget.labor[i])||0)+(Number(d.pl.budget.outsource[i])||0)+(Number(d.pl.budget.adv[i])||0)+(Number((d.pl.budget.gaichu||[])[i])||0)+(Number(d.pl.budget.other[i])||0));
@@ -2075,7 +2094,7 @@ function renderPLView(d) {
   });
   html += `<td class="budget ${bOpSum >= 0 ? 'diff-pos' : 'diff-neg'}" style="background:rgba(55,138,221,0.12);border-left:2px solid rgba(55,138,221,0.3);font-weight:700">${bOpSum >= 0 ? '' : '▲'}${Math.abs(Math.round(bOpSum)).toLocaleString()}</td></tr>`;
 
-  html += `<tr class="tot"><td class="l"></td><td class="l" style="font-size:9px">実績</td>`;
+  html += `<tr class="tot"><td class="l" style="position:sticky;left:0;z-index:1;background:var(--bg3)"></td><td class="l" style="font-size:9px;position:sticky;left:130px;z-index:1;background:var(--bg3)">実績</td>`;
   let aOpSum = 0;
   d.months.forEach((_, i) => {
     const gp = gpA[i];
@@ -4418,9 +4437,10 @@ function buildSimPLTable() {
   const cellStyle = 'border:1px solid var(--border);padding:0;';
   const inputStyle = 'width:100%;padding:4px 5px;border:none;background:transparent;color:var(--text);font-size:11px;text-align:right;font-family:inherit;min-width:58px;';
   const thStyle = 'background:var(--bg2);color:var(--text3);font-size:10px;font-weight:700;padding:5px 6px;border:1px solid var(--border);white-space:nowrap;text-align:center;';
-  const labelStyle = 'background:var(--bg2);color:var(--text2);font-size:10px;padding:5px 8px;border:1px solid var(--border);white-space:nowrap;';
+  const labelStyle = 'background:var(--bg2);color:var(--text2);font-size:10px;padding:5px 8px;border:1px solid var(--border);white-space:nowrap;position:sticky;left:0;z-index:2;';
+  const thLabelStyle = thStyle + 'position:sticky;left:0;z-index:3;text-align:left;';
 
-  let html = `<thead><tr><th style="${thStyle}min-width:120px;text-align:left">科目</th>`;
+  let html = `<thead><tr><th style="${thLabelStyle}min-width:120px;">科目</th>`;
   labels.forEach(l => { html += `<th style="${thStyle}">${l}</th>`; });
   html += `<th style="${thStyle}">合計</th></tr></thead><tbody>`;
 
@@ -4538,9 +4558,10 @@ function buildSimCFTable() {
   const cellStyle = 'border:1px solid var(--border);padding:0;';
   const inputStyle = 'width:100%;padding:4px 5px;border:none;background:transparent;color:var(--text);font-size:11px;text-align:right;font-family:inherit;min-width:58px;';
   const thStyle = 'background:var(--bg2);color:var(--text3);font-size:10px;font-weight:700;padding:5px 6px;border:1px solid var(--border);white-space:nowrap;text-align:center;';
-  const labelStyle = 'background:var(--bg2);color:var(--text2);font-size:10px;padding:5px 8px;border:1px solid var(--border);white-space:nowrap;';
+  const labelStyle = 'background:var(--bg2);color:var(--text2);font-size:10px;padding:5px 8px;border:1px solid var(--border);white-space:nowrap;position:sticky;left:0;z-index:2;';
+  const thLabelStyleCf = thStyle + 'position:sticky;left:0;z-index:3;text-align:left;';
 
-  let html = `<thead><tr><th style="${thStyle}min-width:140px;text-align:left">科目（万円）</th>`;
+  let html = `<thead><tr><th style="${thLabelStyleCf}min-width:140px;">科目（万円）</th>`;
   labels.forEach(l => { html += `<th style="${thStyle}">${l}</th>`; });
   html += `<th style="${thStyle}">合計</th></tr></thead><tbody>`;
 
