@@ -370,7 +370,7 @@ td.actual.editable-cell {
 
   <div class="g2">
     <div class="card">
-      <div class="ct">月次売上推移（万円）</div>
+      <div class="ct">月次売上推移（千円）</div>
       <div class="ch" style="height:190px"><canvas id="wk-rev-chart"></canvas></div>
     </div>
     <div class="card">
@@ -386,7 +386,7 @@ td.actual.editable-cell {
         <span style="font-weight:600;font-size:13px">現在のリスクレベル</span>
         <span id="risk-badge" class="badge ba">🟡 注意</span>
       </div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:12px">残りキャッシュ期間：<strong id="runway-val" style="color:var(--text)">—</strong>（バーンレート <span id="burnrate-val">—</span>万円/月）</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px">残りキャッシュ期間：<strong id="runway-val" style="color:var(--text)">—</strong>（バーンレート <span id="burnrate-val">—</span>千円/月）</div>
       <div class="risk-row"><div class="risk-lbl">🔴 危険</div><div class="risk-track"><div class="risk-fill" style="width:25%;background:#E24B4A"></div></div><div style="font-size:10px;color:var(--text3)">3ヶ月未満</div></div>
       <div class="risk-row"><div class="risk-lbl">🟠 警戒</div><div class="risk-track"><div class="risk-fill" style="width:50%;background:#EF9F27"></div></div><div style="font-size:10px;color:var(--text3)">3〜6ヶ月</div></div>
       <div class="risk-row"><div class="risk-lbl">🟡 注意</div><div class="risk-track"><div class="risk-fill" style="width:75%;background:#EF9F27;opacity:.6"></div></div><div style="font-size:10px;color:var(--text3)">6〜12ヶ月</div></div>
@@ -821,7 +821,7 @@ td.actual.editable-cell {
         <div id="bar-edit-title" style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px"></div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <input type="number" id="bar-edit-input" style="width:100px;padding:5px 7px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:13px;font-weight:700;text-align:right;font-family:inherit">
-          <span style="font-size:11px;color:var(--text3)">万円</span>
+          <span style="font-size:11px;color:var(--text3)">千円</span>
         </div>
         <div style="display:flex;gap:6px">
           <button class="btn btn-p" style="font-size:11px;flex:1" onclick="commitBarEdit()">✓ 確定</button>
@@ -865,63 +865,63 @@ td.actual.editable-cell {
         <!-- スライダー群 -->
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px 20px;margin-bottom:1rem">
           <div>
-            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">NEO会費（万円/月）</div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">NEO会費（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
               <input type="range" min="0" max="2000" step="50" value="700" id="qs-fee" oninput="onQS()" style="flex:1;accent-color:#378ADD">
               <input type="number" id="qsn-fee" value="700" min="0" max="9999" oninput="onQSNum('fee')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
-            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">研修売上（万円/月）</div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">研修売上（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
               <input type="range" min="0" max="1000" step="10" value="150" id="qs-training" oninput="onQS()" style="flex:1;accent-color:#378ADD">
               <input type="number" id="qsn-training" value="150" min="0" max="9999" oninput="onQSNum('training')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
-            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">その他売上（万円/月）</div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">その他売上（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
               <input type="range" min="0" max="500" step="10" value="30" id="qs-other-rev" oninput="onQS()" style="flex:1;accent-color:#378ADD">
               <input type="number" id="qsn-other-rev" value="30" min="0" max="9999" oninput="onQSNum('other-rev')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
-            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">人件費（万円/月）</div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">人件費（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
               <input type="range" min="0" max="800" step="10" value="320" id="qs-labor" oninput="onQS()" style="flex:1;accent-color:#E24B4A">
               <input type="number" id="qsn-labor" value="320" min="0" max="9999" oninput="onQSNum('labor')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
-            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">業務委託費（万円/月）</div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">業務委託費（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
               <input type="range" min="0" max="800" step="10" value="400" id="qs-outsource" oninput="onQS()" style="flex:1;accent-color:#E24B4A">
               <input type="number" id="qsn-outsource" value="400" min="0" max="9999" oninput="onQSNum('outsource')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
-            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">広告販促費（万円/月）</div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">広告販促費（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
               <input type="range" min="0" max="500" step="10" value="100" id="qs-adv" oninput="onQS()" style="flex:1;accent-color:#EF9F27">
               <input type="number" id="qsn-adv" value="100" min="0" max="9999" oninput="onQSNum('adv')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
-            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">外注費（万円/月）</div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">外注費（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
               <input type="range" min="0" max="400" step="10" value="80" id="qs-gaichu" oninput="onQS()" style="flex:1;accent-color:#D85A30">
               <input type="number" id="qsn-gaichu" value="80" min="0" max="9999" oninput="onQSNum('gaichu')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
-            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">賃料（万円/月）</div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">賃料（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
               <input type="range" min="0" max="300" step="5" value="90" id="qs-rent" oninput="onQS()" style="flex:1;accent-color:#888780">
               <input type="number" id="qsn-rent" value="90" min="0" max="9999" oninput="onQSNum('rent')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
-            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">その他費用（万円/月）</div>
+            <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">その他費用（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
               <input type="range" min="0" max="300" step="10" value="80" id="qs-other-cost" oninput="onQS()" style="flex:1;accent-color:#888780">
               <input type="number" id="qsn-other-cost" value="80" min="0" max="9999" oninput="onQSNum('other-cost')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
@@ -1038,9 +1038,9 @@ td.actual.editable-cell {
     <div class="pdf-sec">
       <div class="pdf-sec-t">経営KPIサマリー</div>
       <div class="pdf-kpis" id="pdf-kpis">
-        <div class="pdf-kpi"><div class="pdf-kpi-v">7,737万円</div><div class="pdf-kpi-l">累積売上（予算比103%）</div></div>
-        <div class="pdf-kpi"><div class="pdf-kpi-v r">▲4,523万円</div><div class="pdf-kpi-l">営業損益（累積）</div></div>
-        <div class="pdf-kpi"><div class="pdf-kpi-v">5,371万円</div><div class="pdf-kpi-l">現預金残高</div></div>
+        <div class="pdf-kpi"><div class="pdf-kpi-v">7,737千円</div><div class="pdf-kpi-l">累積売上（予算比103%）</div></div>
+        <div class="pdf-kpi"><div class="pdf-kpi-v r">▲4,523千円</div><div class="pdf-kpi-l">営業損益（累積）</div></div>
+        <div class="pdf-kpi"><div class="pdf-kpi-v">5,371千円</div><div class="pdf-kpi-l">現預金残高</div></div>
         <div class="pdf-kpi"><div class="pdf-kpi-v a">🟡 注意</div><div class="pdf-kpi-l">資金ショートリスク</div></div>
       </div>
     </div>
@@ -1357,23 +1357,23 @@ function updateWeeklyKPIs() {
   const burnrate = countMonths > 0 ? Math.round((cumOpex / (lastActualIdx + 1))) : 1022;
   const runway = lastCash ? (lastCash / 10 / burnrate).toFixed(1) : '—'; // lastCash:千円→÷10→万円, burnrate:万円/月
 
-  document.getElementById('kpi-cash').textContent = lastCash ? fmt万(lastCash / 10) + '万円' : '5,371万円';
+  document.getElementById('kpi-cash').textContent = lastCash ? fmt万(lastCash / 10) + '千円' : '5,371千円';
   document.getElementById('kpi-cash-s').innerHTML = lastCash ? `<span class="${riskClass(runway)}">残り約${runway}ヶ月</span>` : '<span class="badge ba">残り約7.5ヶ月</span>';
-  document.getElementById('kpi-rev').textContent = cumRev ? fmt万(cumRev) + '万円' : '7,737万円';
+  document.getElementById('kpi-rev').textContent = cumRev ? fmt万(cumRev) + '千円' : '7,737千円';
   document.getElementById('kpi-rev-s').innerHTML = budRev ? `<span class="badge ${cumRev >= budRev ? 'bg' : 'br'}">予算比 ${Math.round(cumRev / budRev * 100)}%</span>` : '';
   if (document.getElementById('kpi-gp')) {
     document.getElementById('kpi-gp').innerHTML = cumGP >= 0
-      ? `<span class="g">${fmt万(cumGP)}万円</span>`
-      : `<span class="r">▲${fmt万(Math.abs(cumGP))}万円</span>`;
+      ? `<span class="g">${fmt万(cumGP)}千円</span>`
+      : `<span class="r">▲${fmt万(Math.abs(cumGP))}千円</span>`;
     const gpEl = document.getElementById('kpi-gp-s');
     if (gpEl && gpRate !== null) gpEl.innerHTML = `<span class="badge ${gpRate>=30?'bg':gpRate>=0?'ba':'br'}">${gpRate}% 粗利率</span>`;
   }
   document.getElementById('kpi-opex').innerHTML = cumOpex
-    ? `<span class="r">${fmt万(cumOpex)}万円</span>` : '12,259万円';
+    ? `<span class="r">${fmt万(cumOpex)}千円</span>` : '12,259千円';
   const opexSEl = document.getElementById('kpi-opex-s');
   if (opexSEl) opexSEl.innerHTML = opexRate !== null
     ? `<span class="badge ${opexRate <= 100 ? 'bg' : 'br'}">${opexRate}% 予算比</span>` : '';
-  document.getElementById('kpi-op').innerHTML = cumOp >= 0 ? `<span class="g">${fmt万(cumOp)}万円</span>` : `<span class="r">▲${fmt万(Math.abs(cumOp))}万円</span>`;
+  document.getElementById('kpi-op').innerHTML = cumOp >= 0 ? `<span class="g">${fmt万(cumOp)}千円</span>` : `<span class="r">▲${fmt万(Math.abs(cumOp))}千円</span>`;
   document.getElementById('kpi-op-s').innerHTML = `<span class="badge ${cumOp >= 0 ? 'bg' : 'ba'}">累積損益</span>`;
 
   const rwy = lastCash ? parseFloat(runway) : 7.5;
@@ -1394,7 +1394,7 @@ function riskClass(months) {
   const m = parseFloat(months);
   return m >= 12 ? 'g' : m >= 6 ? 'a' : 'r';
 }
-function fmt万(v) { return Math.round(v).toLocaleString(); }
+function fmt万(v) { return Math.round(v).toLocaleString(); } // 千円単位
 
 function initWeeklyCharts(d, lastIdx) {
   const months = d.months.map(m => MONTH_LABELS[m] || m);
@@ -1411,7 +1411,7 @@ function initWeeklyCharts(d, lastIdx) {
         { label: '実績', data: revActual, backgroundColor: '#378ADD', borderRadius: 3 }
       ]
     },
-    options: chartOpts(v => v.toLocaleString() + '万')
+    options: chartOpts(v => v.toLocaleString() + '千円')
   });
 
   // 最新実績月のデータを取得（なければ直近N月の合計を使う）
@@ -1452,13 +1452,13 @@ function initWeeklyCharts(d, lastIdx) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: ctx => ` ${Math.round(ctx.parsed.x).toLocaleString()}万円` + (hasAnyCost ? '' : '（参考値）')
+            label: ctx => ` ${Math.round(ctx.parsed.x).toLocaleString()}千円` + (hasAnyCost ? '' : '（参考値）')
           }
         }
       },
       scales: {
         x: {
-          ticks: { color: tc, font: { size: 10 }, callback: v => v.toLocaleString()+'万' },
+          ticks: { color: tc, font: { size: 10 }, callback: v => v.toLocaleString()+'千円' },
           grid: { color: gc },
           min: 0
         },
@@ -1990,8 +1990,8 @@ function renderPLView(d) {
       plugins: { legend: { labels: { font: { size: 10 }, color: tc, boxWidth: 10, padding: 8 } } },
       scales: {
         x: { ticks: { color: tc, font: { size: 10 } }, grid: { color: gc } },
-        y: { position: 'left', ticks: { color: tc, font: { size: 10 }, callback: v => { const a=Math.abs(v); return (v<0?'▲':'')+(a>=10000?(a/10000).toFixed(0)+'億':a>=1000?(a/1000).toFixed(0)+'千万':a.toLocaleString()+'千'); } }, grid: { color: gc } },
-        y2: { position: 'right', ticks: { color: tc, font: { size: 10 }, callback: v => { const a=Math.abs(v); return (v<0?'▲':'')+(a>=10000?(a/10000).toFixed(0)+'億':a>=1000?(a/1000).toFixed(0)+'千万':a.toLocaleString()+'千'); } }, grid: { display: false } }
+        y: { position: 'left', ticks: { color: tc, font: { size: 10 }, callback: v => { const a=Math.abs(v); return (v<0?'▲':'')+(a>=1000000?(a/1000000).toFixed(1)+'十億':a>=10000?(a/10000).toFixed(0)+'億':a>=1000?(a/1000).toFixed(0)+'百万':a.toLocaleString()+'千円'); } }, grid: { color: gc } },
+        y2: { position: 'right', ticks: { color: tc, font: { size: 10 }, callback: v => { const a=Math.abs(v); return (v<0?'▲':'')+(a>=1000000?(a/1000000).toFixed(1)+'十億':a>=10000?(a/10000).toFixed(0)+'億':a>=1000?(a/1000).toFixed(0)+'百万':a.toLocaleString()+'千円'); } }, grid: { display: false } }
       }
     }
   });
@@ -2142,7 +2142,7 @@ function renderCFView(d) {
     const rateOut = bOutTot > 0 ? Math.round(aOutTot / bOutTot * 100) : null;
 
     const fmt千 = (v) => Math.round(v).toLocaleString() + '千円';
-    const fmt万 = (v) => Math.round(v/10).toLocaleString() + '万円';
+    const fmt万 = (v) => Math.round(v/10).toLocaleString() + '千円';
     const el = (id) => document.getElementById(id);
 
     if (el('cf-sum-in-a'))   el('cf-sum-in-a').textContent = aInTot ? fmt千(aInTot) : '—';
@@ -2154,7 +2154,7 @@ function renderCFView(d) {
       ? `<span class="badge ${rateOut<=100?'bg':'br'}">${rateOut}% 予算比</span>` : '';
     if (el('cf-sum-close')) {
       el('cf-sum-close').innerHTML = lastClose
-        ? `<span class="${lastClose>0?'g':'r'}">${fmt万(lastClose)}</span>` : '—';
+        ? `<span class="${lastClose>0?'g':'r'}">${fmt万CF(lastClose)}</span>` : '—';
     }
     if (el('cf-sum-net')) {
       el('cf-sum-net').innerHTML = netCF >= 0
@@ -3381,7 +3381,7 @@ ${csvFull}
 【区分】: ${kind === 'actual' ? '実績' : '予算'}
 
 ★★★ 単位変換ルール（最重要・必ず守ること）★★★
-- CSVの数値は【円単位】（例：3,028,706 = 約302万円）
+- CSVの数値は【円単位】（例：3,028,706 = 約302千円）
 - 返すJSONはすべて【千円単位の整数】に変換すること
 - 変換式：JSON値 = round(CSV値 ÷ 1000)
 - 具体例：
@@ -3924,7 +3924,7 @@ function showApplyConfirmModal(filledMonths, monthLabels, d) {
       </div>
 
       <!-- PLプレビュー -->
-      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">PLデータ（万円）</div>
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">PLデータ（千円）</div>
       <div class="scroll-x" style="margin-bottom:.875rem">
         <table style="border-collapse:collapse;min-width:${100+filledMonths.length*70}px">
           <thead><tr><th style="padding:3px 8px;font-size:10px;color:var(--text3);text-align:left">科目</th>${monthHeaders}</tr></thead>
@@ -4756,8 +4756,8 @@ function recalcSimPL() {
     : `<span class="r">▲${Math.abs(annualProfit).toLocaleString()}千円</span>`;
   document.getElementById('spl-breakeven').textContent = beMonth >= 0 ? `${getSimLabels()[beMonth]}（${beMonth+1}ヶ月目）` : '未達';
   document.getElementById('spl-cum-profit').innerHTML = cum >= 0
-    ? `<span class="g">+${cum.toLocaleString()}万円</span>`
-    : `<span class="r">▲${Math.abs(cum).toLocaleString()}万円</span>`;
+    ? `<span class="g">+${cum.toLocaleString()}千円</span>`
+    : `<span class="r">▲${Math.abs(cum).toLocaleString()}千円</span>`;
 
   // グラフ更新
   drawSimPLChart(revArr, costArr, profitArr, cumArr);
@@ -4830,7 +4830,7 @@ function drawSimPLChart(revArr, costArr, profitArr, cumArr) {
               if (v === null || v === undefined) return null;
               const abs = Math.abs(Math.round(v));
               const sign = v > 0 ? '+' : v < 0 ? '▲' : '';
-              return ` ${ctx.dataset.label}：${sign}${abs.toLocaleString()}万円`;
+              return ` ${ctx.dataset.label}：${sign}${abs.toLocaleString()}千円`;
             }
           }
         }
@@ -4841,19 +4841,19 @@ function drawSimPLChart(revArr, costArr, profitArr, cumArr) {
           position:'left',
           ticks:{ color:tc, font:{size:10}, callback: v => {
             if (Math.abs(v) >= 1000) return (v/1000).toFixed(0)+'千万';
-            return v.toLocaleString()+'万';
+            return v.toLocaleString()+'千円';
           }},
           grid:{color:gc},
-          title:{display:true, text:'月次（万円）', color:tc, font:{size:9}}
+          title:{display:true, text:'月次（千円）', color:tc, font:{size:9}}
         },
         y2: {
           position:'right',
           ticks:{ color:tc, font:{size:10}, callback: v => {
             if (Math.abs(v) >= 1000) return (v/1000).toFixed(0)+'千万';
-            return v.toLocaleString()+'万';
+            return v.toLocaleString()+'千円';
           }},
           grid:{display:false},
-          title:{display:true, text:'累積損益（万円）', color:tc, font:{size:9}}
+          title:{display:true, text:'累積損益（千円）', color:tc, font:{size:9}}
         }
       }
     }
@@ -4883,7 +4883,7 @@ function updatePLScenarioNote(profitArr, goodProfit, badProfit, cumBase, cumGood
   const beGood = goodProfit.findIndex(p=>p>0);
   const beBad  = badProfit.findIndex(p=>p>0);
   const fmtBE = i => i>=0 ? labels[i]+'月' : '未達';
-  const fmtP = v => (v>=0?'+':'▲')+Math.abs(Math.round(v)).toLocaleString()+'万円';
+  const fmtP = v => (v>=0?'+':'▲')+Math.abs(Math.round(v)).toLocaleString()+'千円';
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:11px">
       <div style="background:var(--bg-green);border-radius:var(--r);padding:10px 12px">
@@ -4988,18 +4988,18 @@ function recalcSimCF() {
 
   // KPIサマリー
   document.getElementById('scf-min-bal').innerHTML = minBal >= 0
-    ? `<span class="g">${Math.round(minBal).toLocaleString()}万円</span>`
-    : `<span class="r">▲${Math.abs(Math.round(minBal)).toLocaleString()}万円</span>`;
+    ? `<span class="g">${Math.round(minBal).toLocaleString()}千円</span>`
+    : `<span class="r">▲${Math.abs(Math.round(minBal)).toLocaleString()}千円</span>`;
   document.getElementById('scf-end-bal').innerHTML = bal >= 0
-    ? `<span class="g">${Math.round(bal).toLocaleString()}万円</span>`
-    : `<span class="r">▲${Math.abs(Math.round(bal)).toLocaleString()}万円</span>`;
+    ? `<span class="g">${Math.round(bal).toLocaleString()}千円</span>`
+    : `<span class="r">▲${Math.abs(Math.round(bal)).toLocaleString()}千円</span>`;
   document.getElementById('scf-short-month').innerHTML = shortMonth === '—'
     ? '<span class="g">なし（安全）</span>'
     : `<span class="r">${shortMonth}</span>`;
   const netAnnual = totalIn - totalOut;
   document.getElementById('scf-net-annual').innerHTML = netAnnual >= 0
-    ? `<span class="g">+${netAnnual.toLocaleString()}万円</span>`
-    : `<span class="r">▲${Math.abs(netAnnual).toLocaleString()}万円</span>`;
+    ? `<span class="g">+${netAnnual.toLocaleString()}千円</span>`
+    : `<span class="r">▲${Math.abs(netAnnual).toLocaleString()}千円</span>`;
 
   // グラフ更新
   drawSimCFChart(months, netArr, balArr);
@@ -5081,7 +5081,7 @@ function drawSimCFChart(months, netArr, balArr) {
               if (v === null || v === undefined) return null;
               const abs = Math.abs(Math.round(v));
               const sign = v >= 0 ? '' : '▲';
-              return ` ${ctx.dataset.label}：${sign}${abs.toLocaleString()}万円`;
+              return ` ${ctx.dataset.label}：${sign}${abs.toLocaleString()}千円`;
             }
           }
         }
@@ -5092,19 +5092,19 @@ function drawSimCFChart(months, netArr, balArr) {
           position:'left',
           ticks:{ color:tc, font:{size:10}, callback: v => {
             if (Math.abs(v) >= 1000) return (v/1000).toFixed(0)+'千万';
-            return v.toLocaleString()+'万';
+            return v.toLocaleString()+'千円';
           }},
           grid:{color:gc},
-          title:{display:true, text:'入出金（万円）', color:tc, font:{size:9}}
+          title:{display:true, text:'入出金（千円）', color:tc, font:{size:9}}
         },
         y2: {
           position:'right',
           ticks:{ color:tc, font:{size:10}, callback: v => {
             if (Math.abs(v) >= 1000) return (v/1000).toFixed(0)+'千万';
-            return v.toLocaleString()+'万';
+            return v.toLocaleString()+'千円';
           }},
           grid:{display:false},
-          title:{display:true, text:'月末残高（万円）', color:tc, font:{size:9}}
+          title:{display:true, text:'月末残高（千円）', color:tc, font:{size:9}}
         }
       }
     }
@@ -5125,7 +5125,7 @@ function updateCFScenarioNote(balBase, balGood, balBad, hasData) {
   const shortBase = balBase.findIndex(v => v < 0);
   const shortGood = balGood.findIndex(v => v < 0);
   const shortBad  = balBad.findIndex(v => v < 0);
-  const fmtBal = v => (v>=0?'':v<0?'▲':'')+Math.abs(Math.round(v)).toLocaleString()+'万円';
+  const fmtBal = v => (v>=0?'':v<0?'▲':'')+Math.abs(Math.round(v)).toLocaleString()+'千円';
   const fmtShort = i => i>=0 ? `<span style="color:var(--tc-red);font-weight:700">${labels[i]}に発生</span>` : '<span style="color:var(--tc-green)">なし（安全）</span>';
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:11px">
@@ -5547,8 +5547,8 @@ async function renderBudgetHistory() {
       </div>
       <div style="text-align:right;white-space:nowrap">
         <div style="font-size:10px;color:var(--text3)">年間売上</div>
-        <div style="font-size:12px;font-weight:700">${annualRev.toLocaleString()}万</div>
-        <div style="font-size:11px;font-weight:600;color:${profit>=0?'var(--tc-green)':'var(--tc-red)'}">損益 ${profit>=0?'+':'▲'}${Math.abs(profit).toLocaleString()}万</div>
+        <div style="font-size:12px;font-weight:700">${annualRev.toLocaleString()}千円</div>
+        <div style="font-size:11px;font-weight:600;color:${profit>=0?'var(--tc-green)':'var(--tc-red)'}">損益 ${profit>=0?'+':'▲'}${Math.abs(profit).toLocaleString()}千円</div>
       </div>
     </div>`;
   }).join('');
@@ -5705,10 +5705,10 @@ function drawQSChart() {
 
   // ── KPI 更新 ──
   const fmtP = v => v >= 0
-    ? `<span class="g">+${v.toLocaleString()}万円</span>`
-    : `<span class="r">▲${Math.abs(v).toLocaleString()}万円</span>`;
-  document.getElementById('qs-rev-mo').textContent     = rev.toLocaleString() + '万円';
-  document.getElementById('qs-cost-mo').textContent    = cost.toLocaleString() + '万円';
+    ? `<span class="g">+${v.toLocaleString()}千円</span>`
+    : `<span class="r">▲${Math.abs(v).toLocaleString()}千円</span>`;
+  document.getElementById('qs-rev-mo').textContent     = rev.toLocaleString() + '千円';
+  document.getElementById('qs-cost-mo').textContent    = cost.toLocaleString() + '千円';
   document.getElementById('qs-profit-mo').innerHTML    = fmtP(profit);
   document.getElementById('qs-annual-profit').innerHTML = fmtP(profit * N);
   document.getElementById('qs-breakeven').innerHTML = profit > 0
@@ -5822,10 +5822,10 @@ function drawQSChart() {
               // 棒は「売上 / 費用」として表示、負値を▲に変換
               const disp = Math.abs(Math.round(v));
               const sign = v >= 0 ? '+' : '▲';
-              if (lbl === '売上（棒）')    return ` 売上：${disp.toLocaleString()}万円`;
-              if (lbl === '費用合計（棒）') return ` 費用：${disp.toLocaleString()}万円`;
+              if (lbl === '売上（棒）')    return ` 売上：${disp.toLocaleString()}千円`;
+              if (lbl === '費用合計（棒）') return ` 費用：${disp.toLocaleString()}千円`;
               if (lbl === '損益分岐ライン') return null;
-              return ` ${lbl}：${sign}${disp.toLocaleString()}万円`;
+              return ` ${lbl}：${sign}${disp.toLocaleString()}千円`;
             }
           }
         }
@@ -5842,11 +5842,11 @@ function drawQSChart() {
             callback: v => {
               const a = Math.abs(v);
               const s = v < 0 ? '▲' : '';
-              return s + (a >= 1000 ? (a/1000).toFixed(0)+'千万' : a.toLocaleString()+'万');
+              return s + (a >= 1000 ? (a/1000).toFixed(0)+'千万' : a.toLocaleString()+'千円');
             }
           },
           grid: { color: 'transparent' },
-          title: { display: true, text: '月次売上 / 費用（万円）', color: tc, font: { size: 9 } }
+          title: { display: true, text: '月次売上 / 費用（千円）', color: tc, font: { size: 9 } }
         },
         y2: {
           position: 'right',
@@ -5856,11 +5856,11 @@ function drawQSChart() {
               const a = Math.abs(v);
               const s = v < 0 ? '▲' : '+';
               if (a === 0) return '0';
-              return s + (a >= 10000 ? (a/10000).toFixed(1)+'億' : a >= 1000 ? (a/1000).toFixed(0)+'千万' : a.toLocaleString()+'万');
+              return s + (a >= 10000 ? (a/10000).toFixed(1)+'億' : a >= 1000 ? (a/1000).toFixed(0)+'千万' : a.toLocaleString()+'千円');
             }
           },
           grid: { color: gc },
-          title: { display: true, text: '累積損益（万円）— 主要指標', color: tc, font: { size: 9 } }
+          title: { display: true, text: '累積損益（千円）— 主要指標', color: tc, font: { size: 9 } }
         }
       }
     }
@@ -6074,8 +6074,8 @@ async function genAI(type) {
   const cumOpex = [...(d.pl.actual.labor||[]),...(d.pl.actual.outsource||[]),...(d.pl.actual.adv||[]),...(d.pl.actual.other||[])].reduce((s, v) => s + (Number(v) || 0), 0) / 4;
 
   const prompts = {
-    weekly: `NEO福岡の経営コンサルタントとして、以下データをもとに週次ブリーフィングを箇条書き3点で作成してください（①CFリスク、②最重要アクション、③中期的注目点）。\n累積売上:${cumRev.toLocaleString()}万円 / 累積販管費概算:${Math.round(cumOpex).toLocaleString()}万円 / 現金:5,371万円（7.5ヶ月分） / OKR:8/10完了 / AI研修45名・粗利500万円達成 / 採用リード獲得が課題`,
-    report: `NEO福岡の代表取締役CEOとして、役員会議用の月次経営方針コメントを400〜500字で作成してください（①成果評価、②財務・資金対策、③来月の重点方針）。\n累積売上:${cumRev.toLocaleString()}万円（予算比103%）/ 累積販管費概算:${Math.round(cumOpex).toLocaleString()}万円 / 現金:5,371万円 / AI研修45名・粗利500万円 / 既存契約更新14社完了 / 課題:採用リード・研修商品最終化`,
+    weekly: `NEO福岡の経営コンサルタントとして、以下データをもとに週次ブリーフィングを箇条書き3点で作成してください（①CFリスク、②最重要アクション、③中期的注目点）。\n累積売上:${cumRev.toLocaleString()}千円 / 累積販管費概算:${Math.round(cumOpex).toLocaleString()}千円 / 現金:5,371万円（7.5ヶ月分） / OKR:8/10完了 / AI研修45名・粗利500万円達成 / 採用リード獲得が課題`,
+    report: `NEO福岡の代表取締役CEOとして、役員会議用の月次経営方針コメントを400〜500字で作成してください（①成果評価、②財務・資金対策、③来月の重点方針）。\n累積売上:${cumRev.toLocaleString()}千円（予算比103%）/ 累積販管費概算:${Math.round(cumOpex).toLocaleString()}千円 / 現金:5,371万円 / AI研修45名・粗利500万円 / 既存契約更新14社完了 / 課題:採用リード・研修商品最終化`,
     'sim-pl': (() => {
       const months = getSimMonths();
       const labels = getSimLabels();
@@ -6086,7 +6086,7 @@ async function genAI(type) {
       const annualProfit = profArr.reduce((a,b)=>a+b,0);
       const peakRev = Math.max(...revArr);
       const peakCost = Math.max(...costArr);
-      return `NEO福岡の${currentSimYear}年度PLシミュレーション計画を分析し、改善提案を3〜5点の箇条書きで作成してください。\n年間売上試算:${annualRev.toLocaleString()}万円 / 年間損益試算:${annualProfit >= 0 ? '+' : '▲'}${Math.abs(annualProfit).toLocaleString()}万円 / 月次売上ピーク:${peakRev.toLocaleString()}万円 / 月次費用ピーク:${peakCost.toLocaleString()}万円\n月次売上: ${revArr.map((v,i)=>labels[i]+'='+v).join(', ')}\n月次損益: ${profArr.map((v,i)=>labels[i]+'='+(v>=0?'+':'')+v).join(', ')}\n黒字化達成月：${profArr.findIndex(p=>p>0)>=0?labels[profArr.findIndex(p=>p>0)]:'未達'}\n売上変動が大きい月の要因分析と、年間通じた黒字化戦略を提案してください。`;
+      return `NEO福岡の${currentSimYear}年度PLシミュレーション計画を分析し、改善提案を3〜5点の箇条書きで作成してください。\n年間売上試算:${annualRev.toLocaleString()}千円 / 年間損益試算:${annualProfit >= 0 ? '+' : '▲'}${Math.abs(annualProfit).toLocaleString()}千円 / 月次売上ピーク:${peakRev.toLocaleString()}千円 / 月次費用ピーク:${peakCost.toLocaleString()}千円\n月次売上: ${revArr.map((v,i)=>labels[i]+'='+v).join(', ')}\n月次損益: ${profArr.map((v,i)=>labels[i]+'='+(v>=0?'+':'')+v).join(', ')}\n黒字化達成月：${profArr.findIndex(p=>p>0)>=0?labels[profArr.findIndex(p=>p>0)]:'未達'}\n売上変動が大きい月の要因分析と、年間通じた黒字化戦略を提案してください。`;
     })(),
     'sim-cf': (() => {
       const months = getSimMonths();
@@ -6097,9 +6097,9 @@ async function genAI(type) {
       const balArr = months.map((_,i) => { bal += inArr[i]-outArr[i]; return bal; });
       const minBal = Math.min(...balArr);
       const shortMonths = balArr.map((b,i) => b<0 ? labels[i] : null).filter(Boolean);
-      return `NEO福岡の${currentSimYear}年度CFシミュレーション計画を分析し、資金繰り改善提案を3〜5点の箇条書きで作成してください。\n月初残高:${(SIM_DATA[currentSimYear].cf.cfOpenFirst||0).toLocaleString()}万円 / 最低残高:${minBal.toLocaleString()}万円 / 資金ショート月:${shortMonths.length>0?shortMonths.join(','):'なし'}\n月次入金: ${inArr.map((v,i)=>labels[i]+'='+v).join(', ')}\n月末残高: ${balArr.map((v,i)=>labels[i]+'='+(v>=0?'':'-')+Math.abs(v)).join(', ')}\n収入と支出のタイミングのズレや、資金ショートリスクへの対策、融資タイミングの最適化を提案してください。`;
+      return `NEO福岡の${currentSimYear}年度CFシミュレーション計画を分析し、資金繰り改善提案を3〜5点の箇条書きで作成してください。\n月初残高:${(SIM_DATA[currentSimYear].cf.cfOpenFirst||0).toLocaleString()}千円 / 最低残高:${minBal.toLocaleString()}千円 / 資金ショート月:${shortMonths.length>0?shortMonths.join(','):'なし'}\n月次入金: ${inArr.map((v,i)=>labels[i]+'='+v).join(', ')}\n月末残高: ${balArr.map((v,i)=>labels[i]+'='+(v>=0?'':'-')+Math.abs(v)).join(', ')}\n収入と支出のタイミングのズレや、資金ショートリスクへの対策、融資タイミングの最適化を提案してください。`;
     })(),
-    pdf: `NEO福岡の役員向け月次レポート用に生成してください。JSONで返してください: {"comment":"経営方針コメント300〜400字","actions":"重点課題3点の箇条書き"}\n累積売上:${cumRev.toLocaleString()}万円（予算比103%）/ 現金:5,371万円 / AI研修45名 / ヒーロー4名輩出 / 課題:採用・研修商品最終化`
+    pdf: `NEO福岡の役員向け月次レポート用に生成してください。JSONで返してください: {"comment":"経営方針コメント300〜400字","actions":"重点課題3点の箇条書き"}\n累積売上:${cumRev.toLocaleString()}千円（予算比103%）/ 現金:5,371万円 / AI研修45名 / ヒーロー4名輩出 / 課題:採用・研修商品最終化`
   };
 
   const boxMap = { weekly: 'weekly-ai-box', report: 'report-ai-box', 'sim-pl': 'sim-pl-ai', 'sim-cf': 'sim-cf-ai' };
@@ -6314,7 +6314,7 @@ function renderVersionList() {
       <div class="v-tag">v${versions.length - idx}${idx === 0 ? ' 　最新' : ''}</div>
       <div class="v-desc">${v.desc}</div>
       <div class="v-meta">
-        ${dt}　|　累積売上 ${revA.toLocaleString()}万円　|　現金 ${Math.round(cash/10).toLocaleString()}万円
+        ${dt}　|　累積売上 ${revA.toLocaleString()}千円　|　現金 ${Math.round(cash).toLocaleString()}千円
       </div>
       <div style="display:flex;gap:6px;margin-top:6px">
         <button class="btn" style="font-size:10px;padding:2px 8px" onclick="event.stopPropagation();previewVersion(${v.id})">👁 確認</button>
@@ -6348,13 +6348,13 @@ function previewVersion(id) {
       <div style="font-weight:700;color:var(--text);margin-bottom:4px">${yr}年度</div>
       <table style="width:100%;font-size:11px;border-collapse:collapse">
         <tr><td style="padding:3px 0;color:var(--text3)">売上（実績/予算）</td>
-            <td style="text-align:right">${revA.toLocaleString()}万 / ${revB.toLocaleString()}万円</td></tr>
+            <td style="text-align:right">${revA.toLocaleString()}千円 / ${revB.toLocaleString()}千円</td></tr>
         <tr><td style="padding:3px 0;color:var(--text3)">販管費（実績）</td>
-            <td style="text-align:right">${opexA.toLocaleString()}万円</td></tr>
+            <td style="text-align:right">${opexA.toLocaleString()}千円</td></tr>
         <tr><td style="padding:3px 0;color:var(--text3)">営業利益（実績）</td>
-            <td style="text-align:right;${opA>=0?'color:var(--tc-green)':'color:var(--tc-red)'}">${opA>=0?'+':'▲'}${Math.abs(opA).toLocaleString()}万円</td></tr>
+            <td style="text-align:right;${opA>=0?'color:var(--tc-green)':'color:var(--tc-red)'}">${opA>=0?'+':'▲'}${Math.abs(opA).toLocaleString()}千円</td></tr>
         <tr><td style="padding:3px 0;color:var(--text3)">現金残高（最新月）</td>
-            <td style="text-align:right">${Math.round(cash/10).toLocaleString()}万円</td></tr>
+            <td style="text-align:right">${Math.round(cash).toLocaleString()}千円</td></tr>
       </table>
     </div>`;
   }
@@ -6512,19 +6512,29 @@ window.addEventListener('load', async () => {
       console.log(`[init] ${cloudVers.length}件のバージョン履歴をクラウドから読み込みました`);
     }
   } catch(e) { console.warn('version sync failed:', e); }
-  // PLデータ単位チェック（万円→千円マイグレーション）
-  // 売上予算が1000未満ならまだ万円単位のデータ → ×10変換
+  // PLデータ単位チェック（旧万円データ→千円マイグレーション + 10倍超過データ→÷10修正）
+  const PL_KEYS = ['rev','labor','outsource','adv','gaichu','other',
+                   'cogs','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
   for (const yr of ['2025','2026']) {
     const plb = DB[yr]?.pl?.budget?.rev || [];
-    const pla = DB[yr]?.pl?.actual?.rev || [];
     const maxBudget = Math.max(...plb.filter(v=>v>0), 0);
+
     if (maxBudget > 0 && maxBudget < 1000) {
-      console.log('PLデータを万円→千円に移行:', yr, 'maxBudget:', maxBudget);
-      ['rev','labor','outsource','adv','gaichu','other',
-       'cogs','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'].forEach(k => {
+      // 旧万円単位データ → ×10して千円に変換
+      console.log('[migrate] 万円→千円:', yr, 'max:', maxBudget);
+      PL_KEYS.forEach(k => {
         if (DB[yr].pl.budget[k]) DB[yr].pl.budget[k] = DB[yr].pl.budget[k].map(v => Math.round((Number(v)||0)*10));
         if (DB[yr].pl.actual[k]) DB[yr].pl.actual[k] = DB[yr].pl.actual[k].map(v => Math.round((Number(v)||0)*10));
       });
+    } else if (maxBudget > 500000) {
+      // 予算売上が50万千円（=5億円）超 → 10倍されている可能性 → ÷10して修正
+      console.log('[migrate] 10倍超過データ→÷10:', yr, 'max:', maxBudget);
+      PL_KEYS.forEach(k => {
+        if (DB[yr].pl.budget[k]) DB[yr].pl.budget[k] = DB[yr].pl.budget[k].map(v => Math.round((Number(v)||0)/10));
+        if (DB[yr].pl.actual[k]) DB[yr].pl.actual[k] = DB[yr].pl.actual[k].map(v => Math.round((Number(v)||0)/10));
+      });
+      // 修正後にSupabaseへ即保存
+      setTimeout(() => saveDB(), 1000);
     }
   }
   try { await loadSimData(); } catch(e) { console.warn('loadSimData:', e); }
