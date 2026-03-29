@@ -110,54 +110,6 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
-      // ── バージョン履歴 読込 ──
-      case 'load_versions': {
-        const { data, error } = await supabase
-          .from('app_versions')
-          .select('version_id, description, saved_at, fiscal_year, db_snapshot, sim_snapshot')
-          .order('saved_at', { ascending: false })
-          .limit(30);
-        if (error) throw error;
-        return res.status(200).json({ ok: true, data: data || [] });
-      }
-
-      // ── バージョン履歴 保存 ──
-      case 'save_version': {
-        const { version_id, description, saved_at, fiscal_year, db_snapshot, sim_snapshot } = req.body;
-        const { error } = await supabase
-          .from('app_versions')
-          .upsert({
-            version_id,
-            description,
-            saved_at,
-            fiscal_year: fiscal_year || null,
-            db_snapshot,
-            sim_snapshot,
-          }, { onConflict: 'version_id' });
-        if (error) throw error;
-        // 30件超えたら古いものを削除
-        const { data: allVers } = await supabase
-          .from('app_versions')
-          .select('version_id')
-          .order('saved_at', { ascending: false });
-        if (allVers && allVers.length > 30) {
-          const toDelete = allVers.slice(30).map(v => v.version_id);
-          await supabase.from('app_versions').delete().in('version_id', toDelete);
-        }
-        return res.status(200).json({ ok: true });
-      }
-
-      // ── バージョン削除 ──
-      case 'delete_version': {
-        const { version_id } = req.body;
-        const { error } = await supabase
-          .from('app_versions')
-          .delete()
-          .eq('version_id', version_id);
-        if (error) throw error;
-        return res.status(200).json({ ok: true });
-      }
-
       default:
         return res.status(400).json({ error: `Unknown action: ${action}` });
     }
