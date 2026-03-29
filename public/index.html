@@ -3037,21 +3037,28 @@ function parseMFCsvDirect(csvText, targetMonths) {
   const rows = lines.map(parseRow);
   if (!rows.length) return null;
 
-  // ヘッダー行から月列インデックスを取得
+  // ヘッダー行から月列インデックスを取得（柔軟マッチング）
   const header = rows[0];
   const monthCols = {};
   const jpMonths = ['4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月'];
   header.forEach((h, i) => {
-    if (jpMonths.includes(h)) monthCols[h] = i;
+    // 空白・BOM・特殊文字を除去して照合
+    const clean = h.replace(/[\s\u00a0\ufeff\u3000]/g, '').trim();
+    if (jpMonths.includes(clean)) monthCols[clean] = i;
   });
 
   const availableMonths = Object.keys(monthCols);
-  if (!availableMonths.length) return null;
+  console.log('[parseMFCsvDirect] header:', header.slice(0,16));
+  console.log('[parseMFCsvDirect] availableMonths:', availableMonths);
+  if (!availableMonths.length) {
+    console.warn('[parseMFCsvDirect] 月列が見つかりません。ヘッダー:', header.slice(0,16).map(h=>JSON.stringify(h)));
+    return null;
+  }
 
   function getVal(row, month) {
     const col = monthCols[month];
     if (col === undefined || col >= row.length) return 0;
-    const v = row[col].replace(/,/g, '');
+    const v = (row[col] || '').replace(/[,\s\u00a0]/g, '');
     const n = parseFloat(v);
     return isNaN(n) ? 0 : Math.round(n);
   }
@@ -3108,13 +3115,16 @@ function parseMFCsvDirect(csvText, targetMonths) {
     const label = row[0] || '';
     const sub   = row[1] || '';
 
-    // 売上合計
-    if (label === '売上高合計') {
-      availableMonths.forEach(m => { acc[m].rev = getVal(row, m); });
+    // 売上合計（「売上高合計」または「売上合計」）
+    if (label === '売上高合計' || label === '売上合計' || label === '売上総利益') {
+      // 売上高合計を優先、なければ売上総利益（売上原価0の場合は同値）
+      if (label === '売上高合計' || (label !== '売上総利益' && !availableMonths.some(m => acc[m].rev > 0))) {
+        availableMonths.forEach(m => { if (!acc[m].rev || label === '売上高合計') acc[m].rev = getVal(row, m); });
+      }
     }
     // 販管費セクション検出
-    if (label === '販売費及び一般管理費') { inOpex = true; continue; }
-    if (label === '販売費及び一般管理費合計') {
+    if (label === '販売費及び一般管理費' || label === '販管費' || label === '販売管理費') { inOpex = true; continue; }
+    if (label === '販売費及び一般管理費合計' || label === '販管費合計' || label === '販売管理費合計') {
       availableMonths.forEach(m => { acc[m].opexTotal = getVal(row, m); });
       inOpex = false; continue;
     }
@@ -3154,7 +3164,7 @@ function parseMFCsvDirect(csvText, targetMonths) {
 // analyzeCSV が呼ばれたとき、まず直接パースを試みる
 // 成功すればAIを使わず即反映、失敗時のみAIにフォールバック
 async function tryDirectParse() {
-  if (!csvRawText || !csvParsed.length) return null;
+  if (!csvRawText) return null;
   if (document.getElementById('csv-type').value !== 'pl') return null; // PLのみ対応
 
   const months = getSelectedMonths();
@@ -3162,15 +3172,19 @@ async function tryDirectParse() {
 
   try {
     const parsed = parseMFCsvDirect(csvRawText, months);
-    if (!parsed || !Object.keys(parsed.data).length) return null;
+    if (!parsed || !Object.keys(parsed.data).length) {
+      console.warn('[tryDirectParse] パース結果が空。availableMonths:', parsed?.availableMonths);
+      return null;
+    }
 
     // 全対象月のデータが取れているか確認
     const found = months.filter(m => m in parsed.data);
+    console.log('[tryDirectParse] 要求月:', months, '取得月:', found);
     if (found.length === 0) return null;
 
     return parsed;
   } catch(e) {
-    console.warn('直接パース失敗:', e);
+    console.warn('[tryDirectParse] 直接パース例外:', e);
     return null;
   }
 }
@@ -3211,7 +3225,10 @@ async function analyzeCSV() {
       };
       direct.months.forEach(m => {
         const d = direct.data[m];
+        // other = CSV販管費合計 - 各科目の合計（千円）で逆算
+        // d.other は直接パース値（ACCOUNT_MAP外科目は含まれない可能性があるため逆算を使用）
         const otherCalc = d.opexTotal - d.labor - d.outsource - d.adv - d.gaichu;
+        console.log(`[Direct Parse] ${m}: opex=${d.opexTotal} labor=${d.labor} out=${d.outsource} adv=${d.adv} gc=${d.gaichu} other_calc=${otherCalc} other_direct=${d.other}`);
         parsedForPreview.months[m] = {
           pl: {
             rev:       d.rev,
@@ -3219,10 +3236,10 @@ async function analyzeCSV() {
             outsource: d.outsource,
             adv:       d.adv,
             gaichu:    d.gaichu,
-            other:     Math.max(0, otherCalc), // CSV合計からの逆算で残りをotherに
+            other:     Math.max(0, otherCalc),
           }
         };
-        log.innerHTML += `<span class="log-info">${MONTH_LABELS[m]||m}: 売上${d.rev.toLocaleString()}千円 / 人件費${d.labor.toLocaleString()}千円 / 委託${d.outsource.toLocaleString()}千円 / 広告${d.adv.toLocaleString()}千円</span>\n`;
+        log.innerHTML += `<span class="log-info">${MONTH_LABELS[m]||m}: 売上${d.rev.toLocaleString()}千円 / 人件費${d.labor.toLocaleString()}千円 / 委託${d.outsource.toLocaleString()}千円 / 広告${d.adv.toLocaleString()}千円 / その他${otherCalc.toLocaleString()}千円</span>\n`;
       });
 
       window._csvPendingResult = { parsed: parsedForPreview, months: direct.months, kind, csvType };
@@ -3256,13 +3273,19 @@ ${csvFull}
 【取込対象月】: ${monthsStr}
 【区分】: ${kind === 'actual' ? '実績' : '予算'}
 
-★★★ 単位変換ルール（必ず守ること）★★★
-- マネーフォワードのCSVは【円単位】で出力される
-- PL・CF・BSすべての数値を【千円に変換して整数】で返す
-  （例：3,000,000円 → 3,000千円 → 3000、141,000円 → 141千円 → 141）
-- 小数は切り捨て
-- PL・CF・BSすべて円÷1000で千円に変換（例：3,000,000円→3,000千円→3000）
-- 万円に換算しないこと（PLも千円単位で返す）
+★★★ 単位変換ルール（最重要・必ず守ること）★★★
+- CSVの数値は【円単位】（例：3,028,706 = 約302万円）
+- 返すJSONはすべて【千円単位の整数】に変換すること
+- 変換式：JSON値 = round(CSV値 ÷ 1000)
+- 具体例：
+    3,028,706円 → round(3028706÷1000) = 3029 → JSONに 3029 と書く
+    1,556,707円 → round(1556707÷1000) = 1557 → JSONに 1557 と書く
+    629,649円   → round(629649÷1000)  = 630  → JSONに 630 と書く
+    12,569,325円→ round(12569325÷1000)= 12569→ JSONに 12569 と書く
+- 絶対にやってはいけないこと：
+    × 3,028,706円をそのまま 3028706 とJSONに書く（円のまま）
+    × 万円変換して 302 と書く
+    × 10000で割って 302 と書く
 
 ★★★ 販管費の分類ルール（厳守）★★★
 【重要①】各科目は排他的に分類すること。1つの費用を複数科目に入れてはいけない（二重計上禁止）
@@ -3354,7 +3377,7 @@ ${csvFull}
 5. JSONのみ返す（前後の説明・コメント不要）`;
 
   try {
-    const raw = await callAI(prompt, 6000);
+    const raw = await callAI(prompt, 8000);
     const rawStr = (typeof raw === 'string' ? raw : JSON.stringify(raw))
       .replace(/```json|```/g, '')
       .replace(/\/\*[\s\S]*?\*\//g, '')
