@@ -4213,8 +4213,11 @@ function addSimRow(isRev, parentKey) {
   if (!label || !label.trim()) return;
   const key = 'custom_' + Date.now();
   if (!SIM_DATA[currentSimYear].customRows) SIM_DATA[currentSimYear].customRows = [];
+  // 原価科目への追加かどうかを判定
+  const COGS_PARENT_KEYS = new Set(['_cogsHead','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther']);
+  const isCogs = !isRev && parentKey && COGS_PARENT_KEYS.has(parentKey);
   SIM_DATA[currentSimYear].customRows.push({
-    key, label: label.trim(), isRev, isCost: !isRev,
+    key, label: label.trim(), isRev, isCost: !isRev, isCogs,
     parentKey: parentKey || null
   });
   buildSimPLTable();
@@ -4415,26 +4418,52 @@ function buildSimPLTable() {
   // ── 項目追加ボタンをテーブルの下に追加 ──
   const addArea = document.getElementById('sim-pl-add-area');
   if (addArea) {
-    const revParents  = PL_ROWS_BASE.filter(r => r.isRev && r.key !== 'rev');
-    const costParents = PL_ROWS_BASE.filter(r => r.isCost);
-    const revBtns  = revParents.map(r =>
+    // 原価科目キー（固定）
+    const COGS_KEYS = new Set(['_cogsHead','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther']);
+
+    // 売上親行（rev本体・計算行を除く）
+    const revParents = PL_ROWS_BASE.filter(r => r.isRev && r.key !== 'rev' && !r.isCalc);
+
+    // 原価親行（_cogsHeadとその子行 = 明細追加先として表示）
+    const cogsParents = PL_ROWS_BASE.filter(r => COGS_KEYS.has(r.key) && r.key !== '_cogsHead');
+
+    // 販管費親行（原価・計算行・セクション行を除くisCost）
+    const opexParents = PL_ROWS_BASE.filter(r =>
+      r.isCost && !COGS_KEYS.has(r.key) && !r.isSection && !r.isCalc
+    );
+
+    const revBtns = revParents.map(r =>
       `<button class="btn btn-g" style="font-size:10px;padding:3px 9px" onclick="addSimRow(true,'${r.key}')">＋ ${r.label}に追加</button>`
     ).join('');
-    const costBtns = costParents.map(r =>
+
+    // 原価ボタン：_cogsHeadに追加 + 各子行に追加
+    const cogsBtns = [
+      `<button class="btn" style="font-size:10px;padding:3px 9px;border-color:var(--tc-amber);color:var(--tc-amber)" onclick="addSimRow(false,'_cogsHead')">＋ NEOプログラム原価に追加</button>`,
+      ...cogsParents.map(r =>
+        `<button class="btn" style="font-size:10px;padding:3px 9px;border-color:rgba(239,159,39,0.4);color:var(--tc-amber)" onclick="addSimRow(false,'${r.key}')">＋ ${r.label}に追加</button>`
+      )
+    ].join('');
+
+    const opexBtns = opexParents.map(r =>
       `<button class="btn" style="font-size:10px;padding:3px 9px" onclick="addSimRow(false,'${r.key}')">＋ ${r.label}に追加</button>`
     ).join('');
+
     const hint = getCustomRows(currentSimYear).length > 0
       ? '<span style="font-size:10px;color:var(--text3);margin-left:4px">追加済み項目は行の × で削除</span>' : '';
+
     addArea.innerHTML = `
       <div style="margin-top:10px;padding:10px 12px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border)">
         <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px">📌 明細項目を追加</div>
-        <div style="margin-bottom:6px">
-          <span style="font-size:10px;color:var(--tc-green);font-weight:700;margin-right:6px">売上</span>${revBtns}
-          <button class="btn btn-g" style="font-size:10px;padding:3px 9px;margin-left:8px;opacity:.7" onclick="addSimRow(true,null)">＋ 売上（独立）</button>
+        <div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+          <span style="font-size:10px;color:var(--tc-green);font-weight:700;margin-right:2px">売上</span>${revBtns}
+          <button class="btn btn-g" style="font-size:10px;padding:3px 9px;opacity:.7" onclick="addSimRow(true,null)">＋ 売上（独立）</button>
         </div>
-        <div>
-          <span style="font-size:10px;color:var(--tc-red);font-weight:700;margin-right:6px">費用</span>${costBtns}
-          <button class="btn" style="font-size:10px;padding:3px 9px;margin-left:8px;opacity:.7" onclick="addSimRow(false,null)">＋ 費用（独立）</button>
+        <div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+          <span style="font-size:10px;color:var(--tc-amber);font-weight:700;margin-right:2px">原価</span>${cogsBtns}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+          <span style="font-size:10px;color:var(--tc-red);font-weight:700;margin-right:2px">販管費</span>${opexBtns}
+          <button class="btn" style="font-size:10px;padding:3px 9px;opacity:.7" onclick="addSimRow(false,null)">＋ 費用（独立）</button>
         </div>
         ${hint}
       </div>`;
@@ -4505,43 +4534,47 @@ function recalcSimPL() {
 
   const plRowsCur = getPLRows();
 
-  // ── キー分類（isSection/_cogsHead/_grossProfit などの計算行は除外）──
-  const CALC_KEYS = ['rev','_cogsHead','_grossProfit']; // 自動計算行・セクション行
-  const COGS_PARENT_KEY = '_cogsHead';
+  // ── キー分類 ──
+  // 計算行・セクション行（値を持たない行）
+  const CALC_KEYS = new Set(['rev','_cogsHead','_grossProfit']);
 
-  // 原価の子行キー（_cogsHeadを親に持つ行、またはcogsXxxキー）
-  const cogsChildKeys = plRowsCur
-    .filter(r => r.parentKey === COGS_PARENT_KEY || r.key.startsWith('cogs'))
-    .filter(r => !CALC_KEYS.includes(r.key))
+  // 原価の実データ行（_cogsHeadの直接の子行）
+  const COGS_DIRECT_CHILDREN = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+
+  // 売上トップ行：isRevでparentKeyなし（rev本体と計算行を除く）
+  const topRevKeys = plRowsCur
+    .filter(r => r.isRev && !CALC_KEYS.has(r.key) && !r.parentKey)
     .map(r => r.key);
 
-  // 売上トップ行（rev以外・isRev・parentKeyなし）
-  const topRevKeys = plRowsCur.filter(r =>
-    r.isRev && !CALC_KEYS.includes(r.key) && !r.parentKey
-  ).map(r => r.key);
+  // 原価行：固定5科目 ＋ 原価系の親を持つカスタム行（isCogs）
+  const COGS_PARENT_KEYS_SET = new Set(['_cogsHead','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther']);
+  const cogsKeys = plRowsCur
+    .filter(r =>
+      COGS_DIRECT_CHILDREN.includes(r.key) ||
+      r.parentKey === '_cogsHead' ||
+      r.isCogs === true
+    )
+    .map(r => r.key);
 
-  // 販管費トップ行（原価子行・計算行を除いたisCost・parentKeyなし）
-  const topOpexKeys = plRowsCur.filter(r =>
-    r.isCost &&
-    !CALC_KEYS.includes(r.key) &&
-    !r.isSection &&
-    !cogsChildKeys.includes(r.key) &&
-    r.key !== COGS_PARENT_KEY &&
-    !r.parentKey
-  ).map(r => r.key);
-
-  // 原価トップ行（_cogsHeadは集計専用なので子行のトップレベルのみ）
-  // _cogsHeadに直接子行がある場合はそれを使う、なければcogsChildKeysのうちparentKeyなしのもの
-  const cogsTopKeys = plRowsCur.filter(r =>
-    cogsChildKeys.includes(r.key) && !r.parentKey
-  ).map(r => r.key);
+  // 販管費トップ行：isCostでparentKeyなし、かつ原価行・計算行・セクション行・isCogs行を除く
+  const topOpexKeys = plRowsCur
+    .filter(r =>
+      r.isCost &&
+      !CALC_KEYS.has(r.key) &&
+      !r.isSection &&
+      !r.parentKey &&
+      !cogsKeys.includes(r.key) &&
+      !r.isCogs
+    )
+    .map(r => r.key);
 
   // 集計
   const revArr = Array.from({length: N}, (_, i) =>
     topRevKeys.reduce((sum, k) => sum + getEffectiveSimVal(k, i), 0)
   );
+  // 原価：子行を直接合計（_cogsHeadのgetEffectiveSimValと同等）
   const cogsArr = Array.from({length: N}, (_, i) =>
-    cogsTopKeys.reduce((sum, k) => sum + getEffectiveSimVal(k, i), 0)
+    cogsKeys.reduce((sum, k) => sum + getSimVal('pl', k, i), 0)
   );
   const gpArr = revArr.map((r, i) => r - cogsArr[i]);
   const costArr = Array.from({length: N}, (_, i) =>
@@ -5189,10 +5222,12 @@ function openBudgetModal() {
     const _allRows = getPLRows();
     const _revRows = _allRows.filter(r => r.isRev && r.key !== 'rev' && !r.parentKey);
     const rev = _revRows.reduce((s,r) => s + getEffectiveSimVal(r.key, i), 0);
-    // 原価：_cogsHeadの子行（cogsXxx）のトップレベルのみ集計
-    const _allRowsMod = getPLRows();
-    const COGS_CK = _allRowsMod.filter(r => r.key.startsWith('cogs') && !r.key.includes('Head') && !r.parentKey).map(r=>r.key);
-    const cogs = COGS_CK.reduce((t,k) => t + getEffectiveSimVal(k, i), 0);
+    // 原価：固定5科目 + _cogsHeadの子カスタム行
+    const _cogsRows = getPLRows().filter(r =>
+      ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'].includes(r.key) ||
+      r.parentKey === '_cogsHead'
+    );
+    const cogs = _cogsRows.reduce((t,r) => t + getSimVal('pl', r.key, i), 0);
     const gp   = rev - cogs;
     const _opexRows = getPLRows().filter(r => r.isCost && !cogsKeys.includes(r.key) && !r.parentKey);
     const opex = _opexRows.reduce((s,r) => s + getEffectiveSimVal(r.key, i), 0);
