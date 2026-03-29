@@ -4503,37 +4503,49 @@ function recalcSimPL() {
   const months = getSimMonths();
   const N = months.length;
 
-  // 売上合計 = 固定売上行 + カスタム売上行
   const plRowsCur = getPLRows();
-  const revKeys   = plRowsCur.filter(r => r.isRev  && r.key !== 'rev').map(r => r.key);
-  const cogsKeysSim = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
-  const opexKeys  = plRowsCur.filter(r => r.isCost && !cogsKeysSim.includes(r.key)).map(r => r.key);
-  const allCostKeys = plRowsCur.filter(r => r.isCost).map(r => r.key);
 
-  // 集計ルール：
-  //   トップレベル行（parentKeyなし）を基本単位として集計
-  //   子行（parentKeyあり）は親行の getEffectiveSimVal で自動集計されるため個別加算しない
-  //   子行を持つ親行 → getEffectiveSimVal = 子行の合計
-  //   子行のない親行 → getEffectiveSimVal = 直接入力値
+  // ── キー分類（isSection/_cogsHead/_grossProfit などの計算行は除外）──
+  const CALC_KEYS = ['rev','_cogsHead','_grossProfit']; // 自動計算行・セクション行
+  const COGS_PARENT_KEY = '_cogsHead';
 
-  // 売上：トップレベル行のみ（parentKeyなし、rev本体を除く）
-  const topRevKeys  = revKeys.filter(k => !plRowsCur.find(r => r.key === k)?.parentKey);
+  // 原価の子行キー（_cogsHeadを親に持つ行、またはcogsXxxキー）
+  const cogsChildKeys = plRowsCur
+    .filter(r => r.parentKey === COGS_PARENT_KEY || r.key.startsWith('cogs'))
+    .filter(r => !CALC_KEYS.includes(r.key))
+    .map(r => r.key);
+
+  // 売上トップ行（rev以外・isRev・parentKeyなし）
+  const topRevKeys = plRowsCur.filter(r =>
+    r.isRev && !CALC_KEYS.includes(r.key) && !r.parentKey
+  ).map(r => r.key);
+
+  // 販管費トップ行（原価子行・計算行を除いたisCost・parentKeyなし）
+  const topOpexKeys = plRowsCur.filter(r =>
+    r.isCost &&
+    !CALC_KEYS.includes(r.key) &&
+    !r.isSection &&
+    !cogsChildKeys.includes(r.key) &&
+    r.key !== COGS_PARENT_KEY &&
+    !r.parentKey
+  ).map(r => r.key);
+
+  // 原価トップ行（_cogsHeadは集計専用なので子行のトップレベルのみ）
+  // _cogsHeadに直接子行がある場合はそれを使う、なければcogsChildKeysのうちparentKeyなしのもの
+  const cogsTopKeys = plRowsCur.filter(r =>
+    cogsChildKeys.includes(r.key) && !r.parentKey
+  ).map(r => r.key);
+
+  // 集計
   const revArr = Array.from({length: N}, (_, i) =>
-    topRevKeys.reduce((sum, key) => sum + getEffectiveSimVal(key, i), 0)
+    topRevKeys.reduce((sum, k) => sum + getEffectiveSimVal(k, i), 0)
   );
-
-  // 原価：トップレベル行のみ
-  const topCogsKeys = cogsKeysSim.filter(k => !plRowsCur.find(r => r.key === k)?.parentKey);
   const cogsArr = Array.from({length: N}, (_, i) =>
-    topCogsKeys.reduce((sum, key) => sum + getEffectiveSimVal(key, i), 0)
+    cogsTopKeys.reduce((sum, k) => sum + getEffectiveSimVal(k, i), 0)
   );
-
   const gpArr = revArr.map((r, i) => r - cogsArr[i]);
-
-  // 販管費：トップレベル行のみ
-  const topOpexKeys = opexKeys.filter(k => !plRowsCur.find(r => r.key === k)?.parentKey);
   const costArr = Array.from({length: N}, (_, i) =>
-    topOpexKeys.reduce((sum, key) => sum + getEffectiveSimVal(key, i), 0) + cogsArr[i]
+    topOpexKeys.reduce((sum, k) => sum + getEffectiveSimVal(k, i), 0) + cogsArr[i]
   );
   // 月次損益 = 粗利 - 販管費
   const profitArr = gpArr.map((g, i) => g - (costArr[i] - cogsArr[i]));
@@ -4602,7 +4614,7 @@ function recalcSimPL() {
     } else if (row.key === '_cogsHead') {
       const sv = cogsArr.reduce((a, b) => a + b, 0);
       el.textContent = sv ? sv.toLocaleString() : '—';
-      el.style.color = 'var(--tc-amber)';
+      el.style.color = sv ? 'var(--tc-amber)' : '';
     } else if (row.key === '_grossProfit') {
       const sv = gpArr.reduce((a, b) => a + b, 0);
       el.textContent = sv > 0 ? `+${sv.toLocaleString()}` : sv < 0 ? `▲${Math.abs(sv).toLocaleString()}` : '—';
@@ -5177,7 +5189,10 @@ function openBudgetModal() {
     const _allRows = getPLRows();
     const _revRows = _allRows.filter(r => r.isRev && r.key !== 'rev' && !r.parentKey);
     const rev = _revRows.reduce((s,r) => s + getEffectiveSimVal(r.key, i), 0);
-    const cogs = cogsKeys.reduce((t,k) => t+(hasChildren(k)?getEffectiveSimVal(k,i):getSimVal('pl',k,i)), 0);
+    // 原価：_cogsHeadの子行（cogsXxx）のトップレベルのみ集計
+    const _allRowsMod = getPLRows();
+    const COGS_CK = _allRowsMod.filter(r => r.key.startsWith('cogs') && !r.key.includes('Head') && !r.parentKey).map(r=>r.key);
+    const cogs = COGS_CK.reduce((t,k) => t + getEffectiveSimVal(k, i), 0);
     const gp   = rev - cogs;
     const _opexRows = getPLRows().filter(r => r.isCost && !cogsKeys.includes(r.key) && !r.parentKey);
     const opex = _opexRows.reduce((s,r) => s + getEffectiveSimVal(r.key, i), 0);
@@ -5273,11 +5288,11 @@ async function commitBudget() {
     const simTo千 = (v) => Math.round(v * 10);
     d.pl.budget.rev[idx] = simTo千(rev);
 
-    // PL原価（NEOプログラム原価）
+    // PL原価（NEOプログラム原価）- 固定5科目のみ書き込み
     const cogsSimKeys = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
     cogsSimKeys.forEach(key => {
       if (!d.pl.budget[key]) d.pl.budget[key] = [];
-      d.pl.budget[key][idx] = simTo千(getSimVal('pl', key, i));
+      d.pl.budget[key][idx] = simTo千(getEffectiveSimVal(key, i));
     });
 
     // PL販管費
