@@ -2330,7 +2330,7 @@ function renderCFView(d) {
     { label:'月末残高',         bArr:bCloseCalc, aArr:aCloseCalc, noSum:true, edAKey:'actual.cfClose', isTot:true },
 
     // ── NEOプログラム原価（折りたたみ）──
-    { label:'── NEOプログラム原価', section:true, colId:'cf-sec-cogs' },
+    { label:'── 原価', section:true, colId:'cf-sec-cogs' },
     { label:'原価合計', bArr:Array.from({length:N},(_,i)=>['cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'].reduce((t,k)=>t+(Number((cfArr('budget',k)||[])[i])||0),0)), aArr:Array.from({length:N},(_,i)=>['cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'].reduce((t,k)=>t+(Number((cfArr('actual',k)||[])[i])||0),0)), isTot:true, isOut:true, noDiff:false, subColId:'cf-sec-cogs-d' },
     R('　　ホームルーム',  'cogsHomeroomPay', 'cogsHomeroomPay', {isSub:true, isOut:true, colGroup:'cf-sec-cogs-d'}),
     R('　　評議会',        'cogsHyogikaiPay', 'cogsHyogikaiPay', {isSub:true, isOut:true, colGroup:'cf-sec-cogs-d'}),
@@ -4110,7 +4110,7 @@ const PL_ROWS_BASE = [
   { key: 'training',       label: '研修売上',             color: '#378ADD', indent: true, isRev: true },
   { key: 'event',          label: 'イベント・その他',     color: '#378ADD', indent: true, isRev: true },
   // ── NEOプログラム原価 ──
-  { key: '_cogsHead',      label: 'NEOプログラム原価',   color: '#EF9F27', isCost: true, isSection: true },
+  { key: '_cogsHead',      label: '原価',               color: '#EF9F27', isCost: true, isSection: true },
   { key: 'cogsHomeroom',   label: 'ホームルーム',         color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
   { key: 'cogsHyogikai',   label: '評議会',               color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
   { key: 'cogsOenKaigi',   label: '応援カイギ',           color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
@@ -4436,13 +4436,10 @@ function buildSimPLTable() {
       `<button class="btn btn-g" style="font-size:10px;padding:3px 9px" onclick="addSimRow(true,'${r.key}')">＋ ${r.label}に追加</button>`
     ).join('');
 
-    // 原価ボタン：_cogsHeadに追加 + 各子行に追加
-    const cogsBtns = [
-      `<button class="btn" style="font-size:10px;padding:3px 9px;border-color:var(--tc-amber);color:var(--tc-amber)" onclick="addSimRow(false,'_cogsHead')">＋ NEOプログラム原価に追加</button>`,
-      ...cogsParents.map(r =>
-        `<button class="btn" style="font-size:10px;padding:3px 9px;border-color:rgba(239,159,39,0.4);color:var(--tc-amber)" onclick="addSimRow(false,'${r.key}')">＋ ${r.label}に追加</button>`
-      )
-    ].join('');
+    // 原価ボタン：各原価子行に追加のみ（_cogsHead直接追加は削除）
+    const cogsBtns = cogsParents.map(r =>
+      `<button class="btn" style="font-size:10px;padding:3px 9px;border-color:rgba(239,159,39,0.4);color:var(--tc-amber)" onclick="addSimRow(false,'${r.key}')">＋ ${r.label}に追加</button>`
+    ).join('');
 
     const opexBtns = opexParents.map(r =>
       `<button class="btn" style="font-size:10px;padding:3px 9px" onclick="addSimRow(false,'${r.key}')">＋ ${r.label}に追加</button>`
@@ -4543,29 +4540,31 @@ function recalcSimPL() {
   const topOpexKeys = [];
 
   for (const r of plRowsCur) {
-    // スキップ（セクション行・計算行）
     if (SKIP_ROW_KEYS.has(r.key) || r.isSection || r.isCalc) continue;
 
     if (r.isRev) {
-      // 売上：トップ行（parentKeyなし）のみ集計
+      // 売上：トップ行（parentKeyなし）のみ
       if (!r.parentKey) topRevKeys.push(r.key);
 
-    } else if (FIXED_COGS_KEYS.includes(r.key) || r.isCogs === true) {
-      // 原価：固定5科目 ＋ isCogs付きカスタム行
+    } else if (FIXED_COGS_KEYS.includes(r.key)) {
+      // 原価：固定5科目のみ（カスタム子行は getEffectiveSimVal が内部で集計）
       cogsKeys.push(r.key);
 
-    } else if (r.isCost && !r.parentKey) {
-      // 販管費：parentKeyなしのトップ行
+    } else if (r.isCost && !r.parentKey && !r.isCogs) {
+      // 販管費：parentKeyなしかつ原価でないisCost行
       topOpexKeys.push(r.key);
     }
+    // isCogs:true のカスタム原価行は cogsKeys に入れない
+    // → FIXED_COGS 親行の getEffectiveSimVal で自動集計される
   }
 
   // 集計
   const revArr = Array.from({length: N}, (_, i) =>
     topRevKeys.reduce((sum, k) => sum + getEffectiveSimVal(k, i), 0)
   );
+  // 原価：各原価親行の実効値（子行があれば子行合計、なければ直接入力）
   const cogsArr = Array.from({length: N}, (_, i) =>
-    cogsKeys.reduce((sum, k) => sum + getSimVal('pl', k, i), 0)
+    cogsKeys.reduce((sum, k) => sum + getEffectiveSimVal(k, i), 0)
   );
   const gpArr  = revArr.map((r, i) => r - cogsArr[i]);
   const costArr = Array.from({length: N}, (_, i) =>
