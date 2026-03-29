@@ -629,12 +629,18 @@ td.actual.editable-cell {
   <div id="import-csv" style="display:none">
     <div class="g2">
       <div class="card">
-        <div class="ct">マネーフォワード CSV取込</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:.75rem">
+          <div class="ct" style="margin:0">ファイル取込</div>
+          <div class="pa-toggle" style="margin:0">
+            <button class="pa-btn active" id="import-mode-mf"   onclick="setImportMode('mf',this)">📊 MF CSV（PL）</button>
+            <button class="pa-btn"        id="import-mode-mizuho" onclick="setImportMode('mizuho',this)">🏦 みずほ API（CF）</button>
+          </div>
+        </div>
         <div class="upload-zone" id="drop-zone" ondragover="onDrag(event,true)" ondragleave="onDrag(event,false)" ondrop="onDrop(event)">
-          <input type="file" accept=".csv" onchange="onFileSelect(event)">
+          <input type="file" id="import-file-input" accept=".csv,.api" onchange="onFileSelect(event)">
           <div class="uz-icon">📄</div>
           <div class="uz-title">CSVファイルをドロップ または クリックして選択</div>
-          <div class="uz-sub">マネーフォワード クラウド会計の月次PL/BS CSVに対応</div>
+          <div class="uz-sub" id="uz-sub-text">マネーフォワード クラウド会計の月次PL/BS CSVに対応</div>
           <div id="csv-encoding-info" style="font-size:10px;color:var(--tc-blue);margin-top:4px"></div>
         </div>
         <div class="section-lbl" style="margin-top:.875rem">取込設定</div>
@@ -691,7 +697,7 @@ td.actual.editable-cell {
           </div>
         </div>
         <div class="btn-row">
-          <button class="btn btn-p" id="csv-analyze-btn" onclick="analyzeCSV()" disabled>🤖 AIで解析</button>
+          <button class="btn btn-p" id="csv-analyze-btn" onclick="analyzeCSV()" disabled>🔍 解析</button>
           <button class="btn" onclick="clearCSV()">🗑 クリア</button>
         </div>
         <div id="import-log" class="import-log" style="display:none"></div>
@@ -3251,6 +3257,178 @@ function getSelectedMonths() {
 // ═══════════════════════════════════════════
 
 // CSVテキストから月別データを直接抽出
+// ════════════════════════════════════
+//  みずほ API ファイル パーサー
+// ════════════════════════════════════
+let _importMode = 'mf'; // 'mf' | 'mizuho'
+
+function setImportMode(mode, el) {
+  _importMode = mode;
+  document.querySelectorAll('#import-mode-mf, #import-mode-mizuho').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  const sub = document.getElementById('uz-sub-text');
+  const input = document.getElementById('import-file-input');
+  const csvTypeRow = document.querySelector('#csv-type')?.closest('.fg');
+  if (mode === 'mizuho') {
+    if (sub) sub.textContent = 'みずほ銀行 APIファイル（.api）をドロップ または クリックして選択';
+    if (input) input.accept = '.api';
+    if (csvTypeRow) csvTypeRow.style.display = 'none';
+  } else {
+    if (sub) sub.textContent = 'マネーフォワード クラウド会計の月次PL/BS CSVに対応';
+    if (input) input.accept = '.csv,.api';
+    if (csvTypeRow) csvTypeRow.style.display = '';
+  }
+  clearCSV();
+}
+
+// みずほAPIファイルをパース → 月別 cfIn/cfOut を返す
+function parseMizuhoAPI(text, targetMonths) {
+  const rawLines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.length > 0);
+  const lines = rawLines;
+
+  // ヘッダー行（項目名称 で始まる行）を探す
+  let header = null;
+  for (const line of lines) {
+    if (line.startsWith('項目名称')) {
+      header = line.split('\t');
+      break;
+    }
+  }
+  if (!header) return null;
+
+  // カラムインデックス取得
+  const COL = {};
+  header.forEach((h, i) => { COL[h.trim()] = i; });
+
+  const monthCol    = COL['月'];       // '04'
+  const torihikiCol = COL['取引名'];   // '出金'/'振込入金'
+  const kingakuCol  = COL['金額'];     // '00000033000'
+  const tekiyoCol   = COL['摘要'];
+
+  if (monthCol === undefined || torihikiCol === undefined || kingakuCol === undefined) return null;
+
+  // 年度の月コードと月番号のマッピング
+  // targetMonths例: ['2604','2605',...] → 04,05,...
+  const monthCodeMap = {}; // '04' → '2604'
+  targetMonths.forEach(code => {
+    const mNum = String(code).slice(2); // '2604' → '04'
+    monthCodeMap[mNum] = code;
+  });
+
+  // 月別集計
+  const result = {};
+  targetMonths.forEach(code => {
+    result[code] = { cfIn: 0, cfOut: 0, details: [] };
+  });
+
+  const meiLines = lines.filter(l => l.startsWith('明細'));
+  for (const line of meiLines) {
+    const row = line.split('\t');
+    const month     = (row[monthCol]    || '').trim();
+    const torihiki  = (row[torihikiCol] || '').trim();
+    const kingakuStr= (row[kingakuCol]  || '').trim();
+    const tekiyo    = (row[tekiyoCol]   || '').trim();
+    const kingaku   = parseInt(kingakuStr) || 0;
+
+    const code = monthCodeMap[month];
+    if (!code || !result[code]) continue;
+
+    if (torihiki.includes('入金') || torihiki.includes('振込入金')) {
+      result[code].cfIn += kingaku;
+    } else if (torihiki.includes('出金') || torihiki.includes('引落') || torihiki.includes('自動払')) {
+      result[code].cfOut += kingaku;
+    }
+  }
+
+  // 千円に変換
+  const converted = {};
+  targetMonths.forEach(code => {
+    if (result[code]) {
+      converted[code] = {
+        cfIn:  Math.round(result[code].cfIn  / 1000),
+        cfOut: Math.round(result[code].cfOut / 1000),
+      };
+    }
+  });
+
+  return { months: targetMonths.filter(m => converted[m]), data: converted };
+}
+
+// みずほAPIファイルの確認テーブルを描画
+function renderMizuhoConfirmTable(parsed, months) {
+  const el = document.getElementById('csv-confirm-card');
+  if (!el) return;
+
+  let html = `<div style="margin-top:1rem">
+    <div style="font-size:11px;font-weight:700;margin-bottom:.5rem">📋 取込内容確認（CF実績 — 千円）</div>
+    <table class="dt" style="width:100%;font-size:11px">
+      <thead><tr>
+        <th class="l">科目</th>`;
+  months.forEach(m => { html += `<th>${MONTH_LABELS[m] || m}</th>`; });
+  html += `<th>合計</th></tr></thead><tbody>`;
+
+  const rows = [
+    { key: 'cfIn',  label: '入金合計', color: 'var(--tc-green)' },
+    { key: 'cfOut', label: '出金合計', color: 'var(--tc-red)'   },
+    { key: 'net',   label: '純キャッシュフロー', color: 'var(--tc-blue)', isTot: true },
+  ];
+
+  rows.forEach(row => {
+    let total = 0;
+    html += `<tr><td class="l" style="font-weight:${row.isTot?'700':'400'}">${row.label}</td>`;
+    months.forEach(m => {
+      const d = parsed.data[m];
+      const v = row.key === 'net' ? (d.cfIn - d.cfOut) : d[row.key];
+      total += v;
+      const disp = v.toLocaleString();
+      const color = row.key === 'net' ? (v >= 0 ? 'var(--tc-green)' : 'var(--tc-red)') : row.color;
+      html += `<td style="color:${color}">${v !== 0 ? disp : '—'}</td>`;
+    });
+    html += `<td style="font-weight:700;color:${row.key === 'net' ? (total>=0?'var(--tc-green)':'var(--tc-red)') : row.color}">${total.toLocaleString()}</td></tr>`;
+  });
+
+  html += `</tbody></table>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn btn-p" onclick="commitMizuhoImport()" style="font-weight:700">✅ CFデータとして本番反映</button>
+      <button class="btn" onclick="clearCSV()">キャンセル</button>
+    </div>
+  </div>`;
+
+  el.innerHTML = html;
+  el.style.display = '';
+}
+
+// みずほデータをCFに反映
+async function commitMizuhoImport() {
+  const pending = window._mizuhoPending;
+  if (!pending) return;
+
+  const { parsed, months } = pending;
+  const yr = currentYear;
+  const d = DB[yr];
+
+  // 自動バックアップ
+  saveVersion(`[自動バックアップ] みずほAPI反映前 — ${months.map(m=>MONTH_LABELS[m]||m).join('・')}`, yr);
+
+  months.forEach(m => {
+    const idx = d.months.indexOf(m);
+    if (idx === -1) return;
+    const data = parsed.data[m];
+    if (!data) return;
+    // cfIn（入金合計）
+    if (!d.cf.actual.cfIn)    d.cf.actual.cfIn    = Array(12).fill('');
+    if (!d.cf.actual.cfClose) d.cf.actual.cfClose = Array(12).fill('');
+    d.cf.actual.cfIn[idx] = data.cfIn;
+    // cfCloseは累積計算のためここでは設定しない（CF画面で手動入力）
+  });
+
+  DB[yr] = d;
+  await forceSave();
+  alert(`✅ ${months.map(m=>MONTH_LABELS[m]||m).join('・')} のCF入金データを反映しました`);
+  clearCSV();
+  renderPLCF();
+}
+
 function parseMFCsvDirect(csvText, targetMonths) {
   // 行をパース（クォート対応）
   function parseRow(line) {
@@ -3406,6 +3584,131 @@ function parseMFCsvDirect(csvText, targetMonths) {
   return { months: useMonths, data: result, availableMonths };
 }
 
+// ════════════════════════════════════════
+//  みずほ銀行 CSV → CF 直接パーサー
+// ════════════════════════════════════════
+
+// みずほBizダイレクトのCSV列定義
+// 形式A（標準）: 取引日,摘要,支払金額,預り金額,残高
+// 形式B（詳細）: 取引日,摘要,支払金額,預り金額,残高,メモ
+
+function guessCFCategory(desc) {
+  const d = desc.toLowerCase().replace(/\s/g,'').replace(/[　]/g,'');
+
+  // 入金系
+  if (/会費|membership|メンバーシップ/.test(d)) return { key: 'cfInFee',       dir: 'in',  label: '会費入金' };
+  if (/研修|training|セミナー|workshop/.test(d))  return { key: 'cfInTraining',  dir: 'in',  label: '研修入金' };
+  if (/売上|入金|振込入金|うりあげ/.test(d))        return { key: 'cfIn',          dir: 'in',  label: '売上入金' };
+  if (/借入|融資|ローン着金/.test(d))              return { key: 'loanIn',        dir: 'in',  label: '借入金' };
+  if (/資本金|払込|出資/.test(d))                  return { key: 'capitalIn',     dir: 'in',  label: '資本金' };
+
+  // 支払系 — 人件費
+  if (/給与|給料|賞与|役員報酬|社会保険|社保|厚生年金|雇用保険/.test(d))
+    return { key: 'salaryPay', dir: 'out', label: '給与・社保' };
+
+  // 業務委託
+  if (/業務委託|外部委託|フリーランス|ギグ/.test(d))
+    return { key: 'bizComPay', dir: 'out', label: '業務委託' };
+
+  // 専門家
+  if (/顧問|弁護士|税理士|社労士|報酬/.test(d))
+    return { key: 'expertPay', dir: 'out', label: '専門家報酬' };
+
+  // 家賃
+  if (/家賃|地代|賃料|rent/.test(d))
+    return { key: 'rentPay', dir: 'out', label: '家賃' };
+
+  // 通信
+  if (/ntt|softbank|ソフトバンク|docomo|kddi|通信|電話|インターネット/.test(d))
+    return { key: 'telPay', dir: 'out', label: '通信費' };
+
+  // ツール
+  if (/aws|azure|google|slack|zoom|notion|adobe|salesforce|サブスク|クラウド/.test(d))
+    return { key: 'toolsPay', dir: 'out', label: 'ツール' };
+
+  // 広告
+  if (/広告|facebook|meta|instagram|twitter|google ads|yahoo|媒体/.test(d))
+    return { key: 'adSportsPay', dir: 'out', label: '広告費' };
+
+  // 採用
+  if (/indeed|wantedly|採用|求人|リクルート/.test(d))
+    return { key: 'recruitPay', dir: 'out', label: '採用費' };
+
+  // 借入返済
+  if (/返済|弁済|loanout/.test(d))
+    return { key: 'loanOut', dir: 'out', label: '借入返済' };
+
+  // 投資
+  if (/設備|投資|固定資産/.test(d))
+    return { key: 'investPay', dir: 'out', label: '設備投資' };
+
+  // 経費精算・カード
+  if (/経費|精算|card|カード|visa|master|アメックス|amex/.test(d))
+    return { key: 'expensePay', dir: 'out', label: '経費精算' };
+
+  // 交際費
+  if (/交際|接待|会議|restaurant|レストラン/.test(d))
+    return { key: 'entertainPay', dir: 'out', label: '交際費' };
+
+  // 税金
+  if (/税|印紙|国税|都税|市税|県税/.test(d))
+    return { key: 'taxPay', dir: 'out', label: '税金' };
+
+  // 消耗品
+  if (/消耗|備品|文具|amazon|アマゾン|モノタロウ/.test(d))
+    return { key: 'suppliesPay', dir: 'out', label: '消耗品' };
+
+  // デフォルト
+  return { key: 'salesOtherPay', dir: 'out', label: 'その他（要確認）' };
+}
+
+// みずほCSVをCF月次データに集計
+function aggregateMizuhoToMonthly(transactions, targetMonths) {
+  // 月コード → {cfIn, cfInFee, cfInTraining, cfInOther, salaryPay, ...残高}
+  const monthly = {};
+  targetMonths.forEach(m => {
+    monthly[m] = {
+      open: 0, cfClose: 0,
+      cfIn: 0, cfInFee: 0, cfInTraining: 0, cfInOther: 0,
+      salaryPay: 0, devOutPay: 0, bizComPay: 0, incentivePay: 0,
+      expertPay: 0, rentPay: 0, expensePay: 0, telPay: 0,
+      entertainPay: 0, taxPay: 0, toolsPay: 0, suppliesPay: 0,
+      adSportsPay: 0, eventCostPay: 0, recruitPay: 0, annualFeePay: 0,
+      salesOtherPay: 0, investPay: 0, loanIn: 0, loanOut: 0,
+      capitalIn: 0, warrantPay: 0, finOtherPay: 0,
+      rows: [] // 明細（確認テーブル用）
+    };
+  });
+
+  for (const tx of transactions) {
+    const m = monthly[tx.monthCode];
+    if (!m) continue; // 対象月外
+
+    const cat = guessCFCategory(tx.desc);
+    const amt = tx.recvAmt > 0 ? tx.recvAmt : tx.payAmt;
+    const amtK = Math.round(amt / 1000); // 円→千円
+
+    if (tx.recvAmt > 0) {
+      // 入金
+      m.cfIn += amtK;
+      if (cat.key === 'cfInFee')      m.cfInFee      += amtK;
+      else if (cat.key === 'cfInTraining') m.cfInTraining += amtK;
+      else if (cat.key === 'loanIn')  m.loanIn       += amtK;
+      else if (cat.key === 'capitalIn') m.capitalIn  += amtK;
+      else                             m.cfInOther   += amtK;
+    } else {
+      // 支払
+      if (m[cat.key] !== undefined) m[cat.key] += amtK;
+      else m.salesOtherPay += amtK;
+    }
+
+    m.rows.push({ ...tx, cat, amtK });
+    if (tx.balance > 0) m.cfClose = Math.round(tx.balance / 1000);
+  }
+
+  return monthly;
+}
+
 // analyzeCSV が呼ばれたとき、まず直接パースを試みる
 // 成功すればAIを使わず即反映、失敗時のみAIにフォールバック
 async function tryDirectParse() {
@@ -3435,6 +3738,30 @@ async function tryDirectParse() {
 }
 
 async function analyzeCSV() {
+  // みずほAPIモードの場合は専用パーサーを使用
+  if (_importMode === 'mizuho') {
+    const months = getSelectedMonths();
+    if (!months.length) { alert('対象月を選択してください'); return; }
+    const log = document.getElementById('import-log');
+    log.style.display = 'block';
+    log.innerHTML = '<span class="log-info">⏳ みずほAPIファイルを解析中...</span>\n';
+    try {
+      const parsed = parseMizuhoAPI(csvRawText, months);
+      if (!parsed || !parsed.months.length) {
+        log.innerHTML += '<span class="log-warn">⚠ みずほAPIファイルの解析に失敗しました。</span>\n';
+        return;
+      }
+      parsed.months.forEach(m => {
+        const d = parsed.data[m];
+        log.innerHTML += `<span class="log-info">${MONTH_LABELS[m]||m}: 入金 ${d.cfIn.toLocaleString()}千円 / 出金 ${d.cfOut.toLocaleString()}千円 / 純CF ${(d.cfIn-d.cfOut).toLocaleString()}千円</span>\n`;
+      });
+      window._mizuhoPending = { parsed, months: parsed.months };
+      renderMizuhoConfirmTable(parsed, parsed.months);
+    } catch(e) {
+      log.innerHTML += `<span class="log-error">❌ エラー: ${e.message}</span>\n`;
+    }
+    return;
+  }
   const months = getSelectedMonths();
   const csvType = document.getElementById('csv-type').value;
   const kind = document.getElementById('csv-kind').value;
@@ -3708,6 +4035,133 @@ ${csvFull}
 // ═══════════════════════════════════════════
 
 // プレビューテーブルを描画（セルをクリックして修正可能）
+function renderMizuhoConfirmTable(monthly, months, kind) {
+  const CF_LABELS = {
+    cfIn:'売上入金', cfInFee:'会費入金', cfInTraining:'研修入金', cfInOther:'その他入金',
+    salaryPay:'給与・社保', devOutPay:'開発外注', bizComPay:'業務委託',
+    incentivePay:'インセンティブ', expertPay:'専門家報酬', rentPay:'家賃',
+    expensePay:'経費精算', telPay:'通信費', entertainPay:'交際費',
+    taxPay:'税金', toolsPay:'ツール', suppliesPay:'消耗品',
+    adSportsPay:'広告費', eventCostPay:'イベント外注', recruitPay:'採用費',
+    annualFeePay:'年会費', salesOtherPay:'その他費用',
+    investPay:'設備投資', loanIn:'借入金', loanOut:'借入返済',
+    capitalIn:'資本金', cfClose:'月末残高'
+  };
+
+  let html = `<div style="font-size:11px;font-weight:700;margin-bottom:8px">
+    🏦 みずほ銀行 取引明細 — 科目自動判定結果（${kind === 'actual' ? '実績' : '予算'}）
+    <span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:8px">
+      ※ 科目は行末のセレクトで変更できます
+    </span>
+  </div>`;
+
+  months.forEach(m => {
+    const md = monthly[m];
+    if (!md || !md.rows.length) return;
+    const label = MONTH_LABELS[m] || m;
+    html += `<div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:var(--chart-blue);padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:6px">
+        ${label}（${md.rows.length}件 / 月末残高 ${md.cfClose ? md.cfClose.toLocaleString()+'千円' : '—'}）
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:10px">
+        <thead><tr style="background:var(--bg3)">
+          <th style="text-align:left;padding:3px 6px;border:1px solid var(--border)">日付</th>
+          <th style="text-align:left;padding:3px 6px;border:1px solid var(--border)">摘要</th>
+          <th style="text-align:right;padding:3px 6px;border:1px solid var(--border)">金額(千円)</th>
+          <th style="text-align:center;padding:3px 6px;border:1px solid var(--border)">入出金</th>
+          <th style="text-align:left;padding:3px 6px;border:1px solid var(--border);min-width:160px">科目（変更可）</th>
+        </tr></thead><tbody>`;
+
+    md.rows.forEach((tx, idx) => {
+      const isIn = tx.recvAmt > 0;
+      const opts = Object.entries(CF_LABELS).map(([k, v]) =>
+        `<option value="${k}" ${tx.cat.key === k ? 'selected' : ''}>${v}</option>`
+      ).join('');
+      html += `<tr style="${idx%2===0?'':'background:var(--bg2)'}">
+        <td style="padding:3px 6px;border:1px solid var(--border);white-space:nowrap">${tx.date}</td>
+        <td style="padding:3px 6px;border:1px solid var(--border);max-width:220px;overflow:hidden;text-overflow:ellipsis" title="${tx.desc}">${tx.desc}</td>
+        <td style="padding:3px 6px;border:1px solid var(--border);text-align:right;${isIn?'color:var(--tc-green)':'color:var(--tc-red)'}">
+          ${isIn?'+':'−'}${tx.amtK.toLocaleString()}
+        </td>
+        <td style="padding:3px 6px;border:1px solid var(--border);text-align:center">
+          <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${isIn?'rgba(39,174,96,.2)':'rgba(226,75,74,.2)'}">
+            ${isIn?'入金':'支払'}
+          </span>
+        </td>
+        <td style="padding:3px 4px;border:1px solid var(--border)">
+          <select data-month="${m}" data-idx="${idx}"
+            onchange="onMizuhoRowCatChange(this)"
+            style="width:100%;font-size:9px;padding:2px;background:var(--bg);color:var(--text);border:1px solid var(--border2);border-radius:3px">
+            ${opts}
+          </select>
+          ${tx.cat.key === 'salesOtherPay' ? '<span style="color:var(--tc-amber);font-size:9px"> ⚠要確認</span>' : ''}
+        </td>
+      </tr>`;
+    });
+
+    html += '</tbody></table></div>';
+  });
+
+  // 科目別集計サマリー
+  html += `<div style="margin-top:12px;padding:10px;background:var(--bg2);border-radius:6px;border:1px solid var(--border)">
+    <div style="font-size:11px;font-weight:700;margin-bottom:8px">📊 科目別集計（月合計）</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px">`;
+
+  months.forEach(m => {
+    const md = monthly[m];
+    if (!md) return;
+    const nonZeroKeys = Object.keys(CF_LABELS).filter(k => md[k] && md[k] > 0);
+    if (!nonZeroKeys.length) return;
+    html += `<div style="font-size:10px;font-weight:700;color:var(--chart-blue)">${MONTH_LABELS[m]||m}</div>`;
+    nonZeroKeys.forEach(k => {
+      const isIn = ['cfIn','cfInFee','cfInTraining','cfInOther','loanIn','capitalIn'].includes(k);
+      html += `<div style="font-size:10px;display:flex;justify-content:space-between;gap:8px">
+        <span style="color:var(--text3)">${CF_LABELS[k]}</span>
+        <span style="font-weight:600;color:${isIn?'var(--tc-green)':'var(--tc-red)'}">${isIn?'+':'−'}${md[k].toLocaleString()}千円</span>
+      </div>`;
+    });
+  });
+
+  html += '</div></div>';
+
+  document.getElementById('csv-confirm-table').innerHTML = html;
+  document.getElementById('csv-confirm-warnings').innerHTML = `
+    <div style="font-size:10px;color:var(--text3);margin-top:4px">
+      ⚠ 科目が「その他費用」になっている行は内容を確認してセレクトで変更してください。<br>
+      確認後「本番データに反映」ボタンを押すと月次CFに反映されます。
+    </div>`;
+}
+
+function onMizuhoRowCatChange(sel) {
+  const m   = sel.dataset.month;
+  const idx = parseInt(sel.dataset.idx);
+  if (window._csvPendingResult?.mizuho?.[m]?.rows?.[idx]) {
+    window._csvPendingResult.mizuho[m].rows[idx].cat = { key: sel.value, label: sel.options[sel.selectedIndex].text };
+    // 集計を再計算
+    const md = window._csvPendingResult.mizuho[m];
+    const CF_NUM_KEYS = ['cfIn','cfInFee','cfInTraining','cfInOther','salaryPay','devOutPay','bizComPay',
+      'incentivePay','expertPay','rentPay','expensePay','telPay','entertainPay','taxPay','toolsPay',
+      'suppliesPay','adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay',
+      'investPay','loanIn','loanOut','capitalIn','warrantPay','finOtherPay'];
+    CF_NUM_KEYS.forEach(k => { md[k] = 0; });
+    md.cfIn = 0;
+    md.rows.forEach(tx => {
+      const amtK = tx.amtK;
+      if (tx.recvAmt > 0) {
+        md.cfIn += amtK;
+        if (tx.cat.key === 'cfInFee') md.cfInFee += amtK;
+        else if (tx.cat.key === 'cfInTraining') md.cfInTraining += amtK;
+        else if (tx.cat.key === 'loanIn') md.loanIn += amtK;
+        else if (tx.cat.key === 'capitalIn') md.capitalIn += amtK;
+        else md.cfInOther += amtK;
+      } else {
+        if (md[tx.cat.key] !== undefined) md[tx.cat.key] += amtK;
+        else md.salesOtherPay += amtK;
+      }
+    });
+  }
+}
+
 function renderCSVConfirmTable(parsed, months, kind) {
   // グループ別に科目を定義（pl/cf/bsに対応）
   const groups = [
@@ -4087,6 +4541,55 @@ function showApplyConfirmModal(filledMonths, monthLabels, d) {
     </div>`;
 
   document.body.appendChild(modal);
+}
+
+async function applyMizuhoCF() {
+  const pending = window._csvPendingResult;
+  if (!pending?.mizuho) { alert('反映するCFデータがありません'); return; }
+
+  const applyYear = currentYear;
+  const d = DB[applyYear];
+  const months = pending.months;
+  const kind = pending.kind;
+
+  if (!confirm(`${months.map(m=>MONTH_LABELS[m]||m).join('・')} のCFデータを${kind==='actual'?'実績':'予算'}に反映しますか？\n\n⚠ 既存データは上書きされます`)) return;
+
+  // 自動バックアップ
+  const autoVer = {
+    id: Date.now(),
+    desc: `[自動バックアップ] CF反映前 — ${applyYear}年度 ${months.map(m=>MONTH_LABELS[m]||m).join('・')}`,
+    savedAt: new Date().toISOString(), year: applyYear,
+    DB: JSON.parse(JSON.stringify(DB)),
+    SIM_DATA: JSON.parse(JSON.stringify(SIM_DATA)),
+  };
+  const vers = getVersions(); vers.unshift(autoVer);
+  if (vers.length > VER_MAX) vers.splice(VER_MAX);
+  saveVersions(vers); saveVersionToCloud(autoVer);
+
+  const CF_WRITE_KEYS = ['cfIn','cfInFee','cfInTraining','cfInOther','salaryPay','devOutPay','bizComPay',
+    'incentivePay','expertPay','rentPay','expensePay','telPay','entertainPay','taxPay','toolsPay',
+    'suppliesPay','adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay',
+    'investPay','loanIn','loanOut','capitalIn','warrantPay','finOtherPay','cfClose','open'];
+
+  months.forEach(m => {
+    const md = pending.mizuho[m];
+    if (!md) return;
+    const idx = d.months.indexOf(m);
+    if (idx === -1) return;
+    const target = kind === 'actual' ? d.cf.actual : d.cf.budget;
+    CF_WRITE_KEYS.forEach(k => {
+      if (!md[k] && md[k] !== 0) return;
+      if (!target[k]) target[k] = Array(d.months.length).fill('');
+      target[k][idx] = md[k];
+    });
+  });
+
+  DB[applyYear] = d;
+  await forceSave();
+  clearCSV();
+  sw('pl-cf', document.querySelector('.tab[onclick*="pl-cf"]'));
+  document.querySelector('.tab[onclick*="pl-cf"]')?.click();
+  alert(`✓ ${months.map(m=>MONTH_LABELS[m]||m).join('・')} のCFデータを反映しました`);
 }
 
 async function commitImportedToProd() {
