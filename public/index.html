@@ -413,6 +413,19 @@ td.actual.editable-cell {
     <div style="font-size:11px;color:var(--text3);margin-bottom:.625rem">
       📋 年次予実サマリー — <span id="annual-year-label">2025年度</span>
     </div>
+    <!-- 通期/四半期 切替 -->
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:.75rem">
+      <span style="font-size:11px;color:var(--text3)">表示期間：</span>
+      <div style="display:flex;gap:4px">
+        <button id="period-btn-annual" class="btn btn-p" style="font-size:10px;padding:3px 10px" onclick="setAnnualPeriod('annual')">通期</button>
+        <button id="period-btn-q1" class="btn" style="font-size:10px;padding:3px 10px" onclick="setAnnualPeriod('q1')">Q1</button>
+        <button id="period-btn-q2" class="btn" style="font-size:10px;padding:3px 10px" onclick="setAnnualPeriod('q2')">Q2</button>
+        <button id="period-btn-q3" class="btn" style="font-size:10px;padding:3px 10px" onclick="setAnnualPeriod('q3')">Q3</button>
+        <button id="period-btn-q4" class="btn" style="font-size:10px;padding:3px 10px" onclick="setAnnualPeriod('q4')">Q4</button>
+      </div>
+      <span id="period-label" style="font-size:10px;color:var(--text3);margin-left:4px"></span>
+    </div>
+
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:start">
 
       <!-- PL -->
@@ -1506,6 +1519,50 @@ function setAnnualView(v, el) {
   renderAnnualSummary();
 }
 
+// ── 年次サマリーの表示期間管理 ──
+let _annualPeriod = 'annual'; // 'annual' | 'q1' | 'q2' | 'q3' | 'q4'
+
+// 年度の月配列から四半期インデックス範囲を返す
+// 2025年度: [2504..2603] → Q1=4〜6月(idx0-2), Q2=7〜9月(idx3-5), Q3=10〜12月(idx6-8), Q4=1〜3月(idx9-11)
+function getQuarterRange(period, months) {
+  if (period === 'annual') return { start: 0, end: months.length - 1 };
+  // 月コードから月番号を取得（2504→4, 2507→7, 2510→10, 2601→1）
+  const getMonthNum = (code) => {
+    const n = parseInt(String(code).slice(2));
+    return n; // 4〜12, 1〜3
+  };
+  const qMap = { q1: [4,5,6], q2: [7,8,9], q3: [10,11,12], q4: [1,2,3] };
+  const qMonths = qMap[period];
+  const indices = months.reduce((arr, m, i) => {
+    if (qMonths.includes(getMonthNum(m))) arr.push(i);
+    return arr;
+  }, []);
+  if (!indices.length) return { start: 0, end: months.length - 1 };
+  return { start: indices[0], end: indices[indices.length - 1] };
+}
+
+function setAnnualPeriod(period) {
+  _annualPeriod = period;
+  // ボタンのスタイル切替
+  ['annual','q1','q2','q3','q4'].forEach(p => {
+    const btn = document.getElementById(`period-btn-${p}`);
+    if (!btn) return;
+    btn.className = p === period ? 'btn btn-p' : 'btn';
+    btn.style.fontSize = '10px';
+    btn.style.padding = '3px 10px';
+  });
+  // 期間ラベル更新
+  const labels = { annual:'通期', q1:'Q1（4〜6月）', q2:'Q2（7〜9月）', q3:'Q3（10〜12月）', q4:'Q4（1〜3月）' };
+  const lel = document.getElementById('period-label');
+  if (lel) lel.textContent = labels[period] || '';
+  renderAnnualSummary();
+}
+
+// 指定期間のslice付きsumヘルパー
+function sumRange(arr, start, end) {
+  return (arr || []).slice(start, end + 1).reduce((t, v) => t + (Number(v) || 0), 0);
+}
+
 function renderAnnualSummary() {
   const el = document.getElementById('annual-year-label');
   if (!el) return;
@@ -1517,46 +1574,45 @@ function renderAnnualSummary() {
 }
 
 function renderAnnualPL(d) {
-  const sumA = (arr) => (arr||[]).reduce((t,v) => t+(Number(v)||0), 0);
+  const { start, end } = getQuarterRange(_annualPeriod, d.months);
+  const sR = (arr) => sumRange(arr, start, end);
 
-  const revA  = sumA(d.pl.actual.rev);
-  const revB  = sumA(d.pl.budget.rev);
-  const laborA = sumA(d.pl.actual.labor);    const laborB = sumA(d.pl.budget.labor);
-  const outA   = sumA(d.pl.actual.outsource); const outB  = sumA(d.pl.budget.outsource);
-  const advA   = sumA(d.pl.actual.adv);       const advB   = sumA(d.pl.budget.adv);
-  const gaichuA= sumA(d.pl.actual.gaichu||[]); const gaichuB=sumA(d.pl.budget.gaichu||[]);
-  const otherA = sumA(d.pl.actual.other);     const otherB = sumA(d.pl.budget.other);
+  const revA  = sR(d.pl.actual.rev);  const revB  = sR(d.pl.budget.rev);
+  const laborA = sR(d.pl.actual.labor);    const laborB = sR(d.pl.budget.labor);
+  const outA   = sR(d.pl.actual.outsource); const outB  = sR(d.pl.budget.outsource);
+  const advA   = sR(d.pl.actual.adv);       const advB   = sR(d.pl.budget.adv);
+  const gaichuA= sR(d.pl.actual.gaichu||[]); const gaichuB=sR(d.pl.budget.gaichu||[]);
+  const otherA = sR(d.pl.actual.other);     const otherB = sR(d.pl.budget.other);
   const opexA  = laborA+outA+advA+gaichuA+otherA;
   const opexB  = laborB+outB+advB+gaichuB+otherB;
-  const opA    = revA - opexA;
-  const opB    = revB - opexB;
 
   const cogsAnn = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
-  const cogsAA = cogsAnn.reduce((t,k)=>t+sumA(d.pl.actual[k]||[]),0);
-  const cogsAB = cogsAnn.reduce((t,k)=>t+sumA(d.pl.budget[k]||[]),0);
-  const gpAA = revA - cogsAA;
-  const gpAB = revB - cogsAB;
+  const cogsAA = cogsAnn.reduce((t,k)=>t+sR(d.pl.actual[k]||[]),0);
+  const cogsAB = cogsAnn.reduce((t,k)=>t+sR(d.pl.budget[k]||[]),0);
+  const gpAA = revA - cogsAA;  const gpAB = revB - cogsAB;
+  const opA = gpAA - opexA;    const opB  = gpAB - opexB;
 
   const rows = [
-    { label:'売上高',             a:revA,   b:revB,   isRev:true, isTot:true },
-    { label:'NEOプログラム原価',  a:cogsAA, b:cogsAB, isOut:true, isTot:true },
-    { label:'粗利',               a:gpAA,   b:gpAB,   isRev:true, isTot:true, isPL:true },
-    { label:'販管費合計',         a:opexA,  b:opexB,  isOut:true, isTot:true },
-    { label:'　人件費',     a:laborA, b:laborB, isOut:true  },
-    { label:'　業務委託費', a:outA,   b:outB,   isOut:true  },
-    { label:'　広告販促費', a:advA,   b:advB,   isOut:true  },
-    { label:'　外注費',     a:gaichuA,b:gaichuB,isOut:true  },
-    { label:'　その他',     a:otherA, b:otherB, isOut:true  },
-    { label:'営業利益',     a:opA,    b:opB,    isRev:true, isTot:true, isPL:true },
+    { label:'売上高',        a:revA,   b:revB,   isRev:true, isTot:true },
+    { label:'原価',          a:cogsAA, b:cogsAB, isOut:true, isTot:true },
+    { label:'粗利',          a:gpAA,   b:gpAB,   isRev:true, isTot:true, isPL:true },
+    { label:'販管費合計',    a:opexA,  b:opexB,  isOut:true, isTot:true },
+    { label:'　人件費',      a:laborA, b:laborB, isOut:true  },
+    { label:'　業務委託費',  a:outA,   b:outB,   isOut:true  },
+    { label:'　広告販促費',  a:advA,   b:advB,   isOut:true  },
+    { label:'　外注費',      a:gaichuA,b:gaichuB,isOut:true  },
+    { label:'　その他',      a:otherA, b:otherB, isOut:true  },
+    { label:'営業利益',      a:opA,    b:opB,    isRev:true, isTot:true, isPL:true },
   ];
   document.getElementById('annual-pl-table').innerHTML = buildAnnualTable(rows, '千円');
 }
 
 function renderAnnualCF(d) {
+  const { start, end } = getQuarterRange(_annualPeriod, d.months);
   const cfGet = (sec, key) => (d.cf[sec]&&d.cf[sec][key]) || [];
-  const sumA = (arr) => (arr||[]).reduce((t,v) => t+(Number(v)||0), 0);
-  const sA = (key) => sumA(cfGet('actual', key));
-  const sB = (key) => sumA(cfGet('budget', key));
+  const sR = (arr) => sumRange(arr, start, end);
+  const sA = (key) => sR(cfGet('actual', key));
+  const sB = (key) => sR(cfGet('budget', key));
 
   const opexKeys = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
     'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
@@ -1568,25 +1624,30 @@ function renderAnnualCF(d) {
   const fixedA = fixedKeys.reduce((t,k)=>t+sA(k),0); const fixedB = fixedKeys.reduce((t,k)=>t+sB(k),0);
   const varA   = varKeys.reduce((t,k)=>t+sA(k),0);   const varB   = varKeys.reduce((t,k)=>t+sB(k),0);
 
+  // 期間末残高（期間内最後の非ゼロ値）
+  const closeArr = cfGet('actual','cfClose');
+  let closeA = 0;
+  for (let i = end; i >= start; i--) { if (Number(closeArr[i]) > 0) { closeA = Number(closeArr[i]); break; } }
+
+  // 予算期間末残高（期間初残高 + 期間内純CF）
+  const bOpenArr = cfGet('budget','open');
+  const bInArr   = cfGet('budget','cfIn');
+  let closeB = Number(bOpenArr[start]) || 0;
+  for (let i = start; i <= end; i++) {
+    const out = opexKeys.reduce((t,k)=>t+(Number((cfGet('budget',k)||[])[i])||0),0);
+    closeB += (Number(bInArr[i])||0) - out;
+  }
+
   const rows = [
-    { label:'売上入金',       a:sA('cfIn'),     b:sB('cfIn'),    isRev:true,  isTot:true },
-    { label:'販管費合計',     a:opexA,          b:opexB,          isOut:true,  isTot:true },
-    { label:'　固定費合計',   a:fixedA,         b:fixedB,         isOut:true  },
-    { label:'　変動費合計',   a:varA,           b:varB,           isOut:true  },
-    { label:'事業投資',       a:sA('investPay'),b:sB('investPay'),isOut:true  },
-    { label:'新規借入',       a:sA('loanIn'),   b:sB('loanIn'),   isRev:true  },
-    { label:'借入返済',       a:sA('loanOut'),  b:sB('loanOut'),  isOut:true  },
-    { label:'営業CF',         a:sA('cfIn')-opexA, b:sB('cfIn')-opexB, isTot:true, isCF:true },
-    { label:'月末残高',       a:(() => { const arr=cfGet('actual','cfClose'); for(let i=arr.length-1;i>=0;i--){if(Number(arr[i])>0)return Number(arr[i]);} return 0; })(),
-                              b:(() => {
-                                let bal=Number((cfGet('budget','open')||[])[0])||0;
-                                const bIn=cfGet('budget','cfIn');
-                                for(let i=0;i<12;i++){
-                                  const out=opexKeys.reduce((t,k)=>t+(Number((cfGet('budget',k)||[])[i])||0),0);
-                                  bal+=((Number(bIn[i])||0)-out);
-                                }
-                                return Math.round(bal);
-                              })(), isTot:true, noSign:true },
+    { label:'売上入金',     a:sA('cfIn'),   b:sB('cfIn'),   isRev:true,  isTot:true },
+    { label:'販管費合計',   a:opexA,        b:opexB,        isOut:true,  isTot:true },
+    { label:'　固定費',     a:fixedA,       b:fixedB,       isOut:true  },
+    { label:'　変動費',     a:varA,         b:varB,         isOut:true  },
+    { label:'事業投資',     a:sA('investPay'),b:sB('investPay'),isOut:true },
+    { label:'新規借入',     a:sA('loanIn'), b:sB('loanIn'), isRev:true  },
+    { label:'借入返済',     a:sA('loanOut'),b:sB('loanOut'),isOut:true  },
+    { label:'営業CF',       a:sA('cfIn')-opexA, b:sB('cfIn')-opexB, isTot:true, isCF:true },
+    { label:'期末残高',     a:closeA, b:Math.round(closeB), isTot:true, noSign:true },
   ];
   document.getElementById('annual-cf-table').innerHTML = buildAnnualTable(rows, '千円');
 }
