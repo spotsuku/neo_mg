@@ -3737,6 +3737,147 @@ async function tryDirectParse() {
   }
 }
 
+// ════════════════════════════════════════
+//  BS純資産フォールバックスキャナー
+//  AIが bs.capital / bs.retained を0で返した場合に
+//  CSV から直接 資本金・利益剰余金の値を抽出する
+// ════════════════════════════════════════
+function scanBsEquityFromCsv(csvText, targetMonths) {
+  if (!csvText) return null;
+  // 行をパース（クォート対応）
+  function parseRow(line) {
+    const result = [];
+    let inQuote = false, cur = '';
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQuote = !inQuote; continue; }
+      if (c === ',' && !inQuote) { result.push(cur.trim()); cur = ''; continue; }
+      cur += c;
+    }
+    result.push(cur.trim());
+    return result;
+  }
+
+  const lines = csvText.split(/\r?\n/).filter(l => l.trim());
+  const rows = lines.map(parseRow);
+  if (!rows.length) return null;
+
+  // ヘッダー行から月列インデックスを検出
+  const jpMonths = ['4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月'];
+  let monthCols = {};
+  let headerRowIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const r = rows[i];
+    const tmp = {};
+    r.forEach((h, j) => {
+      const clean = (h || '').replace(/[\s\u00a0\ufeff\u3000]/g, '').trim();
+      if (jpMonths.includes(clean)) tmp[clean] = j;
+    });
+    if (Object.keys(tmp).length > 0) { monthCols = tmp; headerRowIdx = i; break; }
+  }
+  if (Object.keys(monthCols).length === 0) return null;
+
+  // 値を読み出すヘルパー（円単位→千円に変換）
+  function getValK(row, month) {
+    const col = monthCols[month];
+    if (col === undefined || col >= row.length) return 0;
+    const raw = (row[col] || '').replace(/[,\s\u00a0]/g, '');
+    // マイナス表記: ▲1,234 / -1,234 / (1,234) など
+    let sign = 1;
+    let v = raw;
+    if (v.startsWith('▲') || v.startsWith('△')) { sign = -1; v = v.slice(1); }
+    if (v.startsWith('(') && v.endsWith(')')) { sign = -1; v = v.slice(1,-1); }
+    if (v.startsWith('-')) { sign = -1; v = v.slice(1); }
+    const n = parseFloat(v);
+    if (isNaN(n)) return 0;
+    return Math.round(sign * n / 1000);
+  }
+
+  // 行ラベルから対象科目を判定
+  // Money Forward形式では label は row[0] / row[1] / row[2] のいずれかにある
+  function rowLabel(row) {
+    for (let i = 0; i < Math.min(row.length, 4); i++) {
+      const s = (row[i] || '').trim();
+      if (s) return s;
+    }
+    return '';
+  }
+
+  // 純資産の部セクション判定
+  const sectionRe = /純資産の部|株主資本|純資産セクション/;
+  const endSectionRe = /負債.{0,2}純資産合計|^負債の部$|^資産の部$/;
+
+  // 除外したい rollup 行（二重計上防止）
+  const skipLabels = /株主資本合計|純資産合計|資本剰余金合計|利益剰余金合計|評価.換算差額等合計|新株予約権合計|負債.{0,2}純資産合計/;
+
+  // 科目 → 保持値
+  // capitalCore      : 「資本金」行（単独、常に加算）
+  // capitalReserveRollup : 「資本剰余金」rollup行（あれば優先）
+  // capitalReserveParts  : 「資本準備金」「その他資本剰余金」等の内訳合計
+  // retainedRollup   : 「利益剰余金」rollup行（あれば優先）
+  // retainedParts    : 「利益準備金」「繰越利益剰余金」等の内訳合計
+  // selfStock        : 「自己株式」（capital から減算）
+  const init = () => ({
+    capitalCore: 0,
+    capitalReserveRollup: null, capitalReserveParts: 0,
+    retainedRollup: null, retainedParts: 0,
+    selfStock: 0,
+  });
+  const byMonth = {}; // { '4月': {...}, ... }
+  Object.keys(monthCols).forEach(m => { byMonth[m] = init(); });
+
+  let inEquity = false;
+  for (let i = headerRowIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    const label = rowLabel(row);
+    if (!label) continue;
+
+    if (sectionRe.test(label)) { inEquity = true; continue; }
+    if (endSectionRe.test(label)) { inEquity = false; continue; }
+    // 【負債の部】のような他セクション見出しで純資産ではない場合に抜ける
+    if (/【?\s*(資産の部|負債の部)\s*】?/.test(label)) { inEquity = false; continue; }
+
+    // 純資産セクション外でも「資本金」「利益剰余金」の行は拾う（セクション見出しがないCSV対応）
+    const relevant = /資本金|資本準備金|資本剰余金|利益準備金|利益剰余金|繰越利益剰余金|別途積立金|任意積立金|自己株式/.test(label);
+    if (!inEquity && !relevant) continue;
+    if (skipLabels.test(label)) continue;
+
+    // 分類
+    Object.keys(monthCols).forEach(m => {
+      const v = getValK(row, m);
+      if (v === 0) return;
+      const acc = byMonth[m];
+      // 注意：正規表現の順序は厳密一致を優先
+      if (/^資本金$/.test(label))                              { acc.capitalCore += v; return; }
+      if (/^資本剰余金$/.test(label))                          { acc.capitalReserveRollup = (acc.capitalReserveRollup || 0) + v; return; }
+      if (/資本準備金|その他資本剰余金|新株式申込証拠金/.test(label)) { acc.capitalReserveParts += v; return; }
+      if (/^利益剰余金$/.test(label))                          { acc.retainedRollup = (acc.retainedRollup || 0) + v; return; }
+      if (/利益準備金|繰越利益剰余金|その他利益剰余金|別途積立金|任意積立金/.test(label)) { acc.retainedParts += v; return; }
+      if (/自己株式/.test(label))                              { acc.selfStock += v; return; }
+    });
+  }
+
+  // 月コード対応表
+  const MLABELS = typeof MONTH_LABELS !== 'undefined' ? MONTH_LABELS : {};
+  const labelToCode = {};
+  (targetMonths || []).forEach(code => { labelToCode[MLABELS[code] || code] = code; });
+
+  const result = {}; // { '2504': { capital, retained }, ... }
+  Object.keys(monthCols).forEach(jpMonth => {
+    const code = labelToCode[jpMonth] || null;
+    if (!code) return;
+    const acc = byMonth[jpMonth];
+    // rollup があれば内訳は無視、なければ内訳合計を使用
+    const capitalReserve = acc.capitalReserveRollup !== null ? acc.capitalReserveRollup : acc.capitalReserveParts;
+    const capital  = acc.capitalCore + capitalReserve - acc.selfStock;
+    const retained = acc.retainedRollup !== null ? acc.retainedRollup : acc.retainedParts;
+    result[code] = { capital, retained };
+  });
+
+  console.log('[scanBsEquityFromCsv] result:', result);
+  return result;
+}
+
 async function analyzeCSV() {
   // みずほAPIモードの場合は専用パーサーを使用
   if (_importMode === 'mizuho') {
@@ -3881,6 +4022,44 @@ ${csvFull}
   labor + outsource + adv + gaichu + other の合計 ＝ CSVの「販管費合計」行の値
   もし一致しない場合は内訳のみで再計算して合わせること
 
+★★★ BS（貸借対照表）抽出ルール — 特に「純資産の部」は絶対に落とさないこと ★★★
+貸借対照表CSV（マネーフォワード形式）には必ず「純資産の部」「【純資産の部】」「株主資本」等のセクションがあり、
+その中に 資本金・資本剰余金・利益剰余金 の行が存在します。これらの行を必ず抽出してください。
+
+◆ bs.capital（資本金・資本剰余金）に加算する勘定科目行（見つかったものをすべて合算）:
+  - 「資本金」
+  - 「資本準備金」
+  - 「その他資本剰余金」
+  - 「新株式申込証拠金」
+  - 「資本剰余金」（rollup行があれば、資本準備金+その他資本剰余金の代わりに使用）
+  注意：「資本剰余金合計」行と内訳行の両方を合算してはいけない（二重計上禁止）。どちらか一方のみを使う。
+
+◆ bs.retained（利益剰余金）に加算する勘定科目行（見つかったものをすべて合算）:
+  - 「利益準備金」
+  - 「任意積立金」「別途積立金」
+  - 「繰越利益剰余金」
+  - 「その他利益剰余金」
+  - 「利益剰余金」（rollup行があれば内訳の代わりに使用）
+  - 「自己株式」はマイナス項目として減算
+  注意：「利益剰余金合計」行と内訳行の両方を合算してはいけない（二重計上禁止）
+
+【最重要・抽出漏れ防止】
+- 数値がマイナス（例：▲71,710,000 や -71,710,000）でも必ず抽出すること。利益剰余金は赤字企業ではマイナスになります。
+- 純資産の部セクションのラベルは空欄や空白・インデントを含む場合があります。
+  CSV各行を走査し、セル値に「資本金」「資本準備金」「資本剰余金」「利益準備金」「利益剰余金」「繰越利益剰余金」
+  「別途積立金」「自己株式」のいずれかが含まれる行の数値列を必ず拾ってください。
+- 「株主資本合計」「純資産合計」「負債純資産合計」の行は使わず、個別の勘定科目行から値を取得してください。
+- BSバランスの自己検算: 資産合計 = 負債合計 + 純資産合計。
+  もし capital=0 かつ retained=0 なら純資産の部の抽出に失敗している可能性が高いので、CSV全行を再スキャンしてください。
+- 本当にCSV内に「資本金」「利益剰余金」の文字列が一切存在しない場合のみ、capital=0 / retained=0 を返し、
+  warnings に「純資産の部データが見つかりませんでした（CSVを確認してください）」と記載してください。
+
+◆ bs.other_ca（その他流動資産）: 前払費用・未収入金・仮払金・立替金・短期貸付金・繰延税金資産 等の合計
+◆ bs.fixed（固定資産）: 有形固定資産 + 無形固定資産 + 投資その他の資産 の合計（固定資産合計の値）
+◆ bs.payable（買掛金・未払金）: 買掛金 + 未払金 + 未払費用 + 未払法人税等 + 未払消費税等 + 前受金 + 預り金
+◆ bs.borrowing（借入金）: 短期借入金 + 1年内返済予定の長期借入金 + 長期借入金
+◆ bs.other_cl（その他流動負債）: 流動負債のうち、payable と borrowing に含めなかった残り
+
 以下のJSON形式で月ごとの数値を返してください:
 {
   "months": {
@@ -4010,6 +4189,35 @@ ${csvFull}
     const hasNested = !!(firstData?.pl || firstData?.cf);
     log.innerHTML += `<span class="log-ok">✓ ${monthsFound.length}ヶ月分の解析完了（形式: ${hasNested ? 'pl/cf/bs階層' : 'フラット'}）</span>\n`;
     log.innerHTML += `<span class="log-info">下の確認テーブルで内容を確認してから「取込確定」してください</span>\n`;
+
+    // ── BS純資産フォールバック：AIが資本金・利益剰余金を0で返した場合、CSVから直接抽出 ──
+    if (csvType === 'bs') {
+      const needsFallback = monthsFound.some(m => {
+        const bs = parsed.months[m]?.bs || {};
+        return (!bs.capital || bs.capital === 0) && (!bs.retained || bs.retained === 0);
+      });
+      if (needsFallback) {
+        try {
+          const scanned = scanBsEquityFromCsv(csvRawText, months);
+          if (scanned) {
+            let patched = 0;
+            monthsFound.forEach(m => {
+              const s = scanned[m];
+              if (!s) return;
+              if (!parsed.months[m].bs) parsed.months[m].bs = {};
+              const bs = parsed.months[m].bs;
+              if ((!bs.capital || bs.capital === 0) && s.capital) { bs.capital = s.capital; patched++; }
+              if ((!bs.retained || bs.retained === 0) && s.retained) { bs.retained = s.retained; patched++; }
+            });
+            if (patched > 0) {
+              log.innerHTML += `<span class="log-ok">✓ 純資産フォールバック：CSVから ${patched} 件の資本金/利益剰余金を直接抽出しました</span>\n`;
+            }
+          }
+        } catch (fbErr) {
+          console.warn('[BS fallback] 例外:', fbErr);
+        }
+      }
+    }
 
     // グローバルに保持（commitCSVResult で使用）
     window._csvPendingResult = { parsed, months, kind, csvType };
