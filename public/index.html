@@ -7238,6 +7238,51 @@ window.addEventListener('load', async () => {
   buildSimPLTable();
   buildSimCFTable();
   renderBudgetHistory();
+  <script>
+    (function(){
+      function mfInit(){
+          var s=document.getElementById('sec-import');
+          if(!s||document.getElementById('mf-section'))return;
+          s.insertAdjacentHTML('beforeend','<div id="mf-section" class="card" style="margin-top:16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h3 style="margin:0;font-size:14px;font-weight:700">\uD83D\uDD17 \u30DE\u30CD\u30D5\u30A9 \u9023\u643A</h3><span id="mf-status-badge" style="padding:3px 10px;border-radius:20px;font-size:11px;background:rgba(100,116,139,.2);color:#94a3b8">\u78BA\u8A8D\u4E2D...</span></div><div id="mf-disconnected" style="display:none;text-align:center;padding:12px 0"><p style="color:#94a3b8;font-size:12px;margin-bottom:10px">\u30DE\u30CD\u30D5\u30A9\u3068\u9023\u643A\u3059\u308B\u3068\u4ED5\u8A33\u30C7\u30FC\u30BF\u3092\u81EA\u52D5\u53D6\u8FBC\u3067\u304D\u307E\u3059</p><button onclick="location.href=\x27/api/mf-auth?action=login\x27" style="background:#3b82f6;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer">\uD83D\uDD17 \u9023\u643A</button></div><div id="mf-connected" style="display:none"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px"><div style="background:rgba(30,41,59,.6);border-radius:8px;padding:10px"><div style="color:#64748b;font-size:10px">\u4E8B\u696D\u8005</div><div id="mf-office-name" style="font-size:12px;font-weight:600">-</div></div><div style="background:rgba(30,41,59,.6);border-radius:8px;padding:10px"><div style="color:#64748b;font-size:10px">\u6700\u7D42\u540C\u671F</div><div id="mf-last-sync" style="font-size:12px">-</div></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select id="mf-fiscal-year" style="background:rgba(30,41,59,.8);color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:5px 8px;font-size:12px"><option value="2025">2025\u5E74\u5EA6</option><option value="2024">2024\u5E74\u5EA6</option><option value="2026">2026\u5E74\u5EA6</option></select><button id="mf-sync-btn" onclick="mfSyncJournals()" style="background:#059669;color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px">\uD83D\uDCE5 \u4ED5\u8A33\u3092\u53D6\u8FBC\u3080</button><button onclick="mfCheckStatus()" style="background:rgba(30,41,59,.8);color:#94a3b8;border:1px solid #334155;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:12px">\uD83D\uDD04 \u66F4\u65B0</button><button onclick="location.href=\x27/api/mf-auth?action=login\x27" style="background:rgba(30,41,59,.8);color:#94a3b8;border:1px solid #334155;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:12px">\uD83D\uDD11 \u518D\u8A8D\u8A3C</button></div><div id="mf-sync-log" style="margin-top:10px;font-size:11px;color:#64748b;min-height:16px"></div></div></div>');
+          mfCheckStatus();
+      }
+      window.mfCheckStatus=async function(){
+          try{
+                var r=await fetch('/api/mf-auth?action=status'),d=await r.json(),b=document.getElementById('mf-status-badge');
+                if(!b)return;
+                if(d.connected&&!d.expired){
+                        b.style.background='rgba(6,78,59,.4)';b.style.color='#34d399';b.textContent='\u2705 \u63A5\u7D9A\u4E2D';
+                        document.getElementById('mf-disconnected').style.display='none';
+                        document.getElementById('mf-connected').style.display='block';
+                        try{var r2=await fetch('/api/mf-sync?action=offices'),d2=await r2.json();if(d2.ok&&d2.data)document.getElementById('mf-office-name').textContent=d2.data.name||'-';}catch(e){}
+                }else{
+                        b.style.background='rgba(127,29,29,.4)';b.style.color='#fca5a5';
+                        b.textContent=d.expired?'\u26A0\uFE0F \u671F\u9650\u5207\u308C':'\u274C \u672A\u63A5\u7D9A';
+                        document.getElementById('mf-disconnected').style.display='block';
+                        document.getElementById('mf-connected').style.display='none';
+                }
+          }catch(e){}
+      };
+      window.mfSyncJournals=async function(){
+          var btn=document.getElementById('mf-sync-btn'),log=document.getElementById('mf-sync-log'),fy=document.getElementById('mf-fiscal-year').value;
+          btn.disabled=true;btn.textContent='\u23F3 \u53D6\u8FBC\u4E2D...';log.style.color='#94a3b8';log.textContent='\u63A5\u7D9A\u4E2D...';
+          try{
+                var s=fy+'-07-01',e=(parseInt(fy)+1)+'-06-30';
+                var r=await fetch('/api/mf-sync?action=journals&from_date='+s+'&to_date='+e),d=await r.json();
+                if(!d.ok)throw new Error(d.error||'\u53D6\u5F97\u5931\u6557');
+                var j=d.data&&d.data.journals?d.data.journals:[],t=d.data&&d.data.metadata?d.data.metadata.total_count:j.length,p=d.data&&d.data.metadata?d.data.metadata.total_pages:1;
+                document.getElementById('mf-last-sync').textContent=new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+                log.style.color='#34d399';log.textContent='\u2705 '+fy+'\u5E74\u5EA6 '+j.length+'\u4EF6\uFF08\u5168'+t+'\u4EF6\u30FB'+p+'p\uFF09';
+                btn.textContent='\u2705 \u5B8C\u4E86';setTimeout(function(){btn.disabled=false;btn.textContent='\uD83D\uDCE5 \u4ED5\u8A33\u3092\u53D6\u8FBC\u3080';},3000);
+          }catch(e){log.style.color='#fca5a5';log.textContent='\u274C '+e.message;btn.disabled=false;btn.textContent='\uD83D\uDCE5 \u4ED5\u8A33\u3092\u53D6\u8FBC\u3080';}
+      };
+      document.addEventListener('DOMContentLoaded',function(){
+          mfInit();
+          var o=window.sw;if(o)window.sw=function(t,el){o(t,el);if(t==='import')setTimeout(mfCheckStatus,100);};
+          if(location.search.includes('mf_connected=1')){setTimeout(function(){var b=[...document.querySelectorAll('button')].find(function(x){return x.textContent.includes('CSV\u53D6\u8FBC');});if(b)b.click();mfCheckStatus();},500);}
+      });
+    })();
+                        </script>
   // クイックシムは閉じた状態で開始（toggleQSで開くとdrawQSChartが呼ばれる）
 });
 </script>
