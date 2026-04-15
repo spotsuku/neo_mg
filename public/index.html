@@ -4654,13 +4654,19 @@ async function loadImportedList() {
   const d = DB[currentYear];
 
   // 実績・予算どちらかでも1項目でもデータがある月を対象に
+  const bsHas = (kind, i) => {
+    const row = d.bs?.[kind]?.[i];
+    if (!row || typeof row !== 'object') return false;
+    return Object.values(row).some(v => v !== undefined && v !== null && v !== '' && Number(v) !== 0);
+  };
   const hasData = (i) => {
     const pl = d.pl;
     const cf = d.cf;
     return (pl.actual.rev[i] !== undefined && pl.actual.rev[i] !== '')
         || (pl.budget.rev[i] !== undefined && pl.budget.rev[i] !== '')
         || (cf.actual?.cfIn?.[i] > 0)
-        || (cf.actual?.cfClose?.[i] > 0);
+        || (cf.actual?.cfClose?.[i] > 0)
+        || bsHas('actual', i) || bsHas('budget', i);
   };
 
   const activeMonths = d.months.filter((m, i) => hasData(i));
@@ -4673,6 +4679,8 @@ async function loadImportedList() {
   const cfB = (key, i) => { const v = d.cf?.budget?.[key]?.[i]; return (v !== undefined && v !== null && v !== '') ? Number(v) : null; };
   const plA = (key, i) => { const v = d.pl?.actual?.[key]?.[i]; return (v !== undefined && v !== null && v !== '') ? Number(v) : null; };
   const plB = (key, i) => { const v = d.pl?.budget?.[key]?.[i]; return (v !== undefined && v !== null && v !== '') ? Number(v) : null; };
+  const bsA = (key, i) => { const v = d.bs?.actual?.[i]?.[key]; return (v !== undefined && v !== null && v !== '') ? Number(v) : null; };
+  const bsB = (key, i) => { const v = d.bs?.budget?.[i]?.[key]; return (v !== undefined && v !== null && v !== '') ? Number(v) : null; };
   const fmt = (v, cls='') => v !== null ? `<span class="${cls}">${Math.round(v).toLocaleString()}</span>` : '<span style="color:var(--text3)">—</span>';
   const fmtBA = (b, a, isOut=false) => {
     const rate = (b && a !== null) ? Math.round(a / b * 100) : null;
@@ -4682,8 +4690,8 @@ async function loadImportedList() {
   };
 
   // タブ切り替え
-  const tabs = ['pl','cf','cf-out','cf-detail'];
-  const tabLabels = { pl:'PL（千円）', cf:'CF収入（千円）', 'cf-out':'CF出金（千円）', 'cf-detail':'CF詳細（千円）' };
+  const tabs = ['pl','cf','cf-out','cf-detail','bs'];
+  const tabLabels = { pl:'PL（千円）', cf:'CF収入（千円）', 'cf-out':'CF出金（千円）', 'cf-detail':'CF詳細（千円）', bs:'BS（千円）' };
   let currentTab = 'pl';
 
   const renderTab = (tab) => {
@@ -4728,13 +4736,26 @@ async function loadImportedList() {
         fmt(cfA('expensePay',i)), fmt(cfA('adSportsPay',i)),
         fmt(cfA('eventCostPay',i)), fmt(cfA('salesOtherPay',i)),
       ];
-    } else {
+    } else if (tab === 'cf-detail') {
       cols = ['通信費','交際費','租税公課','ツール','消耗品','採用費','年会費','借入返済'];
       getRow = (m, i) => [
         fmt(cfA('telPay',i)), fmt(cfA('entertainPay',i)),
         fmt(cfA('taxPay',i)), fmt(cfA('toolsPay',i)),
         fmt(cfA('suppliesPay',i)), fmt(cfA('recruitPay',i)),
         fmt(cfA('annualFeePay',i)), fmt(cfA('loanOut',i)),
+      ];
+    } else {
+      // BS（貸借対照表）
+      cols = ['現預金','売掛金','その他流動資産','固定資産','買掛金・未払金','借入金','資本金','利益剰余金'];
+      getRow = (m, i) => [
+        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('cash',i))}</div>${fmtBA(bsB('cash',i),bsA('cash',i))}`,
+        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('receivable',i))}</div>${fmtBA(bsB('receivable',i),bsA('receivable',i))}`,
+        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('other_ca',i))}</div>${fmtBA(bsB('other_ca',i),bsA('other_ca',i))}`,
+        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('fixed',i))}</div>${fmtBA(bsB('fixed',i),bsA('fixed',i))}`,
+        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('payable',i))}</div>${fmtBA(bsB('payable',i),bsA('payable',i),true)}`,
+        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('borrowing',i))}</div>${fmtBA(bsB('borrowing',i),bsA('borrowing',i),true)}`,
+        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('capital',i))}</div>${fmtBA(bsB('capital',i),bsA('capital',i))}`,
+        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('retained',i))}</div>${fmtBA(bsB('retained',i),bsA('retained',i))}`,
       ];
     }
 
