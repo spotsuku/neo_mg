@@ -416,6 +416,25 @@ td.actual.editable-cell {
     </div>
   </div>
 
+
+  <!-- ── 資金繰り予測（直近12ヶ月） ── -->
+  <div class="card" id="cf-forecast-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem;flex-wrap:wrap;gap:6px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:3px;height:14px;background:var(--chart-green);border-radius:2px;display:inline-block;flex-shrink:0"></span>
+        <span style="font-size:12px;font-weight:700">資金繰り予測（直近12ヶ月）</span>
+        <span style="font-size:10px;color:var(--text3)">実績＋予算ベース ─ 先行きの資金状況を確認</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;color:var(--text3)">残高推移</span>
+        <div id="cf-forecast-sparkline" style="display:inline-flex;align-items:flex-end;gap:2px;height:24px"></div>
+      </div>
+    </div>
+    <div class="scroll-x">
+      <div id="cf-forecast-table" style="font-size:11px;color:var(--text3)">読込中...</div>
+    </div>
+  </div>
+
   <!-- ââ å¹´æ¬¡äºå®ãµããªã¼ ââ -->
   <div style="margin-bottom:1rem">
     <div style="font-size:11px;color:var(--text3);margin-bottom:.625rem">
@@ -1639,6 +1658,7 @@ function renderAnnualSummary() {
   renderAnnualPL(d);
   renderAnnualCF(d);
   renderAnnualBS();
+  renderCashFlowForecast();
 }
 
 function renderAnnualPL(d) {
@@ -1719,6 +1739,140 @@ function renderAnnualCF(d) {
   ];
   document.getElementById('annual-cf-table').innerHTML = buildAnnualTable(rows, 'åå');
 }
+
+// ═══════════════════════════════════════════
+//  資金繰り予測（直近12ヶ月）
+// ═══════════════════════════════════════════
+function renderCashFlowForecast() {
+  const el = document.getElementById('cf-forecast-table');
+  const sparkEl = document.getElementById('cf-forecast-sparkline');
+  if (!el) return;
+
+  const opexKeys = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
+    'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
+    'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay'];
+  const finOutKeys = ['investPay','loanOut'];
+
+  // 全年度の月データを時系列に結合
+  const allMonths = [];
+  ['2025','2026'].forEach(yr => {
+    const d = DB[yr];
+    if (!d || !d.months) return;
+    const cfA = d.cf?.actual || {};
+    const cfB = d.cf?.budget || {};
+    d.months.forEach((m, i) => {
+      const hasActual = (Number(cfA.cfClose?.[i]) > 0) || (Number(cfA.cfIn?.[i]) > 0);
+      const getA = (k) => Number(cfA[k]?.[i]) || 0;
+      const getB = (k) => Number(cfB[k]?.[i]) || 0;
+
+      const cashIn_A = getA('cfIn');
+      const cashIn_B = getB('cfIn');
+      const opex_A = opexKeys.reduce((t,k) => t + getA(k), 0);
+      const opex_B = opexKeys.reduce((t,k) => t + getB(k), 0);
+      const finOut_A = finOutKeys.reduce((t,k) => t + getA(k), 0);
+      const finOut_B = finOutKeys.reduce((t,k) => t + getB(k), 0);
+      const loanIn_A = getA('loanIn');
+      const loanIn_B = getB('loanIn');
+
+      allMonths.push({
+        code: m, yr, label: MONTH_LABELS[m] || m,
+        hasActual,
+        open:   hasActual ? getA('open')    : getB('open'),
+        cashIn: hasActual ? cashIn_A  : cashIn_B,
+        opex:   hasActual ? opex_A    : opex_B,
+        finOut: hasActual ? finOut_A  : finOut_B,
+        loanIn: hasActual ? loanIn_A  : loanIn_B,
+        close:  hasActual ? getA('cfClose') : 0,
+      });
+    });
+  });
+
+  // 直近の実績がある月を起点にして12ヶ月分を表示
+  let lastActualIdx = -1;
+  allMonths.forEach((m, i) => { if (m.hasActual) lastActualIdx = i; });
+  const startIdx = Math.max(0, lastActualIdx);
+  const forecast = allMonths.slice(startIdx, startIdx + 12);
+
+  if (forecast.length === 0) {
+    el.innerHTML = '<span style="color:var(--text3)">データがありません</span>';
+    return;
+  }
+
+  // 予算月の残高を計算（前月末残高ベース）
+  for (let i = 0; i < forecast.length; i++) {
+    const f = forecast[i];
+    if (!f.hasActual && i > 0) {
+      const prevClose = forecast[i-1].close || forecast[i-1].open || 0;
+      f.open = prevClose;
+      f.close = Math.round(prevClose + f.cashIn + f.loanIn - f.opex - f.finOut);
+    }
+    if (f.hasActual && !f.close) {
+      f.close = Math.round((f.open || 0) + f.cashIn + f.loanIn - f.opex - f.finOut);
+    }
+  }
+
+  const fmt = (v) => v !== 0 ? Math.round(v).toLocaleString() : '\u2014';
+
+  // テーブル描画
+  let html = '<table class="dt" style="min-width:' + (forecast.length * 85 + 120) + 'px;width:100%">';
+  html += '<thead><tr><th class="l" style="min-width:110px;font-size:10px;position:sticky;left:0;background:var(--bg2);z-index:1">科目</th>';
+  forecast.forEach(f => {
+    const hdrClr = f.hasActual ? '' : 'color:var(--tc-amber)';
+    const badgeClr = f.hasActual ? 'color:var(--tc-green)' : 'color:var(--tc-amber)';
+    const badge = f.hasActual ? '実績' : '予算';
+    html += '<th style="min-width:80px;font-size:10px;' + hdrClr + '">' + f.label + '<br><span style="font-size:9px;' + badgeClr + '">' + badge + '</span></th>';
+  });
+  html += '</tr></thead><tbody>';
+
+  // 行定義
+  const rowDefs = [
+    { label: '月初残高',   key: 'open',   style: 'font-weight:600' },
+    { label: '入金',       key: 'cashIn', isRev: true },
+    { label: '借入・調達', key: 'loanIn', isRev: true },
+    { label: '販管費出金', key: 'opex',   isOut: true },
+    { label: '投資・返済', key: 'finOut', isOut: true },
+    { label: '月末残高',   key: 'close',  style: 'font-weight:700;border-top:2px solid var(--border2)', isClose: true },
+  ];
+
+  rowDefs.forEach(row => {
+    html += '<tr><td class="l" style="font-size:10px;position:sticky;left:0;background:var(--bg2);z-index:1;' + (row.style || '') + '">' + row.label + '</td>';
+    forecast.forEach(f => {
+      const v = f[row.key] || 0;
+      let cs = row.style || '';
+      if (row.isClose) {
+        if (v < 0) cs += ';background:rgba(226,75,74,0.2);color:var(--tc-red)';
+        else if (v < 5000) cs += ';background:rgba(239,159,39,0.15);color:var(--tc-amber)';
+        else cs += ';color:var(--tc-green)';
+      } else if (row.isOut && v > 0) { cs += ';color:var(--tc-red)'; }
+      else if (row.isRev && v > 0) { cs += ';color:var(--tc-green)'; }
+      html += '<td style="text-align:right;padding:4px 6px;' + cs + '">' + fmt(v) + '</td>';
+    });
+    html += '</tr>';
+  });
+
+  // 純CF行
+  html += '<tr><td class="l" style="font-size:10px;position:sticky;left:0;background:var(--bg2);z-index:1;color:var(--text3)">純CF</td>';
+  forecast.forEach(f => {
+    const net = (f.cashIn||0) + (f.loanIn||0) - (f.opex||0) - (f.finOut||0);
+    const cls = net >= 0 ? 'color:var(--tc-green)' : 'color:var(--tc-red)';
+    html += '<td style="text-align:right;padding:4px 6px;font-size:10px;' + cls + '">' + (net>=0?'+':'') + fmt(net) + '</td>';
+  });
+  html += '</tr></tbody></table>';
+  el.innerHTML = html;
+
+  // スパークライン（月末残高推移）
+  if (sparkEl) {
+    const closes = forecast.map(f => f.close || 0);
+    const maxClose = Math.max(...closes.map(Math.abs), 1);
+    sparkEl.innerHTML = closes.map((v, i) => {
+      const h = Math.max(2, Math.round(Math.abs(v) / maxClose * 22));
+      const bg = v < 0 ? '#E24B4A' : v < 5000 ? '#EF9F27' : '#27ae60';
+      const title = forecast[i].label + ': ' + Math.round(v).toLocaleString() + '千円';
+      return '<div title="' + title + '" style="width:6px;height:' + h + 'px;background:' + bg + ';border-radius:1px;opacity:.8"></div>';
+    }).join('');
+  }
+}
+
 
 function renderAnnualBS() {
   const sections = [
