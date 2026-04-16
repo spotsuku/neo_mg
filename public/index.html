@@ -4023,6 +4023,24 @@ ${csvFull}
   ããä¸è´ããªãå ´åã¯åè¨³ã®ã¿ã§åè¨ç®ãã¦åããããã¨
 
 ä»¥ä¸ã®JSONå½¢å¼ã§æãã¨ã®æ°å¤ãè¿ãã¦ãã ãã:
+
+★★★ BS（貸借対照表）抽出ルール — 特に「純資産の部」は絶対に落とさないこと ★★★
+貸借対照表CSV（マネーフォワード形式）には必ず「純資産の部」「【純資産の部】」「株主資本」等のセクションがあり、
+その中に 資本金・資本剰余金・利益剰余金 の行が存在します。これらの行を必ず抽出してください。
+
+◆ bs.capital（資本金・資本剰余金）に加算する勘定科目行:
+  - 「資本金」「資本準備金」「その他資本剰余金」「新株式申込証拠金」
+  - 「資本剰余金」rollup行があれば資本準備金+その他の代わりに使用（二重計上禁止）
+
+◆ bs.retained（利益剰余金）に加算する勘定科目行:
+  - 「利益準備金」「繰越利益剰余金」「その他利益剰余金」「別途積立金」「任意積立金」
+  - 「利益剰余金」rollup行があれば内訳の代わりに使用（二重計上禁止）
+  - 「自己株式」はマイナス項目として減算
+
+【最重要・抽出漏れ防止】
+- マイナス（▲71,710,000 や -71,710,000）でも必ず抽出。利益剰余金は赤字企業ではマイナスになる。
+- 「株主資本合計」「純資産合計」行ではなく個別勘定科目行から取得。
+- BSバランス自己検算: 資産合計 = 負債合計 + 純資産合計。capital=0 かつ retained=0 なら再スキャン。
 {
   "months": {
     "${months[0]}": {
@@ -4153,6 +4171,34 @@ ${csvFull}
     log.innerHTML += `<span class="log-info">ä¸ã®ç¢ºèªãã¼ãã«ã§åå®¹ãç¢ºèªãã¦ãããåè¾¼ç¢ºå®ããã¦ãã ãã</span>\n`;
 
     // ã°ã­ã¼ãã«ã«ä¿æï¼commitCSVResult ã§ä½¿ç¨ï¼
+    
+    // ── BS純資産フォールバック：AIが資本金・利益剰余金を0で返した場合、CSVから直接抽出 ──
+    if (csvType === 'bs') {
+      const needsFallback = monthsFound.some(m => {
+        const bs = parsed.months[m]?.bs || {};
+        return (!bs.capital || bs.capital === 0) && (!bs.retained || bs.retained === 0);
+      });
+      if (needsFallback) {
+        try {
+          const scanned = scanBsEquityFromCsv(csvRawText, months);
+          if (scanned) {
+            let patched = 0;
+            monthsFound.forEach(m => {
+              const s = scanned[m];
+              if (!s) return;
+              if (!parsed.months[m].bs) parsed.months[m].bs = {};
+              const bs = parsed.months[m].bs;
+              if ((!bs.capital || bs.capital === 0) && s.capital) { bs.capital = s.capital; patched++; }
+              if ((!bs.retained || bs.retained === 0) && s.retained) { bs.retained = s.retained; patched++; }
+            });
+            if (patched > 0) {
+              log.innerHTML += `<span class="log-ok">✓ 純資産フォールバック：CSVから ${patched} 件の資本金/利益剰余金を直接抽出しました</span>\n`;
+            }
+          }
+        } catch (fbErr) { console.warn('[BS fallback]', fbErr); }
+      }
+    }
+
     window._csvPendingResult = { parsed, months, kind, csvType };
 
     // ãã¬ãã¥ã¼ãã¼ãã«ãæç»
@@ -7397,14 +7443,247 @@ window.addEventListener('load', async () => {
 </script>
     <script>
 (function(){
-const MF_PERIODS={2025:{start:'2025-07-01',end:'2026-03-31'},2024:{start:'2024-07-01',end:'2025-06-30'},2023:{start:'2023-07-01',end:'2024-06-30'},2026:{start:'2026-07-01',end:'2027-06-30'}};
-function mfGetPeriod(fy){return MF_PERIODS[fy]||{start:fy+'-07-01',end:(parseInt(fy)+1)+'-03-31'};}
-function mfInit(){var s=document.getElementById('sec-import');if(!s||document.getElementById('mf-section'))return;s.insertAdjacentHTML('afterbegin','<div id="mf-section" class="card" style="margin-bottom:16px;border:1px solid rgba(59,130,246,.3)"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px">🔗</span><div><div style="font-size:14px;font-weight:700">マネフォ クラウド会計 自動連携</div><div style="font-size:11px;color:#64748b">PL・BS・仕訳(CF)を一括取込</div></div></div><span id="mf-status-badge" style="padding:3px 12px;border-radius:20px;font-size:11px;background:rgba(100,116,139,.2);color:#94a3b8">確認中...</span></div><div id="mf-disconnected" style="display:none;text-align:center;padding:16px 0"><p style="color:#94a3b8;font-size:12px;margin-bottom:12px">マネフォと連携するとPL・BS・仕訳データを自動取込できます</p><button onclick="location.href=\x27/api/mf-auth?action=login\x27" style="background:#3b82f6;color:#fff;border:none;padding:9px 24px;border-radius:8px;cursor:pointer;font-size:13px">🔗 マネフォと連携</button></div><div id="mf-connected" style="display:none"><div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap"><div style="background:rgba(30,41,59,.6);border-radius:8px;padding:8px 14px;flex:1;min-width:120px"><div style="color:#64748b;font-size:10px">事業者</div><div id="mf-office-name" style="font-size:12px;font-weight:600">-</div></div><div style="background:rgba(30,41,59,.6);border-radius:8px;padding:8px 14px;flex:1;min-width:120px"><div style="color:#64748b;font-size:10px">最終同期</div><div id="mf-last-sync" style="font-size:12px">-</div></div><select id="mf-fiscal-year" style="background:rgba(30,41,59,.8);color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 10px;font-size:12px"><option value="2025">2025年度(7月〜3月)</option><option value="2024">2024年度(7月〜6月)</option><option value="2026">2026年度(7月〜)</option></select></div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px"><button id="mf-btn-journals" onclick="mfSync(\x27journals\x27)" style="background:#059669;color:#fff;border:none;padding:9px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">📊 仕訳(CF)</button><button id="mf-btn-trial_pl" onclick="mfSync(\x27trial_pl\x27)" style="background:#7c3aed;color:#fff;border:none;padding:9px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">📈 PL試算表</button><button id="mf-btn-trial_bs" onclick="mfSync(\x27trial_bs\x27)" style="background:#0369a1;color:#fff;border:none;padding:9px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">🏛 BS試算表</button></div><div style="display:flex;gap:8px;justify-content:flex-end"><button onclick="mfCheckStatus()" style="background:rgba(30,41,59,.8);color:#94a3b8;border:1px solid #334155;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px">🔄 更新</button><button onclick="location.href=\x27/api/mf-auth?action=login\x27" style="background:rgba(30,41,59,.8);color:#94a3b8;border:1px solid #334155;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px">🔑 再認証</button></div><div id="mf-sync-log" style="margin-top:8px;font-size:11px;color:#64748b;min-height:16px"></div></div></div>');mfCheckStatus();}
-window.mfCheckStatus=async function(){try{var r=await fetch('/api/mf-auth?action=status'),d=await r.json(),b=document.getElementById('mf-status-badge');if(!b)return;if(d.connected&&!d.expired){b.style.background='rgba(6,78,59,.4)';b.style.color='#34d399';b.textContent='✅ 接続中';document.getElementById('mf-disconnected').style.display='none';document.getElementById('mf-connected').style.display='block';try{var r2=await fetch('/api/mf-sync?action=offices'),d2=await r2.json();if(d2.ok&&d2.data)document.getElementById('mf-office-name').textContent=d2.data.name||'-';}catch(e){}}else{b.style.background='rgba(127,29,29,.4)';b.style.color='#fca5a5';b.textContent=d.expired?'⚠️ 期限切れ':'❌ 未接続';document.getElementById('mf-disconnected').style.display='block';document.getElementById('mf-connected').style.display='none';}}catch(e){}};
-function applyPlToDb(conv,fy){try{var db=eval("DB['"+fy+"']");if(!db||!db.pl)return 0;var n=0;['rev','labor','outsource','adv','gaichu','other','cogs'].forEach(function(k){if(!conv[k]||!db.pl.actual[k])return;conv[k].actual.forEach(function(v,i){if(v>0&&i<db.pl.actual[k].length){db.pl.actual[k][i]=v;n++;}});});return n;}catch(e){return 0;}}
-function applyCfToDb(conv,fy){try{var db=eval("DB['"+fy+"']");if(!db||!db.cf)return 0;var n=0;if(conv.cashIn&&db.cf.actual.cfIn){conv.cashIn.forEach(function(v,i){if(i<db.cf.actual.cfIn.length){db.cf.actual.cfIn[i]=v;n++;}});}return n;}catch(e){return 0;}}
-window.mfSync=async function(type){var fy=parseInt(document.getElementById('mf-fiscal-year').value);var period=mfGetPeriod(fy);var log=document.getElementById('mf-sync-log');var labels={journals:'📊 仕訳(CF)',trial_pl:'📈 PL試算表',trial_bs:'🏛 BS試算表'};var btn=document.getElementById('mf-btn-'+type);if(btn){btn.disabled=true;btn.textContent='⏳ 取得中...';}log.style.color='#94a3b8';try{var url=type==='journals'?'/api/mf-sync?action=cf_for_dashboard&fiscal_year='+fy:type==='trial_pl'?'/api/mf-sync?action=pl_for_dashboard&fiscal_year='+fy:'/api/mf-sync?action=bs_for_dashboard&fiscal_year='+fy;log.textContent=fy+'年度 '+labels[type]+' 取得中...';var r=await fetch(url),d=await r.json();if(!d.ok)throw new Error(d.error||'取得失敗');var applied=0;if(type==='trial_pl'&&d.converted){applied=applyPlToDb(d.converted,fy);if(applied>0){await saveDB();if(typeof updateWeeklyKPIs==='function')updateWeeklyKPIs();if(typeof renderReportTabs==='function')renderReportTabs();if(typeof buildSimPLTable==='function')buildSimPLTable();}}else if(type==='journals'&&d.converted){applied=applyCfToDb(d.converted,fy);if(applied>0){await saveDB();if(typeof updateWeeklyKPIs==='function')updateWeeklyKPIs();}}document.getElementById('mf-last-sync').textContent=new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});log.style.color='#34d399';var msg='✅ '+fy+'年度 '+labels[type];if(type==='journals')msg+=': 全'+(d.total_journals||0)+'件、DB'+applied+'項更新';else if(type==='trial_pl')msg+=': DB'+applied+'項更新・画面更新完了';else{var bs=d.converted||{};msg+=': 現金'+(bs.cash||0)+'千円、売掛'+(bs.receivable||0)+'千円、未払'+(bs.payable||0)+'千円';}log.textContent=msg;if(btn){btn.textContent='✅ 完了';setTimeout(function(){btn.disabled=false;btn.textContent=labels[type];},3000);}}catch(e){log.style.color='#fca5a5';log.textContent='❌ '+e.message;if(btn){btn.disabled=false;btn.textContent=labels[type];}}};
-document.addEventListener('DOMContentLoaded',function(){mfInit();var o=window.sw;if(o)window.sw=function(t,el){o(t,el);if(t==='import')setTimeout(function(){mfInit();mfCheckStatus();},100);};if(location.search.includes('mf_connected=1')){setTimeout(function(){var b=[...document.querySelectorAll('button')].find(function(x){return x.textContent.includes('CSV取込');});if(b)b.click();mfCheckStatus();},500);}});
+
+// ── MF連携: 会計年度は4月〜3月 ──
+function mfInit() {
+  var s = document.getElementById('sec-import');
+  if (!s || document.getElementById('mf-section')) return;
+  s.insertAdjacentHTML('afterbegin', '\
+<div id="mf-section" class="card" style="margin-bottom:16px;border:1px solid rgba(59,130,246,.3)">\
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">\
+    <div style="display:flex;align-items:center;gap:10px">\
+      <span style="font-size:18px">\u{1F517}</span>\
+      <div>\
+        <div style="font-size:14px;font-weight:700">マネフォ クラウド会計 自動連携</div>\
+        <div style="font-size:11px;color:#64748b">PL・BS・仕訳(CF)を一括取込 → ダッシュボードに自動反映</div>\
+      </div>\
+    </div>\
+    <span id="mf-status-badge" style="padding:3px 12px;border-radius:20px;font-size:11px;background:rgba(100,116,139,.2);color:#94a3b8">確認中...</span>\
+  </div>\
+  <div id="mf-disconnected" style="display:none;text-align:center;padding:16px 0">\
+    <p style="color:#94a3b8;font-size:12px;margin-bottom:12px">マネフォと連携するとPL・BS・仕訳データを自動取込できます</p>\
+    <button onclick="location.href=\'/api/mf-auth?action=login\'" style="background:#3b82f6;color:#fff;border:none;padding:9px 24px;border-radius:8px;cursor:pointer;font-size:13px">\u{1F517} マネフォと連携</button>\
+  </div>\
+  <div id="mf-connected" style="display:none">\
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">\
+      <div style="background:rgba(30,41,59,.6);border-radius:8px;padding:8px 14px;flex:1;min-width:120px">\
+        <div style="color:#64748b;font-size:10px">事業者</div>\
+        <div id="mf-office-name" style="font-size:12px;font-weight:600">-</div>\
+      </div>\
+      <div style="background:rgba(30,41,59,.6);border-radius:8px;padding:8px 14px;flex:1;min-width:120px">\
+        <div style="color:#64748b;font-size:10px">最終同期</div>\
+        <div id="mf-last-sync" style="font-size:12px">-</div>\
+      </div>\
+      <select id="mf-fiscal-year" style="background:rgba(30,41,59,.8);color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 10px;font-size:12px">\
+        <option value="2025">2025年度（4月〜3月）</option>\
+        <option value="2026">2026年度（4月〜3月）</option>\
+      </select>\
+    </div>\
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">\
+      <button id="mf-btn-journals" onclick="mfSync(\'journals\')" style="background:#059669;color:#fff;border:none;padding:9px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">\u{1F4CA} 仕訳(CF)</button>\
+      <button id="mf-btn-trial_pl" onclick="mfSync(\'trial_pl\')" style="background:#7c3aed;color:#fff;border:none;padding:9px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">\u{1F4C8} PL試算表</button>\
+      <button id="mf-btn-trial_bs" onclick="mfSync(\'trial_bs\')" style="background:#0369a1;color:#fff;border:none;padding:9px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">\u{1F3DB} BS試算表</button>\
+    </div>\
+    <div style="display:flex;gap:8px;justify-content:flex-end">\
+      <button onclick="mfCheckStatus()" style="background:rgba(30,41,59,.8);color:#94a3b8;border:1px solid #334155;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px">\u{1F504} 更新</button>\
+      <button onclick="location.href=\'/api/mf-auth?action=login\'" style="background:rgba(30,41,59,.8);color:#94a3b8;border:1px solid #334155;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px">\u{1F511} 再認証</button>\
+    </div>\
+    <div id="mf-sync-log" style="margin-top:8px;font-size:11px;color:#64748b;min-height:16px"></div>\
+  </div>\
+</div>');
+  mfCheckStatus();
+}
+
+// ── 接続状態確認 ──
+window.mfCheckStatus = async function() {
+  try {
+    var r = await fetch('/api/mf-auth?action=status');
+    var d = await r.json();
+    var b = document.getElementById('mf-status-badge');
+    if (!b) return;
+    if (d.connected && !d.expired) {
+      b.style.background = 'rgba(6,78,59,.4)';
+      b.style.color = '#34d399';
+      b.textContent = '\u2705 接続中';
+      document.getElementById('mf-disconnected').style.display = 'none';
+      document.getElementById('mf-connected').style.display = 'block';
+      try {
+        var r2 = await fetch('/api/mf-sync?action=offices');
+        var d2 = await r2.json();
+        if (d2.ok && d2.data) {
+          var name = d2.data.name || d2.data.display_name || '-';
+          document.getElementById('mf-office-name').textContent = name;
+        }
+      } catch(e) { console.warn('[MF] offices fetch failed:', e); }
+    } else {
+      b.style.background = 'rgba(127,29,29,.4)';
+      b.style.color = '#fca5a5';
+      b.textContent = d.expired ? '\u26A0\uFE0F 期限切れ' : '\u274C 未接続';
+      document.getElementById('mf-disconnected').style.display = 'block';
+      document.getElementById('mf-connected').style.display = 'none';
+    }
+  } catch(e) { console.warn('[MF] status check failed:', e); }
+};
+
+// ── PL → DB書込 ──
+function applyPlToDb(conv, fy) {
+  var db = window.DB[String(fy)];
+  if (!db || !db.pl) return 0;
+  var n = 0;
+  ['rev','labor','outsource','adv','gaichu','other','cogs'].forEach(function(k) {
+    if (!conv[k] || !conv[k].actual) return;
+    if (!db.pl.actual[k]) db.pl.actual[k] = new Array(db.months.length).fill(0);
+    conv[k].actual.forEach(function(v, i) {
+      if (v > 0 && i < db.pl.actual[k].length) {
+        db.pl.actual[k][i] = v;
+        n++;
+      }
+    });
+  });
+  return n;
+}
+
+// ── BS → DB書込 ──
+function applyBsToDb(conv, fy) {
+  var db = window.DB[String(fy)];
+  if (!db) return 0;
+  var n = 0;
+  // 月次BSデータ書込
+  if (conv.monthly) {
+    if (!db.bs) db.bs = {};
+    if (!db.bs.actual) db.bs.actual = {};
+    var keys = ['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained'];
+    for (var i = 0; i < db.months.length; i++) {
+      var hasVal = keys.some(function(k) { return conv.monthly[k] && conv.monthly[k][i] !== 0; });
+      if (!hasVal) continue;
+      var row = {};
+      keys.forEach(function(k) { row[k] = (conv.monthly[k] && conv.monthly[k][i]) || 0; });
+      db.bs.actual[i] = row;
+      n++;
+    }
+  }
+  // 年次BS_DATA更新（最新月のサマリー）
+  if (conv.summary && typeof BS_DATA !== 'undefined') {
+    var s = conv.summary;
+    if (s.cash !== undefined) BS_DATA.assets.cash.actual = s.cash;
+    if (s.receivable !== undefined) BS_DATA.assets.receivable.actual = s.receivable;
+    if (s.other_ca !== undefined && BS_DATA.assets.other_ca) BS_DATA.assets.other_ca.actual = s.other_ca;
+    if (s.fixed !== undefined) BS_DATA.assets.fixed.actual = s.fixed;
+    if (s.payable !== undefined) BS_DATA.liabilities.payable.actual = s.payable;
+    if (s.borrowing !== undefined) BS_DATA.liabilities.borrowing.actual = s.borrowing;
+    if (s.other_cl !== undefined && BS_DATA.liabilities.other_cl) BS_DATA.liabilities.other_cl.actual = s.other_cl;
+    if (s.capital !== undefined) BS_DATA.equity.capital.actual = s.capital;
+    if (s.retained !== undefined) BS_DATA.equity.retained.actual = s.retained;
+  }
+  return n;
+}
+
+// ── CF → DB書込 ──
+function applyCfToDb(conv, fy) {
+  var db = window.DB[String(fy)];
+  if (!db || !db.cf) return 0;
+  var n = 0;
+  if (conv.cashIn && db.cf.actual.cfIn) {
+    conv.cashIn.forEach(function(v, i) {
+      if (i < db.cf.actual.cfIn.length) { db.cf.actual.cfIn[i] = v; n++; }
+    });
+  }
+  return n;
+}
+
+// ── ダッシュボード全画面更新 ──
+function refreshDashboardAfterSync() {
+  if (typeof updateWeeklyKPIs === 'function') updateWeeklyKPIs();
+  if (typeof renderPLCF === 'function') renderPLCF();
+  if (typeof loadImportedList === 'function') loadImportedList();
+  if (typeof renderAnnualSummary === 'function') renderAnnualSummary();
+  if (typeof renderReportTabs === 'function') renderReportTabs();
+  if (typeof buildSimPLTable === 'function') buildSimPLTable();
+}
+
+// ── メイン同期関数 ──
+window.mfSync = async function(type) {
+  var fy = parseInt(document.getElementById('mf-fiscal-year').value);
+  var log = document.getElementById('mf-sync-log');
+  var labels = { journals: '\u{1F4CA} 仕訳(CF)', trial_pl: '\u{1F4C8} PL試算表', trial_bs: '\u{1F3DB} BS試算表' };
+  var btn = document.getElementById('mf-btn-' + type);
+  if (btn) { btn.disabled = true; btn.textContent = '\u23F3 取得中...'; }
+  log.style.color = '#94a3b8';
+
+  try {
+    var actionMap = { journals: 'cf_for_dashboard', trial_pl: 'pl_for_dashboard', trial_bs: 'bs_for_dashboard' };
+    var url = '/api/mf-sync?action=' + actionMap[type] + '&fiscal_year=' + fy;
+    log.textContent = fy + '年度 ' + labels[type] + ' 取得中...';
+
+    var r = await fetch(url);
+    var d = await r.json();
+    if (!d.ok) throw new Error(d.error || '取得失敗');
+
+    var applied = 0;
+    var msg = '\u2705 ' + fy + '年度 ' + labels[type];
+
+    if (type === 'trial_pl' && d.converted) {
+      applied = applyPlToDb(d.converted, fy);
+      if (applied > 0) {
+        await saveDB();
+        refreshDashboardAfterSync();
+      }
+      msg += ': DB ' + applied + '項更新 → ダッシュボード反映完了';
+
+    } else if (type === 'trial_bs' && d.converted) {
+      applied = applyBsToDb(d.converted, fy);
+      if (applied > 0) {
+        await saveDB();
+        refreshDashboardAfterSync();
+      }
+      var s = d.converted.summary || {};
+      msg += ': 現預金' + (s.cash || 0) + '千円 / 借入' + (s.borrowing || 0) + '千円 / 資本金' + (s.capital || 0) + '千円 / 利益剰余金' + (s.retained || 0) + '千円 → DB ' + applied + 'ヶ月反映';
+
+    } else if (type === 'journals' && d.converted) {
+      applied = applyCfToDb(d.converted, fy);
+      if (applied > 0) {
+        await saveDB();
+        refreshDashboardAfterSync();
+      }
+      msg += ': 全' + (d.total_journals || 0) + '件、DB ' + applied + '項更新';
+    }
+
+    document.getElementById('mf-last-sync').textContent = new Date().toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    log.style.color = '#34d399';
+    log.textContent = msg;
+
+    if (btn) {
+      btn.textContent = '\u2705 完了';
+      setTimeout(function() { btn.disabled = false; btn.textContent = labels[type]; }, 3000);
+    }
+  } catch(e) {
+    log.style.color = '#fca5a5';
+    log.textContent = '\u274C ' + e.message;
+    if (btn) { btn.disabled = false; btn.textContent = labels[type]; }
+  }
+};
+
+// ── 初期化 ──
+document.addEventListener('DOMContentLoaded', function() {
+  mfInit();
+  // タブ切り替え時にMFセクション再挿入
+  var origSw = window.sw;
+  if (origSw) {
+    window.sw = function(t, el) {
+      origSw(t, el);
+      if (t === 'import') setTimeout(function() { mfInit(); mfCheckStatus(); }, 100);
+    };
+  }
+  // OAuth コールバック後の自動処理
+  if (location.search.includes('mf_connected=1')) {
+    setTimeout(function() {
+      var b = [].slice.call(document.querySelectorAll('button')).find(function(x) { return x.textContent.includes('CSV取込'); });
+      if (b) b.click();
+      mfCheckStatus();
+    }, 500);
+  }
+});
+
 })();
     </script>
 </body>
