@@ -884,7 +884,7 @@ td.actual.editable-cell {
       <!-- ヘッダー（クリックで開閉） -->
       <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleQS()">
         <div style="display:flex;align-items:center;gap:8px">
-          <span id="qs-toggle-icon" style="font-size:14px;transition:transform .2s">─¶</span>
+          <span id="qs-toggle-icon" style="font-size:14px;transition:transform .2s">▶</span>
           <span style="font-size:11px;font-weight:700;color:var(--text2)">⚡ クイックシミュレーター</span>
           <span style="font-size:10px;color:var(--text3)">— スライダーで月次平均を素早く試算</span>
         </div>
@@ -1896,7 +1896,7 @@ function renderAnnualBS() {
     Object.entries(BS_DATA[sec.key]).forEach(([key, row]) => {
       const diff = (row.actual - row.budget) * sec.sign;
       const diffStr = diff > 0 ? `<span class="g">+${Math.round(diff).toLocaleString()}</span>`
-                    : diff < 0 ? `<span class="r">─²${Math.round(Math.abs(diff)).toLocaleString()}</span>`
+                    : diff < 0 ? `<span class="r">▲${Math.round(Math.abs(diff)).toLocaleString()}</span>`
                     : '─';
       secTotB += row.budget; secTotA += row.actual;
       html += `<tr>
@@ -1908,7 +1908,7 @@ function renderAnnualBS() {
     });
     const secDiff = (secTotA - secTotB) * sec.sign;
     const secDiffStr = secDiff > 0 ? `<span class="g">+${Math.round(secDiff).toLocaleString()}</span>`
-                      : secDiff < 0 ? `<span class="r">─²${Math.round(Math.abs(secDiff)).toLocaleString()}</span>` : '─';
+                      : secDiff < 0 ? `<span class="r">▲${Math.round(Math.abs(secDiff)).toLocaleString()}</span>` : '─';
     html += `<tr style="background:var(--bg3);font-weight:700">
       <td class="l" style="font-size:11px">　合計</td>
       <td class="budget" style="background:rgba(55,138,221,0.12);border-left:2px solid rgba(55,138,221,0.3);font-weight:700">${Math.round(secTotB).toLocaleString()}</td>
@@ -1940,8 +1940,8 @@ function editBSCell(td, section, key, kind) {
 function buildAnnualTable(rows, unit) {
   const fmt = (v) => v !== null && v !== undefined ? Math.round(Math.abs(v)).toLocaleString() : '─';
   const sign = (v, isOut, isPL, isCF, noSign) => {
-    if (noSign) return v >= 0 ? fmt(v) : `─²${fmt(v)}`;
-    if (isPL || isCF) return v >= 0 ? `<span class="g">+${fmt(v)}</span>` : `<span class="r">─²${fmt(v)}</span>`;
+    if (noSign) return v >= 0 ? fmt(v) : `▲${fmt(v)}`;
+    if (isPL || isCF) return v >= 0 ? `<span class="g">+${fmt(v)}</span>` : `<span class="r">▲${fmt(v)}</span>`;
     return fmt(v);
   };
 
@@ -1959,8 +1959,8 @@ function buildAnnualTable(rows, unit) {
     const rowBg = isTot ? 'background:var(--bg3);font-weight:700;' : '';
     const labelStyle = !isTot ? 'padding-left:14px;font-size:10px;color:var(--text3)' : 'font-size:11px';
     const diff = (isOut ? -1 : 1) * ((row.a||0) - (row.b||0));
-    const diffStr = row.noSign ? (diff > 0 ? `<span class="g">+${fmt(diff)}</span>` : diff < 0 ? `<span class="r">─²${fmt(diff)}</span>` : '─')
-                  : diff > 0 ? `<span class="g">+${fmt(diff)}</span>` : diff < 0 ? `<span class="r">─²${fmt(diff)}</span>` : '─';
+    const diffStr = row.noSign ? (diff > 0 ? `<span class="g">+${fmt(diff)}</span>` : diff < 0 ? `<span class="r">▲${fmt(diff)}</span>` : '─')
+                  : diff > 0 ? `<span class="g">+${fmt(diff)}</span>` : diff < 0 ? `<span class="r">▲${fmt(diff)}</span>` : '─';
     const rate = row.b > 0 ? Math.round(row.a / row.b * 100) : null;
     const rateBadge = rate !== null
       ? `<span class="badge ${(isOut ? rate <= 100 : rate >= 100) ? 'bg' : 'br'}">${rate}%</span>` : '─';
@@ -2196,7 +2196,7 @@ function renderPLView(d) {
     const fmt = (v) => Math.round(v).toLocaleString() + '千円';
     const fmtP = (v) => v >= 0
       ? `<span class="g">+${fmt(v)}</span>`
-      : `<span class="r">─²${fmt(Math.abs(v))}</span>`;
+      : `<span class="r">▲${fmt(Math.abs(v))}</span>`;
     const rateBadge = (r, inverted=false) => {
       if (!r) return '';
       const good = inverted ? r <= 100 : r >= 100;
@@ -2388,9 +2388,9 @@ function renderPLView(d) {
   d.months.forEach((_, i) => {
     const bOp = gpB[i] - ((Number(d.pl.budget.labor[i])||0)+(Number(d.pl.budget.outsource[i])||0)+(Number(d.pl.budget.adv[i])||0)+(Number((d.pl.budget.gaichu||[])[i])||0)+(Number(d.pl.budget.other[i])||0));
     bOpSum += bOp;
-    html += `<td class="budget ${bOp >= 0 ? 'diff-pos' : 'diff-neg'}">${bOp >= 0 ? '' : '─²'}${Math.abs(Math.round(bOp)).toLocaleString()}</td>`;
+    html += `<td class="budget ${bOp >= 0 ? 'diff-pos' : 'diff-neg'}">${bOp >= 0 ? '' : '▲'}${Math.abs(Math.round(bOp)).toLocaleString()}</td>`;
   });
-  html += `<td class="budget ${bOpSum >= 0 ? 'diff-pos' : 'diff-neg'}" style="background:rgba(55,138,221,0.12);border-left:2px solid rgba(55,138,221,0.3);font-weight:700">${bOpSum >= 0 ? '' : '─²'}${Math.abs(Math.round(bOpSum)).toLocaleString()}</td></tr>`;
+  html += `<td class="budget ${bOpSum >= 0 ? 'diff-pos' : 'diff-neg'}" style="background:rgba(55,138,221,0.12);border-left:2px solid rgba(55,138,221,0.3);font-weight:700">${bOpSum >= 0 ? '' : '▲'}${Math.abs(Math.round(bOpSum)).toLocaleString()}</td></tr>`;
 
   html += `<tr class="tot"><td class="l" style="position:sticky;left:0;z-index:1;background:var(--bg3)"></td><td class="l" style="font-size:9px;position:sticky;left:130px;z-index:1;background:var(--bg3)">実績</td>`;
   let aOpSum = 0;
@@ -2399,9 +2399,9 @@ function renderPLView(d) {
     const ae = (Number(d.pl.actual.labor[i])||0)+(Number(d.pl.actual.outsource[i])||0)+(Number(d.pl.actual.adv[i])||0)+(Number((d.pl.actual.gaichu||[])[i])||0)+(Number(d.pl.actual.other[i])||0);
     if (gp === null && !ae) { html += `<td>─</td>`; return; }
     const aOp = (gp||0) - ae; aOpSum += aOp;
-    html += `<td class="actual ${aOp >= 0 ? 'diff-pos' : 'diff-neg'}">${aOp >= 0 ? '' : '─²'}${Math.abs(Math.round(aOp)).toLocaleString()}</td>`;
+    html += `<td class="actual ${aOp >= 0 ? 'diff-pos' : 'diff-neg'}">${aOp >= 0 ? '' : '▲'}${Math.abs(Math.round(aOp)).toLocaleString()}</td>`;
   });
-  html += `<td class="actual ${aOpSum >= 0 ? 'diff-pos' : 'diff-neg'}" style="background:rgba(39,174,96,0.10);border-left:2px solid rgba(39,174,96,0.25);font-weight:700">${aOpSum >= 0 ? '' : '─²'}${Math.abs(Math.round(aOpSum)).toLocaleString()}</td></tr>`;
+  html += `<td class="actual ${aOpSum >= 0 ? 'diff-pos' : 'diff-neg'}" style="background:rgba(39,174,96,0.10);border-left:2px solid rgba(39,174,96,0.25);font-weight:700">${aOpSum >= 0 ? '' : '▲'}${Math.abs(Math.round(aOpSum)).toLocaleString()}</td></tr>`;
   html += '</tbody></table>';
   window._plCFd = d;
   document.getElementById('pl-table-wrap').innerHTML = html;
@@ -2785,7 +2785,7 @@ function renderCFView(d) {
       if (row.colId) {
         // 折りたたみ可能セクション
         const isOpen = _cfSectionOpen[row.colId] !== false; // デフォルト開く
-        const icon = isOpen ? '─¼' : '─¶';
+        const icon = isOpen ? '▼' : '▶';
         html += `<tr style="cursor:pointer;user-select:none" onclick="toggleCFSection('${row.colId}')">
           <td colspan="${N+3}" style="${secBg};font-size:10px;font-weight:700;color:var(--text3);${indent};letter-spacing:.3px">
             <span id="icon-${row.colId}" style="margin-right:5px;font-size:9px">${icon}</span>${row.label}
@@ -2807,7 +2807,7 @@ function renderCFView(d) {
     let rowLabel = row.label;
     if (row.subColId) {
       const subOpen = _cfSectionOpen[row.subColId] !== false;
-      const subIcon = subOpen ? '─¼' : '─¶';
+      const subIcon = subOpen ? '▼' : '▶';
       // ラベルの「（明細▶）」を動的なアイコンに置き換え
       rowLabel = rowLabel.replace('（明細▶）', '') +
         ` <span onclick="event.stopPropagation();toggleCFSection('${row.subColId}');renderCFView(DB[currentYear])"
@@ -2855,12 +2855,12 @@ function renderCFView(d) {
         const av = (row.aArr||[])[i];
         if ((bv===null||bv===undefined||bv===''||bv===0) && (av===null||av===undefined||av===''||av===0)) { html+='<td class="diff-zero">─</td>'; return; }
         const diff = (isOut?-1:1)*((Number(av)||0)-(Number(bv)||0));
-        html += `<td class="${diff>0?'diff-pos':diff<0?'diff-neg':'diff-zero'}">${diff>0?'+':'─²'}${diff!==0?Math.abs(Math.round(diff)).toLocaleString():'─'}</td>`;
+        html += `<td class="${diff>0?'diff-pos':diff<0?'diff-neg':'diff-zero'}">${diff>0?'+':'▲'}${diff!==0?Math.abs(Math.round(diff)).toLocaleString():'─'}</td>`;
       });
       const bTot = (row.bArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
       const aTot = (row.aArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
       const dTot = (isOut?-1:1)*(aTot-bTot);
-      html += `<td class="${dTot>0?'diff-pos':dTot<0?'diff-neg':'diff-zero'}" style="font-weight:700;border-left:2px solid rgba(128,128,128,0.2)">${dTot>0?'+':'─²'}${dTot!==0?Math.abs(Math.round(dTot)).toLocaleString():'─'}</td></tr>`;
+      html += `<td class="${dTot>0?'diff-pos':dTot<0?'diff-neg':'diff-zero'}" style="font-weight:700;border-left:2px solid rgba(128,128,128,0.2)">${dTot>0?'+':'▲'}${dTot!==0?Math.abs(Math.round(dTot)).toLocaleString():'─'}</td></tr>`;
     }
   });
 
@@ -3140,7 +3140,7 @@ function renderBankSummary(rows) {
   Object.entries(groupTotals).forEach(([group, data]) => {
     const gc = CAT_GROUP_COLORS[group] || {};
     const amt = data.in > 0 ? data.in : data.out;
-    const sign = data.in > 0 ? '+' : '─²';
+    const sign = data.in > 0 ? '+' : '▲';
     html += `<div style="background:${gc.bg||'var(--bg2)'};border-radius:var(--r);padding:8px 10px">
       <div style="font-size:10px;font-weight:700;color:${gc.color||'var(--text2)'};margin-bottom:4px">${group}</div>
       <div style="font-size:13px;font-weight:700;color:${gc.color||'var(--text2)'}">
@@ -5050,7 +5050,7 @@ async function loadImportedList() {
           `<div style="font-size:10px;color:var(--text3)">${fmt(ab)}</div>${fmtBA(ab,aa,true)}`,
           `<div style="font-size:10px;color:var(--text3)">${fmt(gb)}</div>${fmtBA(gb,ga,true)}`,
           `<div style="font-size:10px;color:var(--text3)">${fmt(xb)}</div>${fmtBA(xb,xa,true)}`,
-          opA !== null ? `<span class="${opA>=0?'g':'r'}">${opA>=0?'+':'─²'}${Math.abs(Math.round(opA)).toLocaleString()}</span>` : '─',
+          opA !== null ? `<span class="${opA>=0?'g':'r'}">${opA>=0?'+':'▲'}${Math.abs(Math.round(opA)).toLocaleString()}</span>` : '─',
         ];
       };
     } else if (tab === 'cf') {
@@ -5674,7 +5674,7 @@ function recalcSimPL() {
     const gpEl = document.getElementById(`spl-gp-${i}`);
     if (gpEl) {
       const gp = gpArr[i];
-      gpEl.textContent = gp > 0 ? `+${gp.toLocaleString()}` : gp < 0 ? `─²${Math.abs(gp).toLocaleString()}` : '─';
+      gpEl.textContent = gp > 0 ? `+${gp.toLocaleString()}` : gp < 0 ? `▲${Math.abs(gp).toLocaleString()}` : '─';
       gpEl.style.color = gp >= 0 ? 'var(--tc-green)' : 'var(--tc-red)';
     }
 
@@ -5683,11 +5683,11 @@ function recalcSimPL() {
     costEl.style.color = opexVal > 0 ? 'var(--tc-red)' : '';
 
     const p = profitArr[i];
-    profEl.textContent = p > 0 ? `+${p.toLocaleString()}` : p < 0 ? `─²${Math.abs(p).toLocaleString()}` : '─';
+    profEl.textContent = p > 0 ? `+${p.toLocaleString()}` : p < 0 ? `▲${Math.abs(p).toLocaleString()}` : '─';
     profEl.style.color = p > 0 ? 'var(--tc-green)' : p < 0 ? 'var(--tc-red)' : '';
 
     const c = cumArr[i];
-    cumEl.textContent = c > 0 ? `+${c.toLocaleString()}` : c < 0 ? `─²${Math.abs(c).toLocaleString()}` : '─';
+    cumEl.textContent = c > 0 ? `+${c.toLocaleString()}` : c < 0 ? `▲${Math.abs(c).toLocaleString()}` : '─';
     cumEl.style.color = c > 0 ? 'var(--tc-green)' : c < 0 ? 'var(--tc-red)' : '';
   });
 
@@ -5718,7 +5718,7 @@ function recalcSimPL() {
       el.style.color = sv ? 'var(--tc-amber)' : '';
     } else if (row.key === '_grossProfit') {
       const sv = gpArr.reduce((a, b) => a + b, 0);
-      el.textContent = sv > 0 ? `+${sv.toLocaleString()}` : sv < 0 ? `─²${Math.abs(sv).toLocaleString()}` : '─';
+      el.textContent = sv > 0 ? `+${sv.toLocaleString()}` : sv < 0 ? `▲${Math.abs(sv).toLocaleString()}` : '─';
       el.style.color = sv >= 0 ? 'var(--tc-green)' : 'var(--tc-red)';
     } else if (hasChildren(row.key)) {
       // 親行の合計列は子行の合計
@@ -5735,7 +5735,7 @@ function recalcSimPL() {
   const profSumEl = document.getElementById('spl-sum-profit');
   if (costSumEl) { costSumEl.textContent = costSum ? costSum.toLocaleString() : '─'; costSumEl.style.color = 'var(--tc-red)'; }
   if (profSumEl) {
-    profSumEl.textContent = profSum > 0 ? `+${profSum.toLocaleString()}` : profSum < 0 ? `─²${Math.abs(profSum).toLocaleString()}` : '─';
+    profSumEl.textContent = profSum > 0 ? `+${profSum.toLocaleString()}` : profSum < 0 ? `▲${Math.abs(profSum).toLocaleString()}` : '─';
     profSumEl.style.color = profSum >= 0 ? 'var(--tc-green)' : 'var(--tc-red)';
   }
 
@@ -5825,7 +5825,7 @@ function drawSimPLChart(revArr, costArr, profitArr, cumArr) {
               const v = ctx.parsed.y;
               if (v === null || v === undefined) return null;
               const abs = Math.abs(Math.round(v));
-              const sign = v > 0 ? '+' : v < 0 ? '─²' : '';
+              const sign = v > 0 ? '+' : v < 0 ? '▲' : '';
               return ` ${ctx.dataset.label}：${sign}${abs.toLocaleString()}千円`;
             }
           }
@@ -5955,11 +5955,11 @@ function recalcSimCF() {
     const netEl = document.getElementById(`scf-net-${i}`);
     const balEl = document.getElementById(`scf-bal-${i}`);
     if (netEl) {
-      netEl.textContent = net > 0 ? `+${net.toLocaleString()}` : net < 0 ? `─²${Math.abs(net).toLocaleString()}` : '─';
+      netEl.textContent = net > 0 ? `+${net.toLocaleString()}` : net < 0 ? `▲${Math.abs(net).toLocaleString()}` : '─';
       netEl.style.color = net >= 0 ? 'var(--tc-green)' : 'var(--tc-red)';
     }
     if (balEl) {
-      balEl.textContent = bal > 0 ? bal.toLocaleString() : `─²${Math.abs(bal).toLocaleString()}`;
+      balEl.textContent = bal > 0 ? bal.toLocaleString() : `▲${Math.abs(bal).toLocaleString()}`;
       balEl.style.color = bal >= 0 ? 'var(--tc-green)' : 'var(--tc-red)';
       balEl.style.fontWeight = bal < 0 ? '700' : '';
       if (bal < 0) balEl.style.background = 'rgba(226,75,74,0.12)';
@@ -5978,7 +5978,7 @@ function recalcSimCF() {
   const netSumEl = document.getElementById('scf-sum-net');
   if (netSumEl) {
     const ns = totalIn - totalOut;
-    netSumEl.textContent = ns > 0 ? `+${ns.toLocaleString()}` : ns < 0 ? `─²${Math.abs(ns).toLocaleString()}` : '─';
+    netSumEl.textContent = ns > 0 ? `+${ns.toLocaleString()}` : ns < 0 ? `▲${Math.abs(ns).toLocaleString()}` : '─';
     netSumEl.style.color = ns >= 0 ? 'var(--tc-green)' : 'var(--tc-red)';
   }
 
@@ -6076,7 +6076,7 @@ function drawSimCFChart(months, netArr, balArr) {
               const v = ctx.parsed.y;
               if (v === null || v === undefined) return null;
               const abs = Math.abs(Math.round(v));
-              const sign = v >= 0 ? '' : '─²';
+              const sign = v >= 0 ? '' : '▲';
               return ` ${ctx.dataset.label}：${sign}${abs.toLocaleString()}千円`;
             }
           }
@@ -6310,7 +6310,7 @@ function openBudgetModal() {
       <td style="padding:4px 8px;text-align:right;color:var(--tc-blue)">${rev.toLocaleString()}</td>
       ${cogsCell}
       <td style="padding:4px 8px;text-align:right;color:var(--tc-red)">${opex.toLocaleString()}</td>
-      <td style="padding:4px 8px;text-align:right;color:${profColor};font-weight:700">${profit>=0?'+':'─²'}${Math.abs(profit).toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right;color:${profColor};font-weight:700">${profit>=0?'+':'▲'}${Math.abs(profit).toLocaleString()}</td>
     </tr>`;
 
     // 入力済みの原価明細を折りたたみで表示
@@ -6817,7 +6817,7 @@ function drawQSChart() {
               const lbl = ctx.dataset.label;
               // 棒は「売上 / 費用」として表示、負値を▲に変換
               const disp = Math.abs(Math.round(v));
-              const sign = v >= 0 ? '+' : '─²';
+              const sign = v >= 0 ? '+' : '▲';
               if (lbl === '売上（棒）')    return ` 売上：${disp.toLocaleString()}千円`;
               if (lbl === '費用合計（棒）') return ` 費用：${disp.toLocaleString()}千円`;
               if (lbl === '損益分岐ライン') return null;
@@ -6837,7 +6837,7 @@ function drawQSChart() {
             color: tc, font: { size: 10 },
             callback: v => {
               const a = Math.abs(v);
-              const s = v < 0 ? '─²' : '';
+              const s = v < 0 ? '▲' : '';
               return s + (a >= 1000 ? (a/1000).toFixed(0)+'千万' : a.toLocaleString()+'千円');
             }
           },
@@ -6850,7 +6850,7 @@ function drawQSChart() {
             color: tc, font: { size: 10 },
             callback: v => {
               const a = Math.abs(v);
-              const s = v < 0 ? '─²' : '+';
+              const s = v < 0 ? '▲' : '+';
               if (a === 0) return '0';
               return s + (a >= 10000 ? (a/10000).toFixed(1)+'億' : a >= 1000 ? (a/1000).toFixed(0)+'千万' : a.toLocaleString()+'千円');
             }
