@@ -7598,222 +7598,510 @@ window.addEventListener('load', async () => {
     <script>
 (function(){
 
-// ── MF連携: 会計年度は4月〜3月 ──
+// ── 月リスト（会計年度: 4月〜3月） ──
+const MF_MONTHS = {
+  '2025': ['2504','2505','2506','2507','2508','2509','2510','2511','2512','2601','2602','2603'],
+  '2026': ['2604','2605','2606','2607','2608','2609','2610','2611','2612','2701','2702','2703'],
+};
+const MF_MONTH_NAMES = ['4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月'];
+
+// ── UI挿入 ──
 function mfInit() {
-  var s = document.getElementById('sec-import');
+  const s = document.getElementById('sec-import');
   if (!s || document.getElementById('mf-section')) return;
-  s.insertAdjacentHTML('afterbegin', '\
-<div id="mf-section" class="card" style="margin-bottom:16px;border:1px solid rgba(59,130,246,.3)">\
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">\
-    <div style="display:flex;align-items:center;gap:10px">\
-      <span style="font-size:18px">\u{1F517}</span>\
-      <div>\
-        <div style="font-size:14px;font-weight:700">マネフォ クラウド会計 自動連携</div>\
-        <div style="font-size:11px;color:#64748b">PL・BS・仕訳(CF)を一括取込 → ダッシュボードに自動反映</div>\
-      </div>\
-    </div>\
-    <span id="mf-status-badge" style="padding:3px 12px;border-radius:20px;font-size:11px;background:rgba(100,116,139,.2);color:#94a3b8">確認中...</span>\
-  </div>\
-  <div id="mf-disconnected" style="display:none;text-align:center;padding:16px 0">\
-    <p style="color:#94a3b8;font-size:12px;margin-bottom:12px">マネフォと連携するとPL・BS・仕訳データを自動取込できます</p>\
-    <button onclick="location.href=\'/api/mf-auth?action=login\'" style="background:#3b82f6;color:#fff;border:none;padding:9px 24px;border-radius:8px;cursor:pointer;font-size:13px">\u{1F517} マネフォと連携</button>\
-  </div>\
-  <div id="mf-connected" style="display:none">\
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">\
-      <div style="background:rgba(30,41,59,.6);border-radius:8px;padding:8px 14px;flex:1;min-width:120px">\
-        <div style="color:#64748b;font-size:10px">事業者</div>\
-        <div id="mf-office-name" style="font-size:12px;font-weight:600">-</div>\
-      </div>\
-      <div style="background:rgba(30,41,59,.6);border-radius:8px;padding:8px 14px;flex:1;min-width:120px">\
-        <div style="color:#64748b;font-size:10px">最終同期</div>\
-        <div id="mf-last-sync" style="font-size:12px">-</div>\
-      </div>\
-      <select id="mf-fiscal-year" style="background:rgba(30,41,59,.8);color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 10px;font-size:12px">\
-        <option value="2025">2025年度（4月〜3月）</option>\
-        <option value="2026">2026年度（4月〜3月）</option>\
-      </select>\
-    </div>\
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">\
-      <button id="mf-btn-journals" onclick="mfSync(\'journals\')" style="background:#059669;color:#fff;border:none;padding:9px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">\u{1F4CA} 仕訳(CF)</button>\
-      <button id="mf-btn-trial_pl" onclick="mfSync(\'trial_pl\')" style="background:#7c3aed;color:#fff;border:none;padding:9px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">\u{1F4C8} PL試算表</button>\
-      <button id="mf-btn-trial_bs" onclick="mfSync(\'trial_bs\')" style="background:#0369a1;color:#fff;border:none;padding:9px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">\u{1F3DB} BS試算表</button>\
-    </div>\
-    <div style="display:flex;gap:8px;justify-content:flex-end">\
-      <button onclick="mfCheckStatus()" style="background:rgba(30,41,59,.8);color:#94a3b8;border:1px solid #334155;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px">\u{1F504} 更新</button>\
-      <button onclick="location.href=\'/api/mf-auth?action=login\'" style="background:rgba(30,41,59,.8);color:#94a3b8;border:1px solid #334155;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px">\u{1F511} 再認証</button>\
-    </div>\
-    <div id="mf-sync-log" style="margin-top:8px;font-size:11px;color:#64748b;min-height:16px"></div>\
-  </div>\
-</div>');
+
+  const html = `
+<div id="mf-section" class="card" style="margin-bottom:16px;border:1px solid rgba(59,130,246,.3)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:18px">🔗</span>
+      <div>
+        <div style="font-size:14px;font-weight:700">マネフォ クラウド会計 自動連携</div>
+        <div style="font-size:11px;color:var(--text3)">Chromeで連携 → データ取得 → AI仕分け → 確認 → PL/BS/CFに反映（月次単位）</div>
+      </div>
+    </div>
+    <span id="mf-status-badge" style="padding:3px 12px;border-radius:20px;font-size:11px;background:rgba(100,116,139,.2);color:var(--text3)">確認中...</span>
+  </div>
+
+  <!-- 未連携・期限切れ表示 -->
+  <div id="mf-disconnected" style="display:none;text-align:center;padding:20px 12px;background:rgba(239,159,39,.08);border-radius:8px;border:1px solid rgba(239,159,39,.3)">
+    <div style="font-size:13px;font-weight:700;color:var(--tc-amber);margin-bottom:8px" id="mf-disconnected-title">🔑 マネフォ連携が必要です</div>
+    <p style="color:var(--text3);font-size:11px;margin-bottom:14px" id="mf-disconnected-desc">
+      Chromeで認証すると、PL試算表・BS試算表・仕訳データをワンクリックで取込めます
+    </p>
+    <button onclick="location.href='/api/mf-auth?action=login'" style="background:#3b82f6;color:#fff;border:none;padding:10px 28px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+      🔗 Chromeでマネフォと連携する
+    </button>
+  </div>
+
+  <!-- 連携済み状態 -->
+  <div id="mf-connected" style="display:none">
+    <!-- 事業者・最終同期・再認証 -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="background:var(--bg3);border-radius:8px;padding:7px 12px;flex:1;min-width:130px">
+        <div style="color:var(--text3);font-size:10px">事業者</div>
+        <div id="mf-office-name" style="font-size:12px;font-weight:600">-</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:7px 12px;flex:1;min-width:130px">
+        <div style="color:var(--text3);font-size:10px">最終同期</div>
+        <div id="mf-last-sync" style="font-size:12px">-</div>
+      </div>
+      <button onclick="mfCheckStatus()" class="btn" style="font-size:10px;padding:5px 10px">🔄 更新</button>
+      <button onclick="location.href='/api/mf-auth?action=login'" class="btn" style="font-size:10px;padding:5px 10px">🔑 再認証</button>
+    </div>
+
+    <!-- ステップ1: 年度と月を選択 -->
+    <div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:11px;font-weight:700;color:var(--text)">① 対象期間を選択</span>
+        <select id="mf-fiscal-year" onchange="mfRenderMonthPicker()" style="padding:4px 8px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:11px">
+          <option value="2025">2025年度（4月〜3月）</option>
+          <option value="2026">2026年度（4月〜3月）</option>
+        </select>
+        <button class="btn" style="font-size:10px;padding:3px 8px" onclick="mfToggleAllMonths(true)">全選択</button>
+        <button class="btn" style="font-size:10px;padding:3px 8px" onclick="mfToggleAllMonths(false)">全解除</button>
+      </div>
+      <div id="mf-month-picker" style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px"></div>
+    </div>
+
+    <!-- ステップ2: データ取得 -->
+    <div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:8px">② データ取得（Chromeで連携したAPIから取得）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <button id="mf-btn-trial_pl" onclick="mfFetch('trial_pl')" style="background:#7c3aed;color:#fff;border:none;padding:10px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700">
+          📈 PL試算表を取得
+        </button>
+        <button id="mf-btn-trial_bs" onclick="mfFetch('trial_bs')" style="background:#0369a1;color:#fff;border:none;padding:10px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700">
+          🏛 BS試算表を取得
+        </button>
+        <button id="mf-btn-journals" onclick="mfFetch('journals')" style="background:#059669;color:#fff;border:none;padding:10px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700">
+          📊 仕訳(CF)を取得
+        </button>
+      </div>
+      <div id="mf-sync-log" style="margin-top:8px;font-size:11px;color:var(--text3);min-height:14px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── プレビュー（取得後に表示） ── -->
+<div id="mf-preview-card" class="card" style="display:none;margin-bottom:16px;border:2px solid var(--tc-green)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+    <div>
+      <div style="font-size:13px;font-weight:700" id="mf-preview-title">📋 取得データのプレビュー</div>
+      <div style="font-size:10px;color:var(--text3)" id="mf-preview-subtitle">内容を確認し、反映する月にチェックを入れてから「③ 反映する」を押してください</div>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-g" style="font-weight:700;font-size:12px;padding:8px 18px" onclick="mfCommit()">✓ ③ 反映する</button>
+      <button class="btn" style="font-size:11px" onclick="mfCancelPreview()">✕ キャンセル</button>
+    </div>
+  </div>
+
+  <!-- AI仕分けサマリー（CF時のみ） -->
+  <div id="mf-preview-ai-summary" style="display:none;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px">
+    <div style="font-weight:700;color:#3b82f6;margin-bottom:4px">🤖 AI自動仕分け結果</div>
+    <div id="mf-preview-ai-detail" style="color:var(--text2)"></div>
+  </div>
+
+  <!-- 月選択バー -->
+  <div id="mf-preview-months" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;padding:8px;background:var(--bg3);border-radius:8px;font-size:11px">
+    <span style="color:var(--text3);font-weight:700">反映対象月:</span>
+  </div>
+
+  <!-- データテーブル -->
+  <div class="scroll-x">
+    <div id="mf-preview-table"></div>
+  </div>
+
+  <!-- サンプル仕訳（CF時のみ） -->
+  <div id="mf-preview-samples" style="display:none;margin-top:12px">
+    <details>
+      <summary style="font-size:11px;font-weight:700;color:var(--text3);cursor:pointer">🔍 取得した仕訳サンプル（最大100件）を確認</summary>
+      <div class="scroll-x" style="margin-top:8px">
+        <div id="mf-preview-samples-table"></div>
+      </div>
+    </details>
+  </div>
+</div>
+`;
+  s.insertAdjacentHTML('afterbegin', html);
+  mfRenderMonthPicker();
   mfCheckStatus();
+}
+
+// ── 月セレクター（チェックボックス） ──
+function mfRenderMonthPicker() {
+  const el = document.getElementById('mf-month-picker');
+  if (!el) return;
+  const fy = document.getElementById('mf-fiscal-year').value;
+  const months = MF_MONTHS[fy] || [];
+  el.innerHTML = months.map((code, i) =>
+    `<label style="display:flex;align-items:center;justify-content:center;gap:3px;padding:4px 2px;background:var(--bg2);border:1px solid var(--border2);border-radius:4px;cursor:pointer;font-size:10px;font-weight:600">
+       <input type="checkbox" class="mf-month-cb" value="${code}" checked style="margin:0">
+       ${MF_MONTH_NAMES[i]}
+     </label>`
+  ).join('');
+}
+
+function mfToggleAllMonths(checked) {
+  document.querySelectorAll('.mf-month-cb').forEach(cb => { cb.checked = checked; });
+}
+
+function mfGetSelectedMonths() {
+  return [...document.querySelectorAll('.mf-month-cb:checked')].map(cb => cb.value);
 }
 
 // ── 接続状態確認 ──
 window.mfCheckStatus = async function() {
   try {
-    var r = await fetch('/api/mf-auth?action=status');
-    var d = await r.json();
-    var b = document.getElementById('mf-status-badge');
-    if (!b) return;
+    const r = await fetch('/api/mf-auth?action=status');
+    const d = await r.json();
+    const badge = document.getElementById('mf-status-badge');
+    if (!badge) return;
+
     if (d.connected && !d.expired) {
-      b.style.background = 'rgba(6,78,59,.4)';
-      b.style.color = '#34d399';
-      b.textContent = '\u2705 接続中';
+      badge.style.background = 'rgba(39,174,96,.15)';
+      badge.style.color = 'var(--tc-green)';
+      badge.textContent = '✅ 接続中';
       document.getElementById('mf-disconnected').style.display = 'none';
       document.getElementById('mf-connected').style.display = 'block';
       try {
-        var r2 = await fetch('/api/mf-sync?action=offices');
-        var d2 = await r2.json();
+        const r2 = await fetch('/api/mf-sync?action=offices');
+        const d2 = await r2.json();
         if (d2.ok && d2.data) {
-          var name = d2.data.name || d2.data.display_name || '-';
+          const name = d2.data.name || d2.data.display_name || (Array.isArray(d2.data) ? (d2.data[0]?.name || '-') : '-');
           document.getElementById('mf-office-name').textContent = name;
         }
       } catch(e) { console.warn('[MF] offices fetch failed:', e); }
     } else {
-      b.style.background = 'rgba(127,29,29,.4)';
-      b.style.color = '#fca5a5';
-      b.textContent = d.expired ? '\u26A0\uFE0F 期限切れ' : '\u274C 未接続';
+      badge.style.background = 'rgba(239,159,39,.15)';
+      badge.style.color = 'var(--tc-amber)';
+      badge.textContent = d.expired ? '⚠️ 期限切れ' : '❌ 未連携';
       document.getElementById('mf-disconnected').style.display = 'block';
       document.getElementById('mf-connected').style.display = 'none';
+      // 状態に応じてメッセージ変更
+      const title = document.getElementById('mf-disconnected-title');
+      const desc = document.getElementById('mf-disconnected-desc');
+      if (d.expired) {
+        title.textContent = '⚠️ トークンが期限切れです';
+        desc.textContent = 'OAuthトークンの有効期限が切れました。再度Chromeでログインしてください。';
+      } else {
+        title.textContent = '🔑 マネフォ連携が必要です';
+        desc.textContent = 'Chromeで認証すると、PL試算表・BS試算表・仕訳データをワンクリックで取込めます';
+      }
     }
   } catch(e) { console.warn('[MF] status check failed:', e); }
 };
 
-// ── PL → DB書込 ──
-function applyPlToDb(conv, fy) {
-  var db = window.DB[String(fy)];
-  if (!db || !db.pl) return 0;
-  var n = 0;
-  ['rev','labor','outsource','adv','gaichu','other','cogs'].forEach(function(k) {
-    if (!conv[k] || !conv[k].actual) return;
-    if (!db.pl.actual[k]) db.pl.actual[k] = new Array(db.months.length).fill(0);
-    conv[k].actual.forEach(function(v, i) {
-      if (v > 0 && i < db.pl.actual[k].length) {
-        db.pl.actual[k][i] = v;
-        n++;
-      }
-    });
-  });
-  return n;
-}
+// ── データ取得 → プレビュー ──
+window.mfFetch = async function(type) {
+  const fy = parseInt(document.getElementById('mf-fiscal-year').value);
+  const selectedMonths = mfGetSelectedMonths();
+  const log = document.getElementById('mf-sync-log');
+  const labels = { journals: '📊 仕訳(CF)', trial_pl: '📈 PL試算表', trial_bs: '🏛 BS試算表' };
+  const btn = document.getElementById('mf-btn-' + type);
 
-// ── BS → DB書込 ──
-function applyBsToDb(conv, fy) {
-  var db = window.DB[String(fy)];
-  if (!db) return 0;
-  var n = 0;
-  // 月次BSデータ書込
-  if (conv.monthly) {
-    if (!db.bs) db.bs = {};
-    if (!db.bs.actual) db.bs.actual = {};
-    var keys = ['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained'];
-    for (var i = 0; i < db.months.length; i++) {
-      var hasVal = keys.some(function(k) { return conv.monthly[k] && conv.monthly[k][i] !== 0; });
-      if (!hasVal) continue;
-      var row = {};
-      keys.forEach(function(k) { row[k] = (conv.monthly[k] && conv.monthly[k][i]) || 0; });
-      db.bs.actual[i] = row;
-      n++;
-    }
+  if (selectedMonths.length === 0) {
+    log.style.color = 'var(--tc-amber)';
+    log.textContent = '⚠ 対象月を1つ以上選択してください';
+    return;
   }
-  // 年次BS_DATA更新（最新月のサマリー）
-  if (conv.summary && typeof BS_DATA !== 'undefined') {
-    var s = conv.summary;
-    if (s.cash !== undefined) BS_DATA.assets.cash.actual = s.cash;
-    if (s.receivable !== undefined) BS_DATA.assets.receivable.actual = s.receivable;
-    if (s.other_ca !== undefined && BS_DATA.assets.other_ca) BS_DATA.assets.other_ca.actual = s.other_ca;
-    if (s.fixed !== undefined) BS_DATA.assets.fixed.actual = s.fixed;
-    if (s.payable !== undefined) BS_DATA.liabilities.payable.actual = s.payable;
-    if (s.borrowing !== undefined) BS_DATA.liabilities.borrowing.actual = s.borrowing;
-    if (s.other_cl !== undefined && BS_DATA.liabilities.other_cl) BS_DATA.liabilities.other_cl.actual = s.other_cl;
-    if (s.capital !== undefined) BS_DATA.equity.capital.actual = s.capital;
-    if (s.retained !== undefined) BS_DATA.equity.retained.actual = s.retained;
-  }
-  return n;
-}
 
-// ── CF → DB書込 ──
-function applyCfToDb(conv, fy) {
-  var db = window.DB[String(fy)];
-  if (!db || !db.cf) return 0;
-  var n = 0;
-  if (conv.cashIn && db.cf.actual.cfIn) {
-    conv.cashIn.forEach(function(v, i) {
-      if (i < db.cf.actual.cfIn.length) { db.cf.actual.cfIn[i] = v; n++; }
-    });
-  }
-  return n;
-}
-
-// ── ダッシュボード全画面更新 ──
-function refreshDashboardAfterSync() {
-  if (typeof updateWeeklyKPIs === 'function') updateWeeklyKPIs();
-  if (typeof renderPLCF === 'function') renderPLCF();
-  if (typeof loadImportedList === 'function') loadImportedList();
-  if (typeof renderAnnualSummary === 'function') renderAnnualSummary();
-  if (typeof renderReportTabs === 'function') renderReportTabs();
-  if (typeof buildSimPLTable === 'function') buildSimPLTable();
-}
-
-// ── メイン同期関数 ──
-window.mfSync = async function(type) {
-  var fy = parseInt(document.getElementById('mf-fiscal-year').value);
-  var log = document.getElementById('mf-sync-log');
-  var labels = { journals: '\u{1F4CA} 仕訳(CF)', trial_pl: '\u{1F4C8} PL試算表', trial_bs: '\u{1F3DB} BS試算表' };
-  var btn = document.getElementById('mf-btn-' + type);
-  if (btn) { btn.disabled = true; btn.textContent = '\u23F3 取得中...'; }
-  log.style.color = '#94a3b8';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 取得中...'; }
+  log.style.color = 'var(--text3)';
+  log.textContent = `${fy}年度 ${labels[type]} を取得中...`;
 
   try {
-    var actionMap = { journals: 'cf_for_dashboard', trial_pl: 'pl_for_dashboard', trial_bs: 'bs_for_dashboard' };
-    var url = '/api/mf-sync?action=' + actionMap[type] + '&fiscal_year=' + fy;
-    log.textContent = fy + '年度 ' + labels[type] + ' 取得中...';
-
-    var r = await fetch(url);
-    var d = await r.json();
+    const actionMap = { journals: 'cf_for_dashboard', trial_pl: 'pl_for_dashboard', trial_bs: 'bs_for_dashboard' };
+    const url = `/api/mf-sync?action=${actionMap[type]}&fiscal_year=${fy}`;
+    const r = await fetch(url);
+    const d = await r.json();
     if (!d.ok) throw new Error(d.error || '取得失敗');
 
-    var applied = 0;
-    var msg = '\u2705 ' + fy + '年度 ' + labels[type];
+    // プレビュー表示
+    window._mfPending = { type, fy, selectedMonths, converted: d.converted, totalJournals: d.total_journals };
+    mfRenderPreview();
 
-    if (type === 'trial_pl' && d.converted) {
-      applied = applyPlToDb(d.converted, fy);
-      if (applied > 0) {
-        await saveDB();
-        refreshDashboardAfterSync();
-      }
-      msg += ': DB ' + applied + '項更新 → ダッシュボード反映完了';
+    log.style.color = 'var(--tc-green)';
+    log.textContent = `✓ ${labels[type]} 取得完了 → 下のプレビューを確認してください`;
+    document.getElementById('mf-preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-    } else if (type === 'trial_bs' && d.converted) {
-      applied = applyBsToDb(d.converted, fy);
-      if (applied > 0) {
-        await saveDB();
-        refreshDashboardAfterSync();
-      }
-      var s = d.converted.summary || {};
-      msg += ': 現預金' + (s.cash || 0) + '千円 / 借入' + (s.borrowing || 0) + '千円 / 資本金' + (s.capital || 0) + '千円 / 利益剰余金' + (s.retained || 0) + '千円 → DB ' + applied + 'ヶ月反映';
-
-    } else if (type === 'journals' && d.converted) {
-      applied = applyCfToDb(d.converted, fy);
-      if (applied > 0) {
-        await saveDB();
-        refreshDashboardAfterSync();
-      }
-      msg += ': 全' + (d.total_journals || 0) + '件、DB ' + applied + '項更新';
+  } catch(e) {
+    log.style.color = 'var(--tc-red)';
+    log.textContent = `❌ ${e.message}`;
+    // 401/403系エラーなら再認証を促す
+    if (/401|403|unauthorized|expired|token/i.test(e.message)) {
+      log.innerHTML += ' <button onclick="location.href=\'/api/mf-auth?action=login\'" style="margin-left:8px;padding:2px 8px;font-size:10px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer">🔑 再認証</button>';
     }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = labels[type]; }
+  }
+};
+
+// ── プレビュー描画 ──
+function mfRenderPreview() {
+  const p = window._mfPending;
+  if (!p) return;
+  const card = document.getElementById('mf-preview-card');
+  const title = document.getElementById('mf-preview-title');
+  const typeLbl = { trial_pl: 'PL試算表', trial_bs: 'BS試算表', journals: '仕訳(CF)' }[p.type];
+  title.textContent = `📋 ${p.fy}年度 ${typeLbl} プレビュー`;
+
+  const months = MF_MONTHS[String(p.fy)] || [];
+  const monthNames = MF_MONTH_NAMES;
+
+  // 反映対象月チェックボックス
+  const pmEl = document.getElementById('mf-preview-months');
+  pmEl.innerHTML = '<span style="color:var(--text3);font-weight:700">反映対象月:</span>' +
+    months.map((code, i) => {
+      const checked = p.selectedMonths.includes(code);
+      return `<label style="display:inline-flex;align-items:center;gap:3px;padding:3px 6px;background:var(--bg2);border:1px solid var(--border2);border-radius:4px;cursor:pointer">
+        <input type="checkbox" class="mf-commit-cb" value="${code}" data-idx="${i}" ${checked ? 'checked' : ''} style="margin:0">
+        ${monthNames[i]}
+      </label>`;
+    }).join('') +
+    ' <button class="btn" style="font-size:10px;padding:3px 8px;margin-left:6px" onclick="mfToggleAllCommit(true)">全選択</button>' +
+    ' <button class="btn" style="font-size:10px;padding:3px 8px" onclick="mfToggleAllCommit(false)">全解除</button>';
+
+  // 種類別にテーブル描画
+  const tblEl = document.getElementById('mf-preview-table');
+  const aiEl = document.getElementById('mf-preview-ai-summary');
+  const aiDetailEl = document.getElementById('mf-preview-ai-detail');
+  const samplesEl = document.getElementById('mf-preview-samples');
+
+  if (p.type === 'trial_pl') {
+    aiEl.style.display = 'none';
+    samplesEl.style.display = 'none';
+    tblEl.innerHTML = mfBuildTable(months, monthNames, [
+      { label:'売上',      key:'rev',       isRev:true },
+      { label:'人件費',    key:'labor',     isOut:true },
+      { label:'業務委託',  key:'outsource', isOut:true },
+      { label:'広告販促',  key:'adv',       isOut:true },
+      { label:'外注費',    key:'gaichu',    isOut:true },
+      { label:'その他',    key:'other',     isOut:true },
+      { label:'原価',      key:'cogs',      isOut:true },
+    ], (key, i) => (p.converted[key]?.actual?.[i]) || 0);
+
+  } else if (p.type === 'trial_bs') {
+    aiEl.style.display = 'none';
+    samplesEl.style.display = 'none';
+    const monthly = p.converted.monthly || {};
+    tblEl.innerHTML = mfBuildTable(months, monthNames, [
+      { label:'現預金',         key:'cash',       isRev:true },
+      { label:'売掛金',         key:'receivable', isRev:true },
+      { label:'その他流動資産', key:'other_ca',   isRev:true },
+      { label:'固定資産',       key:'fixed',      isRev:true },
+      { label:'買掛金・未払金', key:'payable',    isOut:true },
+      { label:'借入金',         key:'borrowing',  isOut:true },
+      { label:'その他流動負債', key:'other_cl',   isOut:true },
+      { label:'資本金',         key:'capital',    isRev:true },
+      { label:'利益剰余金',     key:'retained',   isRev:true },
+    ], (key, i) => (monthly[key] && monthly[key][i]) || 0);
+
+  } else if (p.type === 'journals') {
+    // AI仕分けサマリー
+    const monthly = p.converted.monthly || {};
+    const totalCashIn = (p.converted.cashIn || []).reduce((t,v) => t+v, 0);
+    const totalCashOut = (p.converted.cashOut || []).reduce((t,v) => t+v, 0);
+    aiEl.style.display = 'block';
+    aiDetailEl.innerHTML = `取得した <strong>${p.totalJournals || 0}件</strong> の仕訳から、現預金の動きを抽出しました。<br>
+      総入金 <strong style="color:var(--tc-green)">${totalCashIn.toLocaleString()}千円</strong> /
+      総出金 <strong style="color:var(--tc-red)">${totalCashOut.toLocaleString()}千円</strong> /
+      純CF <strong>${(totalCashIn-totalCashOut).toLocaleString()}千円</strong><br>
+      各仕訳の摘要・勘定科目名から、下記CF科目に自動仕分けしました。`;
+
+    tblEl.innerHTML = mfBuildTable(months, monthNames, [
+      { label:'売上入金(会費)',   key:'cfInFee',     isRev:true },
+      { label:'売上入金(研修)',   key:'cfInTraining', isRev:true },
+      { label:'売上入金(他)',     key:'cfInOther',   isRev:true },
+      { label:'新規借入',         key:'loanIn',      isRev:true },
+      { label:'資本金払込',       key:'capitalIn',   isRev:true },
+      { label:'──',              key:'__sep__' },
+      { label:'給与・社保',       key:'salaryPay',   isOut:true },
+      { label:'業務委託',         key:'bizComPay',   isOut:true },
+      { label:'専門家報酬',       key:'expertPay',   isOut:true },
+      { label:'家賃',             key:'rentPay',     isOut:true },
+      { label:'通信費',           key:'telPay',      isOut:true },
+      { label:'ツール',           key:'toolsPay',    isOut:true },
+      { label:'広告費',           key:'adSportsPay', isOut:true },
+      { label:'採用費',           key:'recruitPay',  isOut:true },
+      { label:'イベント',         key:'eventCostPay', isOut:true },
+      { label:'交際費',           key:'entertainPay', isOut:true },
+      { label:'税金',             key:'taxPay',      isOut:true },
+      { label:'消耗品',           key:'suppliesPay', isOut:true },
+      { label:'借入返済',         key:'loanOut',     isOut:true },
+      { label:'投資',             key:'investPay',   isOut:true },
+      { label:'その他出金',       key:'salesOtherPay', isOut:true },
+    ], (key, i) => (monthly[key] && monthly[key][i]) || 0);
+
+    // サンプル仕訳
+    if (p.converted.samples && p.converted.samples.length > 0) {
+      samplesEl.style.display = 'block';
+      const sEl = document.getElementById('mf-preview-samples-table');
+      sEl.innerHTML = `<table class="dt" style="font-size:10px;min-width:800px">
+        <thead><tr><th class="l">日付</th><th class="l">借方</th><th class="l">貸方</th><th style="text-align:right">金額(千円)</th><th class="l">方向</th><th class="l">AI分類</th></tr></thead>
+        <tbody>${p.converted.samples.slice(0, 100).map(s =>
+          `<tr>
+            <td style="font-size:10px">${s.date||''}</td>
+            <td style="font-size:10px">${s.debit||''}</td>
+            <td style="font-size:10px">${s.credit||''}</td>
+            <td style="text-align:right;font-size:10px">${(s.val||0).toLocaleString()}</td>
+            <td style="font-size:10px"><span class="badge ${s.dir==='in'?'bg':'br'}">${s.dir==='in'?'入金':'出金'}</span></td>
+            <td style="font-size:10px;color:var(--tc-blue)">${s.cat||''}</td>
+          </tr>`
+        ).join('')}</tbody>
+      </table>`;
+    } else {
+      samplesEl.style.display = 'none';
+    }
+  }
+
+  card.style.display = 'block';
+}
+
+function mfBuildTable(months, monthNames, rows, getter) {
+  let html = `<table class="dt" style="min-width:${120 + months.length * 75}px;width:100%;font-size:11px">
+    <thead><tr>
+      <th class="l" style="min-width:140px;font-size:10px;position:sticky;left:0;background:var(--bg2);z-index:1">科目 / 月</th>
+      ${months.map((m, i) => `<th style="min-width:70px;font-size:10px">${monthNames[i]}</th>`).join('')}
+      <th style="min-width:80px;font-size:10px;background:var(--bg3)">合計</th>
+    </tr></thead><tbody>`;
+
+  rows.forEach(row => {
+    if (row.key === '__sep__') {
+      html += `<tr><td colspan="${months.length + 2}" style="height:4px;background:var(--border2)"></td></tr>`;
+      return;
+    }
+    html += `<tr><td class="l" style="font-size:11px;padding-left:8px;position:sticky;left:0;background:var(--bg2);z-index:1">${row.label}</td>`;
+    let total = 0;
+    months.forEach((m, i) => {
+      const v = getter(row.key, i) || 0;
+      total += v;
+      const clr = v === 0 ? 'color:var(--text3)' : (row.isOut ? 'color:var(--tc-red)' : (row.isRev ? 'color:var(--tc-green)' : ''));
+      html += `<td style="text-align:right;padding:3px 6px;font-size:10px;${clr}">${v !== 0 ? v.toLocaleString() : '—'}</td>`;
+    });
+    const totClr = total === 0 ? 'color:var(--text3)' : (row.isOut ? 'color:var(--tc-red)' : (row.isRev ? 'color:var(--tc-green)' : ''));
+    html += `<td style="text-align:right;padding:3px 6px;font-size:10px;font-weight:700;background:var(--bg3);${totClr}">${total !== 0 ? total.toLocaleString() : '—'}</td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  return html;
+}
+
+window.mfToggleAllCommit = function(checked) {
+  document.querySelectorAll('.mf-commit-cb').forEach(cb => { cb.checked = checked; });
+};
+
+window.mfCancelPreview = function() {
+  window._mfPending = null;
+  document.getElementById('mf-preview-card').style.display = 'none';
+};
+
+// ── プレビュー → DB反映 ──
+window.mfCommit = async function() {
+  const p = window._mfPending;
+  if (!p) return;
+
+  const commitMonths = [...document.querySelectorAll('.mf-commit-cb:checked')].map(cb => ({
+    code: cb.value, idx: parseInt(cb.dataset.idx)
+  }));
+
+  if (commitMonths.length === 0) {
+    alert('反映対象月を1つ以上選択してください');
+    return;
+  }
+
+  const typeLbl = { trial_pl: 'PL試算表', trial_bs: 'BS試算表', journals: '仕訳(CF)' }[p.type];
+  const monthLabels = commitMonths.map(m => MF_MONTH_NAMES[m.idx]).join('・');
+  if (!confirm(`${p.fy}年度 ${typeLbl} を以下の月に反映します。\n\n対象月: ${monthLabels}\n\n実績データとして反映しますか？`)) return;
+
+  const db = window.DB[String(p.fy)];
+  if (!db) { alert('DB が見つかりません'); return; }
+
+  let applied = 0;
+
+  try {
+    if (p.type === 'trial_pl') {
+      const keys = ['rev','labor','outsource','adv','gaichu','other','cogs'];
+      keys.forEach(k => {
+        if (!db.pl.actual[k]) db.pl.actual[k] = new Array(db.months.length).fill(0);
+        if (!p.converted[k]?.actual) return;
+        commitMonths.forEach(m => {
+          const v = p.converted[k].actual[m.idx] || 0;
+          if (v !== 0) { db.pl.actual[k][m.idx] = v; applied++; }
+        });
+      });
+
+    } else if (p.type === 'trial_bs') {
+      const keys = ['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained'];
+      if (!db.bs) db.bs = {};
+      if (!db.bs.actual) db.bs.actual = {};
+      const monthly = p.converted.monthly || {};
+      commitMonths.forEach(m => {
+        const row = {};
+        let hasVal = false;
+        keys.forEach(k => {
+          const v = (monthly[k] && monthly[k][m.idx]) || 0;
+          row[k] = v;
+          if (v !== 0) hasVal = true;
+        });
+        if (hasVal) { db.bs.actual[m.idx] = row; applied++; }
+      });
+      // BS_DATA 年次サマリー更新（最新月から）
+      if (typeof BS_DATA !== 'undefined' && p.converted.summary) {
+        const s = p.converted.summary;
+        if (s.cash !== undefined) BS_DATA.assets.cash.actual = s.cash;
+        if (s.receivable !== undefined) BS_DATA.assets.receivable.actual = s.receivable;
+        if (s.fixed !== undefined) BS_DATA.assets.fixed.actual = s.fixed;
+        if (s.payable !== undefined) BS_DATA.liabilities.payable.actual = s.payable;
+        if (s.borrowing !== undefined) BS_DATA.liabilities.borrowing.actual = s.borrowing;
+        if (s.capital !== undefined) BS_DATA.equity.capital.actual = s.capital;
+        if (s.retained !== undefined) BS_DATA.equity.retained.actual = s.retained;
+      }
+
+    } else if (p.type === 'journals') {
+      const cfKeys = ['cfIn','cfInFee','cfInTraining','cfInOther','loanIn','capitalIn',
+        'salaryPay','bizComPay','expertPay','rentPay','telPay','entertainPay','taxPay',
+        'toolsPay','suppliesPay','adSportsPay','eventCostPay','recruitPay','annualFeePay',
+        'investPay','loanOut','salesOtherPay','expensePay'];
+      const monthly = p.converted.monthly || {};
+      cfKeys.forEach(k => {
+        if (!db.cf.actual[k]) db.cf.actual[k] = new Array(db.months.length).fill(0);
+        if (!monthly[k]) return;
+        commitMonths.forEach(m => {
+          const v = monthly[k][m.idx] || 0;
+          if (v !== 0) { db.cf.actual[k][m.idx] = v; applied++; }
+        });
+      });
+    }
+
+    if (typeof saveDB === 'function') await saveDB();
+    if (typeof updateWeeklyKPIs === 'function') updateWeeklyKPIs();
+    if (typeof renderPLCF === 'function') renderPLCF();
+    if (typeof loadImportedList === 'function') loadImportedList();
+    if (typeof renderAnnualSummary === 'function') renderAnnualSummary();
+    if (typeof renderReportTabs === 'function') renderReportTabs();
+    if (typeof buildSimPLTable === 'function') buildSimPLTable();
 
     document.getElementById('mf-last-sync').textContent = new Date().toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
-    log.style.color = '#34d399';
-    log.textContent = msg;
+    const log = document.getElementById('mf-sync-log');
+    log.style.color = 'var(--tc-green)';
+    log.textContent = `✅ ${p.fy}年度 ${typeLbl} を ${monthLabels} に反映しました（${applied}項更新）`;
 
-    if (btn) {
-      btn.textContent = '\u2705 完了';
-      setTimeout(function() { btn.disabled = false; btn.textContent = labels[type]; }, 3000);
-    }
-  } catch(e) {
-    log.style.color = '#fca5a5';
-    log.textContent = '\u274C ' + e.message;
-    if (btn) { btn.disabled = false; btn.textContent = labels[type]; }
+    // プレビューを閉じる
+    window._mfPending = null;
+    document.getElementById('mf-preview-card').style.display = 'none';
+
+    // トースト
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--bg-green);color:var(--tc-green);border:1px solid var(--tc-green);border-radius:var(--rl);padding:12px 20px;font-size:13px;font-weight:700;z-index:9999';
+    toast.textContent = `✓ ${typeLbl} を ${commitMonths.length}ヶ月分反映しました`;
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.style.opacity='0'; toast.style.transition='opacity .4s'; setTimeout(()=>toast.remove(),500); }, 3500);
+
+  } catch (err) {
+    console.error('[mfCommit]', err);
+    alert('反映中にエラー: ' + err.message);
   }
 };
 
@@ -7821,17 +8109,17 @@ window.mfSync = async function(type) {
 document.addEventListener('DOMContentLoaded', function() {
   mfInit();
   // タブ切り替え時にMFセクション再挿入
-  var origSw = window.sw;
+  const origSw = window.sw;
   if (origSw) {
     window.sw = function(t, el) {
       origSw(t, el);
       if (t === 'import') setTimeout(function() { mfInit(); mfCheckStatus(); }, 100);
     };
   }
-  // OAuth コールバック後の自動処理
+  // OAuth コールバック後
   if (location.search.includes('mf_connected=1')) {
     setTimeout(function() {
-      var b = [].slice.call(document.querySelectorAll('button')).find(function(x) { return x.textContent.includes('CSV取込'); });
+      const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('CSV取込') || x.textContent.includes('取込'));
       if (b) b.click();
       mfCheckStatus();
     }, 500);

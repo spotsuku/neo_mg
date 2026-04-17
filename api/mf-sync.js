@@ -146,22 +146,81 @@ function convertBs(bsRaw, fiscalYear) {
 function convertCf(journals, fiscalYear) {
   const monthIdx = buildMonthIndex(fiscalYear);
   const n = monthIdx.length;
+  // CF詳細科目ごとに月次配列を構築
+  const CF_KEYS = ['cfIn','cfInFee','cfInTraining','cfInOther','loanIn','capitalIn',
+    'salaryPay','bizComPay','expertPay','rentPay','telPay','entertainPay','taxPay',
+    'toolsPay','suppliesPay','adSportsPay','eventCostPay','recruitPay','annualFeePay',
+    'investPay','loanOut','salesOtherPay','expensePay'];
+  const monthly = {};
+  CF_KEYS.forEach(k => { monthly[k] = new Array(n).fill(0); });
   const cashIn = new Array(n).fill(0);
   const cashOut = new Array(n).fill(0);
-  const cashNames = ['普通預金','当座預金','現金'];
+  const cashNames = ['普通預金','当座預金','現金','小口現金','定期預金'];
+
+  // カテゴリ推定（仕訳の摘要/勘定科目から判定）
+  function categorize(desc, isIn) {
+    const d = (desc || '').toLowerCase().replace(/\s|　/g, '');
+    if (isIn) {
+      if (/会費|membership|入会金/.test(d)) return 'cfInFee';
+      if (/研修|training|セミナー/.test(d)) return 'cfInTraining';
+      if (/借入|融資|ローン着金/.test(d)) return 'loanIn';
+      if (/資本金|払込|出資/.test(d)) return 'capitalIn';
+      if (/売上|入金|振込/.test(d)) return 'cfIn';
+      return 'cfInOther';
+    } else {
+      if (/給与|給料|賞与|役員報酬|社会保険|社保|厚生年金/.test(d)) return 'salaryPay';
+      if (/業務委託|外部委託|フリーランス/.test(d)) return 'bizComPay';
+      if (/顧問|弁護士|税理士|社労士|報酬/.test(d)) return 'expertPay';
+      if (/家賃|地代|賃料|rent/.test(d)) return 'rentPay';
+      if (/ntt|softbank|ソフトバンク|docomo|kddi|通信|電話|インターネット/.test(d)) return 'telPay';
+      if (/aws|azure|google|slack|zoom|notion|adobe|サブスク|クラウド/.test(d)) return 'toolsPay';
+      if (/広告|facebook|meta|instagram|google ads|媒体/.test(d)) return 'adSportsPay';
+      if (/indeed|wantedly|採用|求人/.test(d)) return 'recruitPay';
+      if (/返済|弁済|loanout/.test(d)) return 'loanOut';
+      if (/設備|投資|固定資産/.test(d)) return 'investPay';
+      if (/交際|接待|会議|レストラン/.test(d)) return 'entertainPay';
+      if (/税|印紙|国税|都税/.test(d)) return 'taxPay';
+      if (/消耗|備品|文具|amazon|モノタロウ/.test(d)) return 'suppliesPay';
+      if (/イベント|会場|設営|音響/.test(d)) return 'eventCostPay';
+      return 'salesOtherPay';
+    }
+  }
+
+  // サンプル仕訳（プレビュー用に上位100件のみ）
+  const samples = [];
+
   journals.forEach(j => {
     const d = new Date(j.transaction_date);
-    const idx = monthIdx.findIndex(m => m.year===d.getFullYear() && m.month===d.getMonth()+1);
-    if (idx<0) return;
-    (j.branches||[]).forEach(b => {
-      const debit = b.debitor?.account_name||'';
-      const credit = b.creditor?.account_name||'';
-      const val = Math.round((b.debitor?.value||0)/1000);
-      if (cashNames.some(a=>debit.includes(a))) cashIn[idx]+=val;
-      if (cashNames.some(a=>credit.includes(a))) cashOut[idx]+=val;
+    const idx = monthIdx.findIndex(m => m.year === d.getFullYear() && m.month === d.getMonth() + 1);
+    if (idx < 0) return;
+    (j.branches || []).forEach(b => {
+      const debit  = b.debitor?.account_name || '';
+      const credit = b.creditor?.account_name || '';
+      const val = Math.round((b.debitor?.value || b.creditor?.value || 0) / 1000);
+      if (val === 0) return;
+
+      const desc = j.remark || j.description || j.memo || '';
+
+      // 借方に現預金が来る → 入金
+      if (cashNames.some(a => debit.includes(a))) {
+        cashIn[idx] += val;
+        // カテゴリは貸方の勘定科目名で判定、それでもだめなら摘要
+        const cat = categorize(credit || desc, true);
+        monthly[cat][idx] += val;
+        monthly.cfIn[idx] += val;
+        if (samples.length < 100) samples.push({ date: j.transaction_date, debit, credit, val, cat, dir: 'in', desc });
+      }
+      // 貸方に現預金が来る → 出金
+      else if (cashNames.some(a => credit.includes(a))) {
+        cashOut[idx] += val;
+        const cat = categorize(debit || desc, false);
+        monthly[cat][idx] += val;
+        if (samples.length < 100) samples.push({ date: j.transaction_date, debit, credit, val, cat, dir: 'out', desc });
+      }
     });
   });
-  return {cashIn, cashOut, net: cashIn.map((v,i)=>v-cashOut[i])};
+
+  return { cashIn, cashOut, net: cashIn.map((v,i) => v - cashOut[i]), monthly, samples };
 }
 
 // ── 会計年度期間（4月〜3月） ──
