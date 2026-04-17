@@ -7647,6 +7647,7 @@ function mfInit() {
         <div id="mf-last-sync" style="font-size:12px">-</div>
       </div>
       <button onclick="mfCheckStatus()" class="btn" style="font-size:10px;padding:5px 10px">🔄 更新</button>
+      <button onclick="mfDiagnose()" class="btn" style="font-size:10px;padding:5px 10px">🔍 診断</button>
       <button onclick="location.href='/api/mf-auth?action=login'" class="btn" style="font-size:10px;padding:5px 10px">🔑 再認証</button>
     </div>
 
@@ -7790,6 +7791,46 @@ window.mfCheckStatus = async function() {
       }
     }
   } catch(e) { console.warn('[MF] status check failed:', e); }
+};
+
+// ── 診断: 各エンドポイントの応答を確認 ──
+window.mfDiagnose = async function() {
+  const log = document.getElementById('mf-sync-log');
+  log.style.color = 'var(--text3)';
+  log.textContent = '🔍 診断実行中...';
+  try {
+    const fy = document.getElementById('mf-fiscal-year').value;
+    const r = await fetch('/api/mf-sync?action=debug&fiscal_year=' + fy);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '診断失敗');
+
+    const results = d.results || {};
+    const oid = results._resolved_office_id || '未取得';
+    let html = '<div style="background:var(--bg3);padding:10px 12px;border-radius:8px;margin-top:6px;font-family:monospace;font-size:10px;max-height:300px;overflow:auto">';
+    html += '<div style="font-weight:700;margin-bottom:6px;color:var(--text)">🔍 MF API 診断結果 (office_id=' + oid + ')</div>';
+
+    Object.entries(results).forEach(([ep, r]) => {
+      if (ep.startsWith('_')) return;
+      const clr = r.ok ? 'var(--tc-green)' : 'var(--tc-red)';
+      const mark = r.ok ? '✓' : '✗';
+      const detail = r.ok ? `keys: ${(r.keys||[]).join(', ')}` : `error: ${r.error||''}`;
+      html += `<div style="color:${clr};margin-bottom:3px"><strong>${mark} ${ep}</strong>: ${detail}</div>`;
+    });
+    html += '</div>';
+
+    // 成功したレポートエンドポイントがあるか
+    const okReports = Object.entries(results).filter(([k,v]) => k.startsWith('/reports/') && v.ok);
+    if (okReports.length > 0) {
+      html += '<div style="color:var(--tc-green);margin-top:6px;font-size:10px">✓ 利用可能なレポート: ' + okReports.map(([k]) => k).join(', ') + '</div>';
+    } else {
+      html += '<div style="color:var(--tc-amber);margin-top:6px;font-size:10px">⚠ レポートエンドポイントが全て失敗。scope権限・API契約プランを確認してください。</div>';
+    }
+
+    log.innerHTML = html;
+  } catch(e) {
+    log.style.color = 'var(--tc-red)';
+    log.textContent = '❌ 診断失敗: ' + e.message;
+  }
 };
 
 // ── データ取得 → プレビュー ──

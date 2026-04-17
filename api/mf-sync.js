@@ -235,79 +235,126 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers','Content-Type');
   if (req.method==='OPTIONS') return res.status(200).end();
-  const {action, office_id, fiscal_year, from_date, to_date} = req.query;
+  const {action, office_id: queryOfficeId, fiscal_year, from_date, to_date} = req.query;
   try {
     const token = await getAccessToken();
+
+    // ── office_id 自動解決（未指定時は最初の事業者を使用） ──
+    async function resolveOfficeId(provided) {
+      if (provided) return provided;
+      try {
+        const data = await mfFetch(token, '/offices');
+        // レスポンス形式のバリエーションに対応
+        const list = data?.data || data?.offices || (Array.isArray(data) ? data : []);
+        if (list.length > 0) {
+          return list[0].id || list[0].office_id || list[0].uuid || null;
+        }
+      } catch(e) {
+        console.warn('[mf-sync] resolveOfficeId failed:', e.message);
+      }
+      return null;
+    }
+
     if (action==='debug') {
-      const results={};
+      const results = {};
+      // 基本エンドポイント
       for (const ep of ['/offices','/accounts','/partners','/sections']) {
         try { const d=await mfFetch(token,ep); results[ep]={ok:true,keys:Object.keys(d)}; }
-        catch(e){ results[ep]={ok:false,error:e.message.slice(0,100)}; }
+        catch(e){ results[ep]={ok:false,error:e.message.slice(0,200)}; }
+      }
+      // レポートエンドポイント（office_id 付きで）
+      const oid = await resolveOfficeId(queryOfficeId);
+      results._resolved_office_id = oid;
+      const fy = fiscal_year || '2025';
+      const reportParams = oid ? { office_id: oid, fiscal_year: fy } : { fiscal_year: fy };
+      for (const ep of [
+        '/reports/trial_pl',
+        '/reports/trial_pl_three_years',
+        '/reports/trial_pl_by_months',
+        '/reports/trial_bs',
+        '/reports/trial_bs_three_years',
+        '/reports/trial_bs_by_months',
+      ]) {
+        try {
+          const d = await mfFetch(token, ep, reportParams);
+          results[ep] = { ok: true, keys: Object.keys(d).slice(0, 10) };
+        } catch(e) {
+          results[ep] = { ok: false, error: e.message.slice(0, 200) };
+        }
       }
       return res.status(200).json({ok:true,results});
     }
     if (action==='offices') return res.status(200).json({ok:true,data:await mfFetch(token,'/offices')});
     if (action==='accounts_nooffice') return res.status(200).json({ok:true,data:await mfFetch(token,'/accounts')});
-    if (action==='accounts') return res.status(200).json({ok:true,data:await mfFetch(token,'/accounts',office_id?{office_id}:{})});
+    if (action==='accounts') {
+      const oid = await resolveOfficeId(queryOfficeId);
+      return res.status(200).json({ok:true,data:await mfFetch(token,'/accounts',oid?{office_id:oid}:{})});
+    }
     if (action==='journals') {
-      const p={};
-      if (office_id) p.office_id=office_id;
-      if (from_date) p.start_date=from_date;
-      if (to_date) p.end_date=to_date;
+      const oid = await resolveOfficeId(queryOfficeId);
+      const p = {};
+      if (oid) p.office_id = oid;
+      if (from_date) p.start_date = from_date;
+      if (to_date) p.end_date = to_date;
       return res.status(200).json({ok:true,data:await mfFetch(token,'/journals',p)});
     }
     if (action==='trial_pl') {
-      const p={}; if(office_id)p.office_id=office_id; if(fiscal_year)p.fiscal_year=fiscal_year;
-      let data, lastErr;
-      for (const ep of ['/reports/trial_pl_three_years','/reports/trial_pl']) {
-        try { data=await mfFetch(token,ep,p); break; } catch(e){ lastErr=e; }
+      const oid = await resolveOfficeId(queryOfficeId);
+      const p = {}; if (oid) p.office_id = oid; if (fiscal_year) p.fiscal_year = fiscal_year;
+      let data, lastErr, usedEp;
+      for (const ep of ['/reports/trial_pl_three_years','/reports/trial_pl','/reports/trial_pl_by_months']) {
+        try { data = await mfFetch(token, ep, p); usedEp = ep; break; } catch(e) { lastErr = e; }
       }
       if (!data) throw lastErr;
-      return res.status(200).json({ok:true,data});
+      return res.status(200).json({ok:true,data,_endpoint:usedEp});
     }
     if (action==='trial_bs') {
-      const p={}; if(office_id)p.office_id=office_id; if(fiscal_year)p.fiscal_year=fiscal_year;
-      let data, lastErr;
-      for (const ep of ['/reports/trial_bs_three_years','/reports/trial_bs']) {
-        try { data=await mfFetch(token,ep,p); break; } catch(e){ lastErr=e; }
+      const oid = await resolveOfficeId(queryOfficeId);
+      const p = {}; if (oid) p.office_id = oid; if (fiscal_year) p.fiscal_year = fiscal_year;
+      let data, lastErr, usedEp;
+      for (const ep of ['/reports/trial_bs_three_years','/reports/trial_bs','/reports/trial_bs_by_months']) {
+        try { data = await mfFetch(token, ep, p); usedEp = ep; break; } catch(e) { lastErr = e; }
       }
       if (!data) throw lastErr;
-      return res.status(200).json({ok:true,data});
+      return res.status(200).json({ok:true,data,_endpoint:usedEp});
     }
     if (action==='pl_for_dashboard') {
       if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});
-      const p={fiscal_year}; if(office_id)p.office_id=office_id;
-      let raw, lastErr;
-      for (const ep of ['/reports/trial_pl_three_years','/reports/trial_pl']) {
-        try { raw=await mfFetch(token,ep,p); break; } catch(e){ lastErr=e; }
+      const oid = await resolveOfficeId(queryOfficeId);
+      const p = { fiscal_year }; if (oid) p.office_id = oid;
+      let raw, lastErr, usedEp;
+      for (const ep of ['/reports/trial_pl_three_years','/reports/trial_pl','/reports/trial_pl_by_months']) {
+        try { raw = await mfFetch(token, ep, p); usedEp = ep; break; } catch(e) { lastErr = e; }
       }
-      if (!raw) return res.status(404).json({error:'PLデータ取得失敗: '+(lastErr?.message||'')});
-      return res.status(200).json({ok:true, fiscal_year, converted:convertPl(raw,fiscal_year), raw});
+      if (!raw) return res.status(404).json({error:`PLデータ取得失敗 (office_id=${oid||'未取得'}): ${lastErr?.message||''}`});
+      return res.status(200).json({ok:true, fiscal_year, office_id:oid, _endpoint:usedEp, converted:convertPl(raw,fiscal_year), raw});
     }
     if (action==='bs_for_dashboard') {
       if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});
-      const p={fiscal_year}; if(office_id)p.office_id=office_id;
-      let raw, lastErr;
-      for (const ep of ['/reports/trial_bs_three_years','/reports/trial_bs']) {
-        try { raw=await mfFetch(token,ep,p); break; } catch(e){ lastErr=e; }
+      const oid = await resolveOfficeId(queryOfficeId);
+      const p = { fiscal_year }; if (oid) p.office_id = oid;
+      let raw, lastErr, usedEp;
+      for (const ep of ['/reports/trial_bs_three_years','/reports/trial_bs','/reports/trial_bs_by_months']) {
+        try { raw = await mfFetch(token, ep, p); usedEp = ep; break; } catch(e) { lastErr = e; }
       }
-      if (!raw) return res.status(404).json({error:'BSデータ取得失敗: '+(lastErr?.message||'')});
-      return res.status(200).json({ok:true, fiscal_year, converted:convertBs(raw,fiscal_year), raw});
+      if (!raw) return res.status(404).json({error:`BSデータ取得失敗 (office_id=${oid||'未取得'}): ${lastErr?.message||''}`});
+      return res.status(200).json({ok:true, fiscal_year, office_id:oid, _endpoint:usedEp, converted:convertBs(raw,fiscal_year), raw});
     }
     if (action==='cf_for_dashboard') {
       if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});
-      const fy=parseInt(fiscal_year);
-      const period=PERIODS[fy]||{start:fy+'-04-01',end:(fy+1)+'-03-31'};
-      const p={start_date:period.start,end_date:period.end};
-      if(office_id)p.office_id=office_id;
-      let allJournals=[];
-      for(let page=1;page<=20;page++){
-        p.page=page;
-        const data=await mfFetch(token,'/journals',p);
-        allJournals=allJournals.concat(data.journals||[]);
-        if(page>=(data.metadata?.total_pages||1))break;
+      const fy = parseInt(fiscal_year);
+      const period = PERIODS[fy] || { start: fy+'-04-01', end: (fy+1)+'-03-31' };
+      const oid = await resolveOfficeId(queryOfficeId);
+      const p = { start_date: period.start, end_date: period.end };
+      if (oid) p.office_id = oid;
+      let allJournals = [];
+      for (let page = 1; page <= 20; page++) {
+        p.page = page;
+        const data = await mfFetch(token, '/journals', p);
+        allJournals = allJournals.concat(data.journals || data.data || []);
+        if (page >= (data.metadata?.total_pages || data.total_pages || 1)) break;
       }
-      return res.status(200).json({ok:true,fiscal_year,total_journals:allJournals.length,converted:convertCf(allJournals,fiscal_year)});
+      return res.status(200).json({ok:true, fiscal_year, office_id:oid, total_journals:allJournals.length, converted:convertCf(allJournals,fiscal_year)});
     }
     return res.status(400).json({error:'Unknown action: '+action});
   } catch(err) {
