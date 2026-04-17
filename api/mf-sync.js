@@ -247,17 +247,46 @@ export default async function handler(req, res) {
         // 形式1: 単一オブジェクト {id, name, ...}
         if (data?.id) return String(data.id);
         if (data?.office_id) return String(data.office_id);
+        // 形式A: MFクラウド会計Plus形式 → code を使用（idがない場合）
+        if (data?.code) return String(data.code);
         // 形式2: 配列 [{id, name, ...}, ...]
-        if (Array.isArray(data) && data.length > 0) return String(data[0].id || data[0].office_id);
+        if (Array.isArray(data) && data.length > 0) return String(data[0].id || data[0].office_id || data[0].code);
         // 形式3: {data: [...]} or {offices: [...]}
         const list = data?.data || data?.offices;
-        if (Array.isArray(list) && list.length > 0) return String(list[0].id || list[0].office_id);
-        // 形式4: {data: {id, ...}} (ラップされた単一)
-        if (list && !Array.isArray(list) && (list.id || list.office_id)) return String(list.id || list.office_id);
-        // 最後の手段: 全キーを走査してidを探す
+        if (Array.isArray(list) && list.length > 0) return String(list[0].id || list[0].office_id || list[0].code);
+        if (list && !Array.isArray(list) && (list.id || list.office_id || list.code)) {
+          return String(list.id || list.office_id || list.code);
+        }
         console.warn('[mf-sync] resolveOfficeId: unknown format, keys:', Object.keys(data));
       } catch(e) {
         console.warn('[mf-sync] resolveOfficeId failed:', e.message);
+      }
+      return null;
+    }
+
+    // ── accounting_period_id 自動解決（/offices の accounting_periods から） ──
+    async function resolveAccountingPeriodId(fiscalYear) {
+      try {
+        const data = await mfFetch(token, '/offices');
+        const periods = data?.accounting_periods || [];
+        if (!Array.isArray(periods) || periods.length === 0) return null;
+        // fiscal_year 指定あり → 期間開始月から推定
+        if (fiscalYear) {
+          const fy = parseInt(fiscalYear);
+          // 会計期間の start_date が fy年4月〜fy年6月 の範囲にあるものを優先
+          const matched = periods.find(p => {
+            const start = new Date(p.start_date || p.start || '');
+            if (isNaN(start)) return false;
+            return start.getFullYear() === fy && start.getMonth() >= 3 && start.getMonth() <= 6;
+          });
+          if (matched) return String(matched.id || matched.period_id || matched.accounting_period_id);
+        }
+        // 最新の期間（または current フラグ付きの期間）
+        const current = periods.find(p => p.is_current || p.current);
+        const target = current || periods[periods.length - 1];
+        return String(target.id || target.period_id || target.accounting_period_id);
+      } catch(e) {
+        console.warn('[mf-sync] resolveAccountingPeriodId failed:', e.message);
       }
       return null;
     }
@@ -269,24 +298,55 @@ export default async function handler(req, res) {
         try { const d=await mfFetch(token,ep); results[ep]={ok:true,keys:Object.keys(d)}; }
         catch(e){ results[ep]={ok:false,error:e.message.slice(0,200)}; }
       }
-      // レポートエンドポイント（office_id 付きで）
+      // ID解決
       const oid = await resolveOfficeId(queryOfficeId);
+      const apid = await resolveAccountingPeriodId(fiscal_year);
       results._resolved_office_id = oid;
+      results._resolved_accounting_period_id = apid;
+
+      // /offices の accounting_periods を取得してレスポンスに含める
+      try {
+        const off = await mfFetch(token, '/offices');
+        results._accounting_periods = (off?.accounting_periods || []).map(p => ({
+          id: p.id || p.period_id || p.accounting_period_id,
+          start_date: p.start_date || p.start,
+          end_date: p.end_date || p.end,
+          is_current: p.is_current || p.current || false,
+        }));
+      } catch(e) { results._accounting_periods_err = e.message.slice(0,100); }
+
       const fy = fiscal_year || '2025';
-      const reportParams = oid ? { office_id: oid, fiscal_year: fy } : { fiscal_year: fy };
-      for (const ep of [
+      // 複数の URL パターン × パラメータ組み合わせを試す
+      const paramVariants = [
+        apid ? { accounting_period_id: apid } : null,
+        apid && oid ? { accounting_period_id: apid, office_id: oid } : null,
+        { fiscal_year: fy },
+        oid ? { office_id: oid, fiscal_year: fy } : null,
+      ].filter(Boolean);
+
+      const endpointVariants = [
         '/reports/trial_pl',
         '/reports/trial_pl_three_years',
         '/reports/trial_pl_by_months',
+        oid ? `/offices/${oid}/reports/trial_pl` : null,
+        oid ? `/offices/${oid}/reports/trial_pl_by_months` : null,
         '/reports/trial_bs',
         '/reports/trial_bs_three_years',
         '/reports/trial_bs_by_months',
-      ]) {
-        try {
-          const d = await mfFetch(token, ep, reportParams);
-          results[ep] = { ok: true, keys: Object.keys(d).slice(0, 10) };
-        } catch(e) {
-          results[ep] = { ok: false, error: e.message.slice(0, 200) };
+        oid ? `/offices/${oid}/reports/trial_bs` : null,
+      ].filter(Boolean);
+
+      for (const ep of endpointVariants) {
+        for (let pi = 0; pi < paramVariants.length; pi++) {
+          const params = paramVariants[pi];
+          const key = ep + ' [' + Object.keys(params).join(',') + ']';
+          try {
+            const d = await mfFetch(token, ep, params);
+            results[key] = { ok: true, keys: Object.keys(d).slice(0, 10) };
+            break; // このエンドポイントで成功したら次へ
+          } catch(e) {
+            results[key] = { ok: false, error: e.message.slice(0, 150) };
+          }
         }
       }
       return res.status(200).json({ok:true,results});
@@ -305,47 +365,86 @@ export default async function handler(req, res) {
       if (to_date) p.end_date = to_date;
       return res.status(200).json({ok:true,data:await mfFetch(token,'/journals',p)});
     }
-    if (action==='trial_pl') {
+    // ── レポート取得: 複数のURLパターン × パラメータを試行 ──
+    async function fetchReportWithFallback(kind, fy) {
       const oid = await resolveOfficeId(queryOfficeId);
-      const p = {}; if (oid) p.office_id = oid; if (fiscal_year) p.fiscal_year = fiscal_year;
-      let data, lastErr, usedEp;
-      for (const ep of ['/reports/trial_pl_three_years','/reports/trial_pl','/reports/trial_pl_by_months']) {
-        try { data = await mfFetch(token, ep, p); usedEp = ep; break; } catch(e) { lastErr = e; }
+      const apid = await resolveAccountingPeriodId(fy);
+      // パラメータの組み合わせ候補
+      const paramVariants = [
+        apid ? { accounting_period_id: apid } : null,
+        apid && oid ? { accounting_period_id: apid, office_id: oid } : null,
+        fy ? { fiscal_year: fy } : null,
+        fy && oid ? { fiscal_year: fy, office_id: oid } : null,
+      ].filter(Boolean);
+
+      const base = kind === 'pl' ? 'trial_pl' : 'trial_bs';
+      const endpointVariants = [
+        `/reports/${base}_by_months`,
+        `/reports/${base}`,
+        `/reports/${base}_three_years`,
+        oid ? `/offices/${oid}/reports/${base}_by_months` : null,
+        oid ? `/offices/${oid}/reports/${base}` : null,
+      ].filter(Boolean);
+
+      const attempts = [];
+      for (const ep of endpointVariants) {
+        for (const params of paramVariants) {
+          try {
+            const data = await mfFetch(token, ep, params);
+            return { data, usedEndpoint: ep, usedParams: params, oid, apid, attempts };
+          } catch(e) {
+            attempts.push(`${ep} [${Object.keys(params).join(',')}]: ${e.message.slice(0,80)}`);
+          }
+        }
       }
-      if (!data) throw lastErr;
-      return res.status(200).json({ok:true,data,_endpoint:usedEp});
+      return { error: 'all patterns failed', oid, apid, attempts };
+    }
+
+    if (action==='trial_pl') {
+      const result = await fetchReportWithFallback('pl', fiscal_year);
+      if (!result.data) {
+        return res.status(404).json({ error: 'PL取得失敗', detail: result.attempts, office_id: result.oid, accounting_period_id: result.apid });
+      }
+      return res.status(200).json({ok:true, data:result.data, _endpoint:result.usedEndpoint, _params:result.usedParams});
     }
     if (action==='trial_bs') {
-      const oid = await resolveOfficeId(queryOfficeId);
-      const p = {}; if (oid) p.office_id = oid; if (fiscal_year) p.fiscal_year = fiscal_year;
-      let data, lastErr, usedEp;
-      for (const ep of ['/reports/trial_bs_three_years','/reports/trial_bs','/reports/trial_bs_by_months']) {
-        try { data = await mfFetch(token, ep, p); usedEp = ep; break; } catch(e) { lastErr = e; }
+      const result = await fetchReportWithFallback('bs', fiscal_year);
+      if (!result.data) {
+        return res.status(404).json({ error: 'BS取得失敗', detail: result.attempts, office_id: result.oid, accounting_period_id: result.apid });
       }
-      if (!data) throw lastErr;
-      return res.status(200).json({ok:true,data,_endpoint:usedEp});
+      return res.status(200).json({ok:true, data:result.data, _endpoint:result.usedEndpoint, _params:result.usedParams});
     }
     if (action==='pl_for_dashboard') {
       if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});
-      const oid = await resolveOfficeId(queryOfficeId);
-      const p = { fiscal_year }; if (oid) p.office_id = oid;
-      let raw, lastErr, usedEp;
-      for (const ep of ['/reports/trial_pl_three_years','/reports/trial_pl','/reports/trial_pl_by_months']) {
-        try { raw = await mfFetch(token, ep, p); usedEp = ep; break; } catch(e) { lastErr = e; }
+      const result = await fetchReportWithFallback('pl', fiscal_year);
+      if (!result.data) {
+        return res.status(404).json({
+          error: `PLデータ取得失敗 (office_id=${result.oid||'未取得'}, accounting_period_id=${result.apid||'未取得'})`,
+          detail: result.attempts
+        });
       }
-      if (!raw) return res.status(404).json({error:`PLデータ取得失敗 (office_id=${oid||'未取得'}): ${lastErr?.message||''}`});
-      return res.status(200).json({ok:true, fiscal_year, office_id:oid, _endpoint:usedEp, converted:convertPl(raw,fiscal_year), raw});
+      return res.status(200).json({
+        ok: true, fiscal_year,
+        office_id: result.oid, accounting_period_id: result.apid,
+        _endpoint: result.usedEndpoint, _params: result.usedParams,
+        converted: convertPl(result.data, fiscal_year), raw: result.data
+      });
     }
     if (action==='bs_for_dashboard') {
       if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});
-      const oid = await resolveOfficeId(queryOfficeId);
-      const p = { fiscal_year }; if (oid) p.office_id = oid;
-      let raw, lastErr, usedEp;
-      for (const ep of ['/reports/trial_bs_three_years','/reports/trial_bs','/reports/trial_bs_by_months']) {
-        try { raw = await mfFetch(token, ep, p); usedEp = ep; break; } catch(e) { lastErr = e; }
+      const result = await fetchReportWithFallback('bs', fiscal_year);
+      if (!result.data) {
+        return res.status(404).json({
+          error: `BSデータ取得失敗 (office_id=${result.oid||'未取得'}, accounting_period_id=${result.apid||'未取得'})`,
+          detail: result.attempts
+        });
       }
-      if (!raw) return res.status(404).json({error:`BSデータ取得失敗 (office_id=${oid||'未取得'}): ${lastErr?.message||''}`});
-      return res.status(200).json({ok:true, fiscal_year, office_id:oid, _endpoint:usedEp, converted:convertBs(raw,fiscal_year), raw});
+      return res.status(200).json({
+        ok: true, fiscal_year,
+        office_id: result.oid, accounting_period_id: result.apid,
+        _endpoint: result.usedEndpoint, _params: result.usedParams,
+        converted: convertBs(result.data, fiscal_year), raw: result.data
+      });
     }
     if (action==='cf_for_dashboard') {
       if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});

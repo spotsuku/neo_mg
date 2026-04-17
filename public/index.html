@@ -7806,24 +7806,45 @@ window.mfDiagnose = async function() {
 
     const results = d.results || {};
     const oid = results._resolved_office_id || '未取得';
-    let html = '<div style="background:var(--bg3);padding:10px 12px;border-radius:8px;margin-top:6px;font-family:monospace;font-size:10px;max-height:300px;overflow:auto">';
-    html += '<div style="font-weight:700;margin-bottom:6px;color:var(--text)">🔍 MF API 診断結果 (office_id=' + oid + ')</div>';
+    const apid = results._resolved_accounting_period_id || '未取得';
+    const periods = results._accounting_periods || [];
 
-    Object.entries(results).forEach(([ep, r]) => {
-      if (ep.startsWith('_')) return;
-      const clr = r.ok ? 'var(--tc-green)' : 'var(--tc-red)';
-      const mark = r.ok ? '✓' : '✗';
-      const detail = r.ok ? `keys: ${(r.keys||[]).join(', ')}` : `error: ${r.error||''}`;
-      html += `<div style="color:${clr};margin-bottom:3px"><strong>${mark} ${ep}</strong>: ${detail}</div>`;
-    });
+    let html = '<div style="background:var(--bg3);padding:10px 12px;border-radius:8px;margin-top:6px;font-family:monospace;font-size:10px;max-height:400px;overflow:auto">';
+    html += `<div style="font-weight:700;margin-bottom:6px;color:var(--text)">🔍 MF API 診断結果</div>`;
+    html += `<div style="margin-bottom:6px;color:var(--text2)">office_id=<strong>${oid}</strong> / accounting_period_id=<strong>${apid}</strong></div>`;
+
+    if (periods.length > 0) {
+      html += `<div style="margin-bottom:8px;padding:6px;background:var(--bg2);border-radius:4px">
+        <div style="color:var(--text);font-weight:700;margin-bottom:3px">📅 会計期間一覧:</div>` +
+        periods.map(p => `<div style="color:var(--text3);font-size:10px">• id=${p.id} / ${p.start_date} 〜 ${p.end_date}${p.is_current ? ' ⭐current' : ''}</div>`).join('') +
+        `</div>`;
+    }
+
+    // カテゴリ別に表示
+    const okEntries = Object.entries(results).filter(([k,v]) => !k.startsWith('_') && v.ok);
+    const ngEntries = Object.entries(results).filter(([k,v]) => !k.startsWith('_') && !v.ok);
+
+    if (okEntries.length > 0) {
+      html += `<div style="color:var(--tc-green);font-weight:700;margin:6px 0 3px">✅ 成功:</div>`;
+      okEntries.forEach(([ep, r]) => {
+        html += `<div style="color:var(--tc-green);margin-bottom:2px;margin-left:8px">✓ ${ep}<br><span style="color:var(--text3);margin-left:16px">keys: ${(r.keys||[]).join(', ')}</span></div>`;
+      });
+    }
+    if (ngEntries.length > 0) {
+      html += `<div style="color:var(--tc-red);font-weight:700;margin:8px 0 3px">❌ 失敗 (${ngEntries.length}件):</div>`;
+      ngEntries.slice(0, 10).forEach(([ep, r]) => {
+        html += `<div style="color:var(--tc-red);margin-bottom:2px;margin-left:8px">✗ ${ep}<br><span style="color:var(--text3);margin-left:16px;font-size:9px">${r.error||''}</span></div>`;
+      });
+      if (ngEntries.length > 10) html += `<div style="color:var(--text3);margin-left:8px">...他${ngEntries.length - 10}件</div>`;
+    }
     html += '</div>';
 
     // 成功したレポートエンドポイントがあるか
-    const okReports = Object.entries(results).filter(([k,v]) => k.startsWith('/reports/') && v.ok);
+    const okReports = okEntries.filter(([k]) => k.includes('/reports/'));
     if (okReports.length > 0) {
-      html += '<div style="color:var(--tc-green);margin-top:6px;font-size:10px">✓ 利用可能なレポート: ' + okReports.map(([k]) => k).join(', ') + '</div>';
+      html += '<div style="color:var(--tc-green);margin-top:6px;font-size:10px;font-weight:700">🎯 利用可能なレポート: ' + okReports.map(([k]) => k.split(' ')[0]).join(', ') + '</div>';
     } else {
-      html += '<div style="color:var(--tc-amber);margin-top:6px;font-size:10px">⚠ レポートエンドポイントが全て失敗。scope権限・API契約プランを確認してください。</div>';
+      html += '<div style="color:var(--tc-amber);margin-top:6px;font-size:10px">⚠ レポートエンドポイントが全て失敗。MFクラウド会計APIのscope権限またはプラン契約を確認してください。</div>';
     }
 
     log.innerHTML = html;
