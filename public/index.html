@@ -7793,6 +7793,17 @@ window.mfCheckStatus = async function() {
   } catch(e) { console.warn('[MF] status check failed:', e); }
 };
 
+// ── /offices 生レスポンスを表示 ──
+window.mfDumpRawOffices = async function() {
+  try {
+    const r = await fetch('/api/mf-sync?action=raw_offices');
+    const d = await r.json();
+    const w = window.open('', '_blank');
+    w.document.write('<pre style="font-family:monospace;padding:16px">' + JSON.stringify(d, null, 2) + '</pre>');
+    w.document.title = '/offices raw response';
+  } catch(e) { alert('取得失敗: ' + e.message); }
+};
+
 // ── 診断: 各エンドポイントの応答を確認 ──
 window.mfDiagnose = async function() {
   const log = document.getElementById('mf-sync-log');
@@ -7813,12 +7824,23 @@ window.mfDiagnose = async function() {
     html += `<div style="font-weight:700;margin-bottom:6px;color:var(--text)">🔍 MF API 診断結果</div>`;
     html += `<div style="margin-bottom:6px;color:var(--text2)">office_id=<strong>${oid}</strong> / accounting_period_id=<strong>${apid}</strong></div>`;
 
-    if (periods.length > 0) {
+    // 生の会計期間データを表示（全フィールドの確認用）
+    const rawPeriods = results._accounting_periods_raw || [];
+    if (rawPeriods.length > 0) {
       html += `<div style="margin-bottom:8px;padding:6px;background:var(--bg2);border-radius:4px">
-        <div style="color:var(--text);font-weight:700;margin-bottom:3px">📅 会計期間一覧:</div>` +
-        periods.map(p => `<div style="color:var(--text3);font-size:10px">• id=${p.id} / ${p.start_date} 〜 ${p.end_date}${p.is_current ? ' ⭐current' : ''}</div>`).join('') +
-        `</div>`;
+        <div style="color:var(--text);font-weight:700;margin-bottom:3px">📅 会計期間生データ (フィールド構造確認):</div>`;
+      const sample = rawPeriods[0];
+      html += `<div style="color:var(--text3);font-size:9px;margin-bottom:4px">最新期間のキー: ${Object.keys(sample || {}).join(', ')}</div>`;
+      rawPeriods.forEach((p, i) => {
+        html += `<details style="margin-bottom:2px"><summary style="cursor:pointer;font-size:10px;color:var(--text2)">期間${i+1}: ${p.start_date||'?'} 〜 ${p.end_date||'?'}</summary>
+          <pre style="font-size:9px;color:var(--text3);margin:2px 0;padding:4px;background:var(--bg3);border-radius:3px;overflow-x:auto">${JSON.stringify(p, null, 2)}</pre>
+        </details>`;
+      });
+      html += `</div>`;
     }
+
+    // Raw offices を取得するボタン
+    html += `<button onclick="mfDumpRawOffices()" style="font-size:10px;padding:4px 8px;background:var(--bg2);border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;margin-bottom:8px">📄 /offices 生レスポンス確認</button>`;
 
     // カテゴリ別に表示
     const okEntries = Object.entries(results).filter(([k,v]) => !k.startsWith('_') && v.ok);

@@ -264,92 +264,110 @@ export default async function handler(req, res) {
       return null;
     }
 
-    // ── accounting_period_id 自動解決（/offices の accounting_periods から） ──
-    async function resolveAccountingPeriodId(fiscalYear) {
+    // ── accounting_period_id 自動解決 + 日付範囲抽出 ──
+    async function resolveAccountingPeriod(fiscalYear) {
       try {
         const data = await mfFetch(token, '/offices');
         const periods = data?.accounting_periods || [];
-        if (!Array.isArray(periods) || periods.length === 0) return null;
-        // fiscal_year 指定あり → 期間開始月から推定
+        if (!Array.isArray(periods) || periods.length === 0) return { id: null, start_date: null, end_date: null, raw: null };
+
+        let target = null;
         if (fiscalYear) {
           const fy = parseInt(fiscalYear);
-          // 会計期間の start_date が fy年4月〜fy年6月 の範囲にあるものを優先
-          const matched = periods.find(p => {
+          target = periods.find(p => {
             const start = new Date(p.start_date || p.start || '');
             if (isNaN(start)) return false;
             return start.getFullYear() === fy && start.getMonth() >= 3 && start.getMonth() <= 6;
           });
-          if (matched) return String(matched.id || matched.period_id || matched.accounting_period_id);
         }
-        // 最新の期間（または current フラグ付きの期間）
-        const current = periods.find(p => p.is_current || p.current);
-        const target = current || periods[periods.length - 1];
-        return String(target.id || target.period_id || target.accounting_period_id);
+        if (!target) target = periods.find(p => p.is_current || p.current);
+        if (!target) target = periods[0];
+
+        // 全フィールドを探索してID候補を検出
+        const id = target.id || target.period_id || target.accounting_period_id
+                || target.uid || target.uuid || target.code || null;
+        return {
+          id: id ? String(id) : null,
+          start_date: target.start_date || target.start || null,
+          end_date: target.end_date || target.end || null,
+          raw: target,
+          allPeriods: periods,
+        };
       } catch(e) {
-        console.warn('[mf-sync] resolveAccountingPeriodId failed:', e.message);
+        console.warn('[mf-sync] resolveAccountingPeriod failed:', e.message);
       }
-      return null;
+      return { id: null, start_date: null, end_date: null, raw: null };
     }
 
     if (action==='debug') {
       const results = {};
       // 基本エンドポイント
-      for (const ep of ['/offices','/accounts','/partners','/sections']) {
+      for (const ep of ['/offices','/accounts','/journals','/partners','/sections','/items','/tax_rates']) {
         try { const d=await mfFetch(token,ep); results[ep]={ok:true,keys:Object.keys(d)}; }
         catch(e){ results[ep]={ok:false,error:e.message.slice(0,200)}; }
       }
       // ID解決
       const oid = await resolveOfficeId(queryOfficeId);
-      const apid = await resolveAccountingPeriodId(fiscal_year);
+      const period = await resolveAccountingPeriod(fiscal_year);
       results._resolved_office_id = oid;
-      results._resolved_accounting_period_id = apid;
-
-      // /offices の accounting_periods を取得してレスポンスに含める
-      try {
-        const off = await mfFetch(token, '/offices');
-        results._accounting_periods = (off?.accounting_periods || []).map(p => ({
-          id: p.id || p.period_id || p.accounting_period_id,
-          start_date: p.start_date || p.start,
-          end_date: p.end_date || p.end,
-          is_current: p.is_current || p.current || false,
-        }));
-      } catch(e) { results._accounting_periods_err = e.message.slice(0,100); }
+      results._resolved_accounting_period_id = period.id;
+      results._resolved_period_dates = { start: period.start_date, end: period.end_date };
+      // 生periods（全フィールド）を確認用に返却
+      results._accounting_periods_raw = (period.allPeriods || []).map(p => p);
 
       const fy = fiscal_year || '2025';
-      // 複数の URL パターン × パラメータ組み合わせを試す
+      // 複数パラメータ組み合わせ
       const paramVariants = [
-        apid ? { accounting_period_id: apid } : null,
-        apid && oid ? { accounting_period_id: apid, office_id: oid } : null,
+        period.start_date && period.end_date ? { from: period.start_date, to: period.end_date } : null,
+        period.start_date && period.end_date ? { start_date: period.start_date, end_date: period.end_date } : null,
+        period.id ? { accounting_period_id: period.id } : null,
+        period.id && oid ? { accounting_period_id: period.id, office_id: oid } : null,
         { fiscal_year: fy },
         oid ? { office_id: oid, fiscal_year: fy } : null,
       ].filter(Boolean);
 
+      // URLパターン（より多くの候補を試行）
       const endpointVariants = [
+        // 標準パス
         '/reports/trial_pl',
-        '/reports/trial_pl_three_years',
         '/reports/trial_pl_by_months',
-        oid ? `/offices/${oid}/reports/trial_pl` : null,
-        oid ? `/offices/${oid}/reports/trial_pl_by_months` : null,
+        '/reports/trial_pl_three_years',
         '/reports/trial_bs',
-        '/reports/trial_bs_three_years',
         '/reports/trial_bs_by_months',
+        '/reports/trial_bs_three_years',
+        // 代替パス候補
+        '/trial_balances/pl',
+        '/trial_balances/bs',
+        '/accounting_reports/trial_pl',
+        '/accounting_reports/trial_bs',
+        // ネステッド形式
+        oid ? `/offices/${oid}/reports/trial_pl` : null,
         oid ? `/offices/${oid}/reports/trial_bs` : null,
+        oid ? `/offices/${oid}/trial_balances/pl` : null,
+        // 期間ネステッド
+        period.id ? `/accounting_periods/${period.id}/reports/trial_pl` : null,
+        period.id ? `/accounting_periods/${period.id}/reports/trial_bs` : null,
       ].filter(Boolean);
 
       for (const ep of endpointVariants) {
-        for (let pi = 0; pi < paramVariants.length; pi++) {
-          const params = paramVariants[pi];
+        for (const params of paramVariants) {
           const key = ep + ' [' + Object.keys(params).join(',') + ']';
           try {
             const d = await mfFetch(token, ep, params);
             results[key] = { ok: true, keys: Object.keys(d).slice(0, 10) };
-            break; // このエンドポイントで成功したら次へ
+            break;
           } catch(e) {
-            results[key] = { ok: false, error: e.message.slice(0, 150) };
+            results[key] = { ok: false, error: e.message.slice(0, 120) };
           }
         }
       }
       return res.status(200).json({ok:true,results});
+    }
+
+    // 生の /offices レスポンスをそのまま返す（デバッグ用）
+    if (action==='raw_offices') {
+      const data = await mfFetch(token, '/offices');
+      return res.status(200).json({ok:true,data});
     }
     if (action==='offices') return res.status(200).json({ok:true,data:await mfFetch(token,'/offices')});
     if (action==='accounts_nooffice') return res.status(200).json({ok:true,data:await mfFetch(token,'/accounts')});
@@ -368,9 +386,11 @@ export default async function handler(req, res) {
     // ── レポート取得: 複数のURLパターン × パラメータを試行 ──
     async function fetchReportWithFallback(kind, fy) {
       const oid = await resolveOfficeId(queryOfficeId);
-      const apid = await resolveAccountingPeriodId(fy);
-      // パラメータの組み合わせ候補
+      const period = await resolveAccountingPeriod(fy);
+      const apid = period.id;
       const paramVariants = [
+        period.start_date && period.end_date ? { from: period.start_date, to: period.end_date } : null,
+        period.start_date && period.end_date ? { start_date: period.start_date, end_date: period.end_date } : null,
         apid ? { accounting_period_id: apid } : null,
         apid && oid ? { accounting_period_id: apid, office_id: oid } : null,
         fy ? { fiscal_year: fy } : null,
@@ -382,8 +402,10 @@ export default async function handler(req, res) {
         `/reports/${base}_by_months`,
         `/reports/${base}`,
         `/reports/${base}_three_years`,
+        `/trial_balances/${kind}`,
         oid ? `/offices/${oid}/reports/${base}_by_months` : null,
         oid ? `/offices/${oid}/reports/${base}` : null,
+        apid ? `/accounting_periods/${apid}/reports/${base}` : null,
       ].filter(Boolean);
 
       const attempts = [];
