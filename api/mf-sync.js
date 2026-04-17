@@ -244,11 +244,18 @@ export default async function handler(req, res) {
       if (provided) return provided;
       try {
         const data = await mfFetch(token, '/offices');
-        // レスポンス形式のバリエーションに対応
-        const list = data?.data || data?.offices || (Array.isArray(data) ? data : []);
-        if (list.length > 0) {
-          return list[0].id || list[0].office_id || list[0].uuid || null;
-        }
+        // 形式1: 単一オブジェクト {id, name, ...}
+        if (data?.id) return String(data.id);
+        if (data?.office_id) return String(data.office_id);
+        // 形式2: 配列 [{id, name, ...}, ...]
+        if (Array.isArray(data) && data.length > 0) return String(data[0].id || data[0].office_id);
+        // 形式3: {data: [...]} or {offices: [...]}
+        const list = data?.data || data?.offices;
+        if (Array.isArray(list) && list.length > 0) return String(list[0].id || list[0].office_id);
+        // 形式4: {data: {id, ...}} (ラップされた単一)
+        if (list && !Array.isArray(list) && (list.id || list.office_id)) return String(list.id || list.office_id);
+        // 最後の手段: 全キーを走査してidを探す
+        console.warn('[mf-sync] resolveOfficeId: unknown format, keys:', Object.keys(data));
       } catch(e) {
         console.warn('[mf-sync] resolveOfficeId failed:', e.message);
       }
