@@ -7804,6 +7804,18 @@ window.mfDumpRawOffices = async function() {
   } catch(e) { alert('取得失敗: ' + e.message); }
 };
 
+// ── /journals 生レスポンス先頭3件を表示（フィールド構造確認用） ──
+window.mfDumpRawJournals = async function() {
+  try {
+    const fy = document.getElementById('mf-fiscal-year').value;
+    const r = await fetch('/api/mf-sync?action=raw_journals&fiscal_year=' + fy);
+    const d = await r.json();
+    const w = window.open('', '_blank');
+    w.document.write('<pre style="font-family:monospace;padding:16px">' + JSON.stringify(d, null, 2) + '</pre>');
+    w.document.title = '/journals raw sample';
+  } catch(e) { alert('取得失敗: ' + e.message); }
+};
+
 // ── 診断: 各エンドポイントの応答を確認 ──
 window.mfDiagnose = async function() {
   const log = document.getElementById('mf-sync-log');
@@ -7840,7 +7852,8 @@ window.mfDiagnose = async function() {
     }
 
     // Raw offices を取得するボタン
-    html += `<button onclick="mfDumpRawOffices()" style="font-size:10px;padding:4px 8px;background:var(--bg2);border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;margin-bottom:8px">📄 /offices 生レスポンス確認</button>`;
+    html += `<button onclick="mfDumpRawOffices()" style="font-size:10px;padding:4px 8px;background:var(--bg2);border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;margin-bottom:8px;margin-right:6px">📄 /offices 生レスポンス確認</button>`;
+    html += `<button onclick="mfDumpRawJournals()" style="font-size:10px;padding:4px 8px;background:var(--bg2);border:1px solid var(--border2);border-radius:4px;color:var(--text2);cursor:pointer;margin-bottom:8px">📄 /journals 先頭3件確認</button>`;
 
     // カテゴリ別に表示
     const okEntries = Object.entries(results).filter(([k,v]) => !k.startsWith('_') && v.ok);
@@ -7971,13 +7984,14 @@ function mfRenderPreview() {
     aiEl.style.display = 'none';
     samplesEl.style.display = 'none';
     tblEl.innerHTML = mfBuildTable(months, monthNames, [
-      { label:'売上',      key:'rev',       isRev:true },
-      { label:'人件費',    key:'labor',     isOut:true },
-      { label:'業務委託',  key:'outsource', isOut:true },
-      { label:'広告販促',  key:'adv',       isOut:true },
-      { label:'外注費',    key:'gaichu',    isOut:true },
-      { label:'その他',    key:'other',     isOut:true },
-      { label:'原価',      key:'cogs',      isOut:true },
+      { label:'売上（売上高）',        key:'rev',       isRev:true },
+      { label:'売上(その他・会費等)', key:'rev_other', isRev:true },
+      { label:'人件費',                 key:'labor',     isOut:true },
+      { label:'業務委託',               key:'outsource', isOut:true },
+      { label:'広告販促',               key:'adv',       isOut:true },
+      { label:'外注費',                 key:'gaichu',    isOut:true },
+      { label:'その他販管費',           key:'other',     isOut:true },
+      { label:'原価',                   key:'cogs',      isOut:true },
     ], (key, i) => (p.pl[key]?.actual?.[i]) || 0);
 
   } else if (p.type === 'trial_bs') {
@@ -8121,6 +8135,7 @@ window.mfCommit = async function() {
 
   try {
     if (p.type === 'trial_pl') {
+      // DBには rev_other は無いので、オプションで rev に合算するか破棄
       const keys = ['rev','labor','outsource','adv','gaichu','other','cogs'];
       keys.forEach(k => {
         if (!db.pl.actual[k]) db.pl.actual[k] = new Array(db.months.length).fill(0);

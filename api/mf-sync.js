@@ -65,15 +65,32 @@ async function resolveFiscalPeriod(token, fiscalYear) {
 // ══════════════════════════════════════════
 
 // PL科目マッピング（勘定科目名 → ダッシュボードキー）
+// 厳密版: MFの損益計算書「売上高合計」と一致させるため、売上高のみを rev にマッピング
+// 会費収入・協賛金収入等は rev_other（未分類）として扱い、デフォルトでは合算しない
 const PL_ACCT_MAP = {
-  '売上高':'rev','売上':'rev','会費収入':'rev','協賛金収入':'rev','入会金収入':'rev',
-  '営業代行収入':'rev','受取手数料':'rev','雑収入':'rev','売上値引・割戻':'rev',
+  // 売上（MFの「売上高」セクションと一致）
+  '売上高':'rev','売上':'rev',
+  // 人件費（MFの給与系科目と一致）
   '役員報酬':'labor','給与手当':'labor','給料手当':'labor','給料賃金':'labor',
   '賞与':'labor','法定福利費':'labor','福利厚生費':'labor','退職金':'labor',
+  // 業務委託
   '業務委託費':'outsource','業務委託料':'outsource','業務委託':'outsource',
+  // 広告販促
   '広告宣伝費':'adv','販売促進費':'adv',
+  // 外注費
   '外注費':'gaichu','外注加工費':'gaichu','支払報酬':'gaichu',
+  // 売上原価
   '仕入高':'cogs','原価':'cogs','会場費':'cogs',
+  // ── その他販管費（上記以外）を 'other' にまとめる ──
+  '旅費交通費':'other','通信費':'other','水道光熱費':'other','消耗品費':'other',
+  '備品・消耗品費':'other','地代家賃':'other','租税公課':'other','支払手数料':'other',
+  'システム利用料':'other','接待交際費':'other','会議費':'other','研修採用費':'other',
+  '採用費':'other','保険料':'other','新聞図書費':'other','諸会費':'other',
+  '荷造運賃':'other','雑費':'other','減価償却費':'other','リース料':'other',
+  // 収益（会費等）は売上ではなく 'rev_other' として分離
+  '会費収入':'rev_other','協賛金収入':'rev_other','入会金収入':'rev_other',
+  '営業代行収入':'rev_other','受取手数料':'rev_other','雑収入':'rev_other',
+  '売上値引・割戻':'rev_other',
 };
 
 // BS科目マッピング
@@ -154,10 +171,13 @@ function buildFromJournals(journals, fiscalYear) {
   const monthIdx = buildMonthIndex(fiscalYear);
   const n = monthIdx.length;
 
-  // ── PL: 月次損益 ──
-  const PL_KEYS = ['rev', 'labor', 'outsource', 'adv', 'gaichu', 'other', 'cogs'];
+  // ── PL: 月次損益（借方・貸方の純額を計算） ──
+  const PL_KEYS = ['rev', 'rev_other', 'labor', 'outsource', 'adv', 'gaichu', 'other', 'cogs'];
   const pl = {};
   PL_KEYS.forEach(k => { pl[k] = { actual: new Array(n).fill(0) }; });
+  // 借方・貸方を別々に集計（純額計算用）
+  const plDebit  = {}; const plCredit = {};
+  PL_KEYS.forEach(k => { plDebit[k] = new Array(n).fill(0); plCredit[k] = new Array(n).fill(0); });
 
   // ── BS: 月次残高 ──
   const BS_KEYS = ['cash', 'receivable', 'other_ca', 'fixed', 'payable', 'borrowing', 'other_cl', 'capital', 'retained'];
@@ -199,20 +219,11 @@ function buildFromJournals(journals, fiscalYear) {
 
       const desc = j.remark || j.description || j.memo || j.summary || '';
 
-      // ── PL計算: 収益科目は貸方、費用科目は借方で発生 ──
+      // ── PL計算: 借方・貸方を別々に追跡して純額を計算 ──
       const plKeyDebit = PL_ACCT_MAP[debitAcct];
       const plKeyCredit = PL_ACCT_MAP[creditAcct];
-
-      if (plKeyDebit) {
-        // 費用の借方発生 → 加算
-        pl[plKeyDebit].actual[idx] += amount;
-      }
-      if (plKeyCredit) {
-        if (plKeyCredit === 'rev') {
-          // 売上は貸方発生 → 加算
-          pl.rev.actual[idx] += amount;
-        }
-      }
+      if (plKeyDebit) plDebit[plKeyDebit][idx] += amount;
+      if (plKeyCredit) plCredit[plKeyCredit][idx] += amount;
 
       // ── BS計算: 借方増 / 貸方増 をトラッキング ──
       const bsKeyDebit = BS_ACCT_MAP[debitAcct];
@@ -248,6 +259,18 @@ function buildFromJournals(journals, fiscalYear) {
         });
       }
     });
+  });
+
+  // ── PL 純額計算 ──
+  // 収益(rev/rev_other): 貸方 − 借方（返品・値引は借方で相殺）
+  // 費用(labor/outsource/adv/gaichu/other/cogs): 借方 − 貸方（戻し処理は貸方で相殺）
+  PL_KEYS.forEach(k => {
+    const isRev = (k === 'rev' || k === 'rev_other');
+    for (let i = 0; i < n; i++) {
+      pl[k].actual[i] = isRev
+        ? (plCredit[k][i] - plDebit[k][i])
+        : (plDebit[k][i] - plCredit[k][i]);
+    }
   });
 
   // BS: 借方-貸方の純額を残高として扱う
@@ -347,6 +370,20 @@ export default async function handler(req, res) {
     // ── /offices 生レスポンス ──
     if (action === 'raw_offices') {
       return res.status(200).json({ ok: true, data: await mfFetch(token, '/offices') });
+    }
+
+    // ── /journals 生レスポンス（先頭3件のみ、フィールド構造確認用） ──
+    if (action === 'raw_journals') {
+      const period = await resolveFiscalPeriod(token, fiscal_year || '2025');
+      const data = await mfFetch(token, '/journals', {
+        start_date: period.start, end_date: period.end, page: 1, per_page: 3
+      });
+      return res.status(200).json({
+        ok: true, period,
+        metadata: data.metadata || data.total_pages || data.total_count,
+        sample: (data.journals || data.data || []).slice(0, 3),
+        top_keys: Object.keys(data).slice(0, 20),
+      });
     }
 
     return res.status(400).json({ error: 'Unknown action: ' + action });
