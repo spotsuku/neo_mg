@@ -7902,11 +7902,26 @@ window.mfFetch = async function(type) {
     if (!d.ok) throw new Error(d.error || '取得失敗');
 
     // プレビュー表示
-    window._mfPending = { type, fy, selectedMonths, converted: d.converted, totalJournals: d.total_journals };
+    // プレビュー表示
+    // バックエンドの新旧レスポンス形式に対応
+    const converted = d.converted || {};
+    const plData = d.pl || converted;
+    const bsData = d.bs || { monthly: converted.monthly, summary: converted.summary };
+    const cfData = d.cf || converted;
+
+    window._mfPending = {
+      type, fy, selectedMonths,
+      pl: plData,
+      bs: bsData,
+      cf: cfData,
+      totalJournals: d.journal_count || d.total_journals || 0,
+      method: d.method || 'unknown',
+    };
     mfRenderPreview();
 
     log.style.color = 'var(--tc-green)';
-    log.textContent = `✓ ${labels[type]} 取得完了 → 下のプレビューを確認してください`;
+    const jCount = d.journal_count || d.total_journals || 0;
+    log.textContent = `✓ ${labels[type]} 取得完了（${jCount}件の仕訳から計算）→ 下のプレビューを確認`;
     document.getElementById('mf-preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   } catch(e) {
@@ -7963,12 +7978,12 @@ function mfRenderPreview() {
       { label:'外注費',    key:'gaichu',    isOut:true },
       { label:'その他',    key:'other',     isOut:true },
       { label:'原価',      key:'cogs',      isOut:true },
-    ], (key, i) => (p.converted[key]?.actual?.[i]) || 0);
+    ], (key, i) => (p.pl[key]?.actual?.[i]) || 0);
 
   } else if (p.type === 'trial_bs') {
     aiEl.style.display = 'none';
     samplesEl.style.display = 'none';
-    const monthly = p.converted.monthly || {};
+    const monthly = p.bs.monthly || {};
     tblEl.innerHTML = mfBuildTable(months, monthNames, [
       { label:'現預金',         key:'cash',       isRev:true },
       { label:'売掛金',         key:'receivable', isRev:true },
@@ -7983,9 +7998,9 @@ function mfRenderPreview() {
 
   } else if (p.type === 'journals') {
     // AI仕分けサマリー
-    const monthly = p.converted.monthly || {};
-    const totalCashIn = (p.converted.cashIn || []).reduce((t,v) => t+v, 0);
-    const totalCashOut = (p.converted.cashOut || []).reduce((t,v) => t+v, 0);
+    const monthly = p.cf.monthly || {};
+    const totalCashIn = (p.cf.cashIn || []).reduce((t,v) => t+v, 0);
+    const totalCashOut = (p.cf.cashOut || []).reduce((t,v) => t+v, 0);
     aiEl.style.display = 'block';
     aiDetailEl.innerHTML = `取得した <strong>${p.totalJournals || 0}件</strong> の仕訳から、現預金の動きを抽出しました。<br>
       総入金 <strong style="color:var(--tc-green)">${totalCashIn.toLocaleString()}千円</strong> /
@@ -8018,12 +8033,12 @@ function mfRenderPreview() {
     ], (key, i) => (monthly[key] && monthly[key][i]) || 0);
 
     // サンプル仕訳
-    if (p.converted.samples && p.converted.samples.length > 0) {
+    if (p.cf?.samples && p.cf.samples.length > 0) {
       samplesEl.style.display = 'block';
       const sEl = document.getElementById('mf-preview-samples-table');
       sEl.innerHTML = `<table class="dt" style="font-size:10px;min-width:800px">
         <thead><tr><th class="l">日付</th><th class="l">借方</th><th class="l">貸方</th><th style="text-align:right">金額(千円)</th><th class="l">方向</th><th class="l">AI分類</th></tr></thead>
-        <tbody>${p.converted.samples.slice(0, 100).map(s =>
+        <tbody>${p.cf.samples.slice(0, 100).map(s =>
           `<tr>
             <td style="font-size:10px">${s.date||''}</td>
             <td style="font-size:10px">${s.debit||''}</td>
@@ -8109,9 +8124,9 @@ window.mfCommit = async function() {
       const keys = ['rev','labor','outsource','adv','gaichu','other','cogs'];
       keys.forEach(k => {
         if (!db.pl.actual[k]) db.pl.actual[k] = new Array(db.months.length).fill(0);
-        if (!p.converted[k]?.actual) return;
+        if (!p.pl[k]?.actual) return;
         commitMonths.forEach(m => {
-          const v = p.converted[k].actual[m.idx] || 0;
+          const v = p.pl[k].actual[m.idx] || 0;
           if (v !== 0) { db.pl.actual[k][m.idx] = v; applied++; }
         });
       });
@@ -8120,7 +8135,7 @@ window.mfCommit = async function() {
       const keys = ['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained'];
       if (!db.bs) db.bs = {};
       if (!db.bs.actual) db.bs.actual = {};
-      const monthly = p.converted.monthly || {};
+      const monthly = p.bs.monthly || {};
       commitMonths.forEach(m => {
         const row = {};
         let hasVal = false;
@@ -8132,8 +8147,8 @@ window.mfCommit = async function() {
         if (hasVal) { db.bs.actual[m.idx] = row; applied++; }
       });
       // BS_DATA 年次サマリー更新（最新月から）
-      if (typeof BS_DATA !== 'undefined' && p.converted.summary) {
-        const s = p.converted.summary;
+      if (typeof BS_DATA !== 'undefined' && p.bs?.summary) {
+        const s = p.bs.summary;
         if (s.cash !== undefined) BS_DATA.assets.cash.actual = s.cash;
         if (s.receivable !== undefined) BS_DATA.assets.receivable.actual = s.receivable;
         if (s.fixed !== undefined) BS_DATA.assets.fixed.actual = s.fixed;
@@ -8148,7 +8163,7 @@ window.mfCommit = async function() {
         'salaryPay','bizComPay','expertPay','rentPay','telPay','entertainPay','taxPay',
         'toolsPay','suppliesPay','adSportsPay','eventCostPay','recruitPay','annualFeePay',
         'investPay','loanOut','salesOtherPay','expensePay'];
-      const monthly = p.converted.monthly || {};
+      const monthly = p.cf.monthly || {};
       cfKeys.forEach(k => {
         if (!db.cf.actual[k]) db.cf.actual[k] = new Array(db.months.length).fill(0);
         if (!monthly[k]) return;

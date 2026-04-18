@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const MF_API_BASE = 'https://api-accounting.moneyforward.com/api/v3';
+
 async function getAccessToken() {
   const { data, error } = await supabase.from('mf_tokens').select('access_token,refresh_token,expires_at').eq('id','default').maybeSingle();
   if (error || !data) throw new Error('マネフォ未連携です。先に認証してください。');
@@ -14,15 +15,18 @@ async function getAccessToken() {
   }
   return data.access_token;
 }
+
 async function mfFetch(token, path, params={}) {
-  const url = new URL(MF_API_BASE+path);
-  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
-  const res = await fetch(url.toString(), {headers:{Authorization:'Bearer '+token,Accept:'application/json'}});
-  if (!res.ok) { const text = await res.text(); throw new Error('MF API error '+res.status+': '+text); }
+  const url = new URL(MF_API_BASE + path);
+  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, String(v)));
+  const res = await fetch(url.toString(), { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } });
+  if (!res.ok) { const text = await res.text(); throw new Error('MF API error ' + res.status + ': ' + text.slice(0, 300)); }
   return res.json();
 }
 
-// ── 会計年度は4月〜3月（日本標準） ──
+// ══════════════════════════════════════════
+//  月インデックス（4月〜3月）
+// ══════════════════════════════════════════
 function buildMonthIndex(fiscalYear) {
   const fy = parseInt(fiscalYear);
   const months = [];
@@ -31,9 +35,39 @@ function buildMonthIndex(fiscalYear) {
   return months;
 }
 
-const ACCT_MAP = {
+// 会計期間 start/end を /offices から解決
+async function resolveFiscalPeriod(token, fiscalYear) {
+  try {
+    const data = await mfFetch(token, '/offices');
+    const periods = data?.accounting_periods || [];
+    const fy = parseInt(fiscalYear);
+    // fy年の4月〜6月開始の期間を優先
+    let target = periods.find(p => {
+      const s = new Date(p.start_date || '');
+      return !isNaN(s) && s.getFullYear() === fy && s.getMonth() >= 3 && s.getMonth() <= 6;
+    });
+    if (!target) target = periods.find(p => {
+      const s = new Date(p.start_date || '');
+      return !isNaN(s) && s.getFullYear() === fy;
+    });
+    if (!target) target = periods[0];
+    return {
+      start: target?.start_date || `${fy}-04-01`,
+      end: target?.end_date || `${fy + 1}-03-31`,
+    };
+  } catch (e) {
+    return { start: `${fiscalYear}-04-01`, end: `${parseInt(fiscalYear) + 1}-03-31` };
+  }
+}
+
+// ══════════════════════════════════════════
+//  勘定科目マスタ取得 + カテゴリマッピング構築
+// ══════════════════════════════════════════
+
+// PL科目マッピング（勘定科目名 → ダッシュボードキー）
+const PL_ACCT_MAP = {
   '売上高':'rev','売上':'rev','会費収入':'rev','協賛金収入':'rev','入会金収入':'rev',
-  '営業代行収入':'rev','受取手数料':'rev','雑収入':'rev',
+  '営業代行収入':'rev','受取手数料':'rev','雑収入':'rev','売上値引・割戻':'rev',
   '役員報酬':'labor','給与手当':'labor','給料手当':'labor','給料賃金':'labor',
   '賞与':'labor','法定福利費':'labor','福利厚生費':'labor','退職金':'labor',
   '業務委託費':'outsource','業務委託料':'outsource','業務委託':'outsource',
@@ -42,11 +76,11 @@ const ACCT_MAP = {
   '仕入高':'cogs','原価':'cogs','会場費':'cogs',
 };
 
-// ── BS科目マッピング ──
+// BS科目マッピング
 const BS_ACCT_MAP = {
   '現金':'cash','小口現金':'cash','普通預金':'cash','当座預金':'cash','定期預金':'cash',
   '現金及び預金':'cash','現金・預金':'cash',
-  '売掛金':'receivable','完成工事未収入金':'receivable','未収入金':'receivable',
+  '売掛金':'receivable','完成工事未収入金':'receivable','未収入金':'other_ca',
   '前払費用':'other_ca','仮払金':'other_ca','立替金':'other_ca','短期貸付金':'other_ca',
   '繰延税金資産':'other_ca','商品':'other_ca','貯蔵品':'other_ca',
   '建物':'fixed','建物附属設備':'fixed','構築物':'fixed','車両運搬具':'fixed',
@@ -62,431 +96,251 @@ const BS_ACCT_MAP = {
   'その他利益剰余金':'retained',
 };
 
-function convertPl(plRaw, fiscalYear) {
-  const monthIdx = buildMonthIndex(fiscalYear);
-  const n = monthIdx.length;
-  const PL_KEYS = ['rev','labor','outsource','adv','gaichu','other','cogs'];
-  const result = {};
-  PL_KEYS.forEach(k => { result[k] = { actual: new Array(n).fill(0) }; });
-  const balances = plRaw?.balances || plRaw?.account_item_balances || plRaw?.items || [];
-  balances.forEach(item => {
-    const name = item.account_item_name || item.name || '';
-    const dbKey = ACCT_MAP[name] || 'other';
-    const monthly = item.monthly_closing_balances || item.month_balances || item.monthly || [];
-    monthly.forEach(mb => {
-      const yr = mb.year || mb.fiscal_year;
-      const mo = mb.month;
-      const idx = monthIdx.findIndex(m => m.year === yr && m.month === mo);
-      if (idx >= 0) {
-        // 収益は正、費用は正（千円）
-        const val = Math.round(Math.abs(mb.closing_balance || mb.amount || 0) / 1000);
-        result[dbKey].actual[idx] += val;
-      }
-    });
-  });
-  return result;
+// CF科目分類（仕訳の勘定科目名からCFカテゴリを推定）
+function categorizeCf(acctName, isIn) {
+  const d = (acctName || '').replace(/\s|　/g, '');
+  if (isIn) {
+    if (/会費|membership|入会金/.test(d)) return 'cfInFee';
+    if (/研修|training|セミナー/.test(d)) return 'cfInTraining';
+    if (/借入|融資/.test(d)) return 'loanIn';
+    if (/資本金|払込|出資/.test(d)) return 'capitalIn';
+    return 'cfInOther';
+  } else {
+    if (/役員報酬|給与|給料|賞与|法定福利|社会保険/.test(d)) return 'salaryPay';
+    if (/業務委託/.test(d)) return 'bizComPay';
+    if (/顧問|弁護士|税理士|社労士/.test(d)) return 'expertPay';
+    if (/家賃|地代|賃料/.test(d)) return 'rentPay';
+    if (/通信|電話|インターネット/.test(d)) return 'telPay';
+    if (/交際|接待|会議/.test(d)) return 'entertainPay';
+    if (/租税|税金|印紙|国税|都税/.test(d)) return 'taxPay';
+    if (/消耗|備品/.test(d)) return 'suppliesPay';
+    if (/広告|宣伝|販促/.test(d)) return 'adSportsPay';
+    if (/イベント|会場/.test(d)) return 'eventCostPay';
+    if (/採用|求人/.test(d)) return 'recruitPay';
+    if (/借入返済|返済/.test(d)) return 'loanOut';
+    if (/設備|投資|固定資産/.test(d)) return 'investPay';
+    return 'salesOtherPay';
+  }
 }
 
-function convertBs(bsRaw, fiscalYear) {
-  const monthIdx = buildMonthIndex(fiscalYear);
-  const n = monthIdx.length;
-  const BS_KEYS = ['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained'];
-  // 月次配列
-  const monthly = {};
-  BS_KEYS.forEach(k => { monthly[k] = new Array(n).fill(0); });
-  // サマリー（年次BS_DATA用）
-  const summary = { cash:0, receivable:0, other_ca:0, fixed:0, payable:0, borrowing:0, other_cl:0, capital:0, retained:0 };
-
-  const balances = bsRaw?.balances || bsRaw?.account_item_balances || bsRaw?.items || [];
-  balances.forEach(item => {
-    const name = item.account_item_name || item.name || '';
-    const cat = item.account_category_name || item.category || '';
-    let dbKey = BS_ACCT_MAP[name];
-    // マッピングに無い場合はカテゴリから推定
-    if (!dbKey) {
-      if (/流動資産/.test(cat) && !/現金|預金|売掛|未収/.test(name)) dbKey = 'other_ca';
-      else if (/固定資産|投資/.test(cat)) dbKey = 'fixed';
-      else if (/流動負債/.test(cat)) dbKey = 'other_cl';
-      else if (/固定負債/.test(cat)) dbKey = 'borrowing';
-      else if (/純資産|資本/.test(cat)) {
-        if (/資本金|資本準備金|資本剰余金/.test(name)) dbKey = 'capital';
-        else dbKey = 'retained';
-      }
-    }
-    if (!dbKey) return;
-
-    // 月次データ取得
-    const monthlyBal = item.monthly_closing_balances || item.month_balances || item.monthly || [];
-    if (monthlyBal.length > 0) {
-      monthlyBal.forEach(mb => {
-        const yr = mb.year || mb.fiscal_year;
-        const mo = mb.month;
-        const idx = monthIdx.findIndex(m => m.year === yr && m.month === mo);
-        if (idx >= 0) {
-          // 資産・純資産は正、負債は正（千円）
-          // 利益剰余金はマイナスの場合があるので符号を保持
-          const isNegativeOk = (dbKey === 'retained' || dbKey === 'capital');
-          const raw = mb.closing_balance || mb.amount || 0;
-          const val = isNegativeOk ? Math.round(raw / 1000) : Math.round(Math.abs(raw) / 1000);
-          monthly[dbKey][idx] += val;
-        }
-      });
-    }
-
-    // サマリー（最終残高）
-    const closingRaw = item.closing_balance || 0;
-    const isNegativeOk = (dbKey === 'retained' || dbKey === 'capital');
-    const closingVal = isNegativeOk ? Math.round(closingRaw / 1000) : Math.round(Math.abs(closingRaw) / 1000);
-    summary[dbKey] += closingVal;
-  });
-
-  return { monthly, summary };
+// ══════════════════════════════════════════
+//  仕訳から PL / BS / CF を一括計算
+// ══════════════════════════════════════════
+async function fetchAllJournals(token, startDate, endDate) {
+  const allJournals = [];
+  for (let page = 1; page <= 50; page++) {
+    const params = { start_date: startDate, end_date: endDate, page };
+    const data = await mfFetch(token, '/journals', params);
+    const journals = data.journals || data.data || [];
+    allJournals.push(...journals);
+    const totalPages = data.metadata?.total_pages || data.total_pages || 1;
+    if (page >= totalPages) break;
+  }
+  return allJournals;
 }
 
-function convertCf(journals, fiscalYear) {
+function buildFromJournals(journals, fiscalYear) {
   const monthIdx = buildMonthIndex(fiscalYear);
   const n = monthIdx.length;
-  // CF詳細科目ごとに月次配列を構築
-  const CF_KEYS = ['cfIn','cfInFee','cfInTraining','cfInOther','loanIn','capitalIn',
-    'salaryPay','bizComPay','expertPay','rentPay','telPay','entertainPay','taxPay',
-    'toolsPay','suppliesPay','adSportsPay','eventCostPay','recruitPay','annualFeePay',
-    'investPay','loanOut','salesOtherPay','expensePay'];
-  const monthly = {};
-  CF_KEYS.forEach(k => { monthly[k] = new Array(n).fill(0); });
+
+  // ── PL: 月次損益 ──
+  const PL_KEYS = ['rev', 'labor', 'outsource', 'adv', 'gaichu', 'other', 'cogs'];
+  const pl = {};
+  PL_KEYS.forEach(k => { pl[k] = { actual: new Array(n).fill(0) }; });
+
+  // ── BS: 月次残高 ──
+  const BS_KEYS = ['cash', 'receivable', 'other_ca', 'fixed', 'payable', 'borrowing', 'other_cl', 'capital', 'retained'];
+  const bsMonthly = {};
+  BS_KEYS.forEach(k => { bsMonthly[k] = new Array(n).fill(0); });
+  const bsSummary = {};
+  BS_KEYS.forEach(k => { bsSummary[k] = 0; });
+  // BS累計トラッカー（各科目の期中増減を月ごとに追跡）
+  const bsDelta = {};
+  BS_KEYS.forEach(k => { bsDelta[k] = new Array(n).fill(0); });
+
+  // ── CF: 月次キャッシュフロー ──
+  const CF_KEYS = ['cfIn', 'cfInFee', 'cfInTraining', 'cfInOther', 'loanIn', 'capitalIn',
+    'salaryPay', 'bizComPay', 'expertPay', 'rentPay', 'telPay', 'entertainPay', 'taxPay',
+    'toolsPay', 'suppliesPay', 'adSportsPay', 'eventCostPay', 'recruitPay', 'annualFeePay',
+    'investPay', 'loanOut', 'salesOtherPay', 'expensePay'];
+  const cfMonthly = {};
+  CF_KEYS.forEach(k => { cfMonthly[k] = new Array(n).fill(0); });
   const cashIn = new Array(n).fill(0);
   const cashOut = new Array(n).fill(0);
-  const cashNames = ['普通預金','当座預金','現金','小口現金','定期預金'];
+  const cashNames = ['普通預金', '当座預金', '現金', '小口現金', '定期預金'];
 
-  // カテゴリ推定（仕訳の摘要/勘定科目から判定）
-  function categorize(desc, isIn) {
-    const d = (desc || '').toLowerCase().replace(/\s|　/g, '');
-    if (isIn) {
-      if (/会費|membership|入会金/.test(d)) return 'cfInFee';
-      if (/研修|training|セミナー/.test(d)) return 'cfInTraining';
-      if (/借入|融資|ローン着金/.test(d)) return 'loanIn';
-      if (/資本金|払込|出資/.test(d)) return 'capitalIn';
-      if (/売上|入金|振込/.test(d)) return 'cfIn';
-      return 'cfInOther';
-    } else {
-      if (/給与|給料|賞与|役員報酬|社会保険|社保|厚生年金/.test(d)) return 'salaryPay';
-      if (/業務委託|外部委託|フリーランス/.test(d)) return 'bizComPay';
-      if (/顧問|弁護士|税理士|社労士|報酬/.test(d)) return 'expertPay';
-      if (/家賃|地代|賃料|rent/.test(d)) return 'rentPay';
-      if (/ntt|softbank|ソフトバンク|docomo|kddi|通信|電話|インターネット/.test(d)) return 'telPay';
-      if (/aws|azure|google|slack|zoom|notion|adobe|サブスク|クラウド/.test(d)) return 'toolsPay';
-      if (/広告|facebook|meta|instagram|google ads|媒体/.test(d)) return 'adSportsPay';
-      if (/indeed|wantedly|採用|求人/.test(d)) return 'recruitPay';
-      if (/返済|弁済|loanout/.test(d)) return 'loanOut';
-      if (/設備|投資|固定資産/.test(d)) return 'investPay';
-      if (/交際|接待|会議|レストラン/.test(d)) return 'entertainPay';
-      if (/税|印紙|国税|都税/.test(d)) return 'taxPay';
-      if (/消耗|備品|文具|amazon|モノタロウ/.test(d)) return 'suppliesPay';
-      if (/イベント|会場|設営|音響/.test(d)) return 'eventCostPay';
-      return 'salesOtherPay';
-    }
-  }
-
-  // サンプル仕訳（プレビュー用に上位100件のみ）
+  // サンプル仕訳（プレビュー用）
   const samples = [];
 
   journals.forEach(j => {
-    const d = new Date(j.transaction_date);
-    const idx = monthIdx.findIndex(m => m.year === d.getFullYear() && m.month === d.getMonth() + 1);
+    const txDate = new Date(j.transaction_date || j.date || j.posted_at || '');
+    if (isNaN(txDate)) return;
+    const idx = monthIdx.findIndex(m => m.year === txDate.getFullYear() && m.month === txDate.getMonth() + 1);
     if (idx < 0) return;
-    (j.branches || []).forEach(b => {
-      const debit  = b.debitor?.account_name || '';
-      const credit = b.creditor?.account_name || '';
-      const val = Math.round((b.debitor?.value || b.creditor?.value || 0) / 1000);
-      if (val === 0) return;
 
-      const desc = j.remark || j.description || j.memo || '';
+    const branches = j.branches || j.entries || j.details || [];
+    branches.forEach(b => {
+      // 借方・貸方の勘定科目と金額を抽出（MF APIレスポンス形式のバリエーション対応）
+      const debitAcct = b.debitor?.account_name || b.debit_account_name || b.debit?.account_name || '';
+      const creditAcct = b.creditor?.account_name || b.credit_account_name || b.credit?.account_name || '';
+      const amount = Math.round((b.debitor?.value || b.debit_amount || b.amount || b.creditor?.value || 0) / 1000);
+      if (amount === 0) return;
 
-      // 借方に現預金が来る → 入金
-      if (cashNames.some(a => debit.includes(a))) {
-        cashIn[idx] += val;
-        // カテゴリは貸方の勘定科目名で判定、それでもだめなら摘要
-        const cat = categorize(credit || desc, true);
-        monthly[cat][idx] += val;
-        monthly.cfIn[idx] += val;
-        if (samples.length < 100) samples.push({ date: j.transaction_date, debit, credit, val, cat, dir: 'in', desc });
+      const desc = j.remark || j.description || j.memo || j.summary || '';
+
+      // ── PL計算: 収益科目は貸方、費用科目は借方で発生 ──
+      const plKeyDebit = PL_ACCT_MAP[debitAcct];
+      const plKeyCredit = PL_ACCT_MAP[creditAcct];
+
+      if (plKeyDebit) {
+        // 費用の借方発生 → 加算
+        pl[plKeyDebit].actual[idx] += amount;
       }
-      // 貸方に現預金が来る → 出金
-      else if (cashNames.some(a => credit.includes(a))) {
-        cashOut[idx] += val;
-        const cat = categorize(debit || desc, false);
-        monthly[cat][idx] += val;
-        if (samples.length < 100) samples.push({ date: j.transaction_date, debit, credit, val, cat, dir: 'out', desc });
+      if (plKeyCredit) {
+        if (plKeyCredit === 'rev') {
+          // 売上は貸方発生 → 加算
+          pl.rev.actual[idx] += amount;
+        }
+      }
+
+      // ── BS計算: 借方増 / 貸方増 をトラッキング ──
+      const bsKeyDebit = BS_ACCT_MAP[debitAcct];
+      const bsKeyCredit = BS_ACCT_MAP[creditAcct];
+      if (bsKeyDebit) bsDelta[bsKeyDebit][idx] += amount;  // 借方 → 資産増 / 負債減
+      if (bsKeyCredit) bsDelta[bsKeyCredit][idx] -= amount; // 貸方 → 資産減 / 負債増
+
+      // ── CF計算: 現預金の借方=入金、貸方=出金 ──
+      const isDebitCash = cashNames.some(c => debitAcct.includes(c));
+      const isCreditCash = cashNames.some(c => creditAcct.includes(c));
+
+      if (isDebitCash) {
+        cashIn[idx] += amount;
+        cfMonthly.cfIn[idx] += amount;
+        const cat = categorizeCf(creditAcct || desc, true);
+        cfMonthly[cat][idx] += amount;
+      }
+      if (isCreditCash) {
+        cashOut[idx] += amount;
+        const cat = categorizeCf(debitAcct || desc, false);
+        cfMonthly[cat][idx] += amount;
+      }
+
+      if (samples.length < 100) {
+        samples.push({
+          date: j.transaction_date || '',
+          debit: debitAcct,
+          credit: creditAcct,
+          val: amount,
+          desc,
+          dir: isDebitCash ? 'in' : isCreditCash ? 'out' : '-',
+          cat: isDebitCash ? categorizeCf(creditAcct || desc, true) : isCreditCash ? categorizeCf(debitAcct || desc, false) : '-',
+        });
       }
     });
   });
 
-  return { cashIn, cashOut, net: cashIn.map((v,i) => v - cashOut[i]), monthly, samples };
+  // BS: 借方-貸方の純額を残高として扱う
+  // 資産は借方増で正、負債・純資産は貸方増で正
+  BS_KEYS.forEach(k => {
+    const isLiabOrEq = ['payable', 'borrowing', 'other_cl', 'capital', 'retained'].includes(k);
+    for (let i = 0; i < n; i++) {
+      bsMonthly[k][i] = isLiabOrEq ? -bsDelta[k][i] : bsDelta[k][i];
+    }
+    // 全期間合計をサマリーに
+    bsSummary[k] = bsMonthly[k].reduce((t, v) => t + v, 0);
+  });
+
+  return {
+    pl,
+    bs: { monthly: bsMonthly, summary: bsSummary },
+    cf: { cashIn, cashOut, net: cashIn.map((v, i) => v - cashOut[i]), monthly: cfMonthly, samples },
+    journalCount: journals.length,
+  };
 }
 
-// ── 会計年度期間（4月〜3月） ──
-const PERIODS = {
-  2024: { start:'2024-04-01', end:'2025-03-31' },
-  2025: { start:'2025-04-01', end:'2026-03-31' },
-  2026: { start:'2026-04-01', end:'2027-03-31' },
-};
-
+// ══════════════════════════════════════════
+//  APIハンドラー
+// ══════════════════════════════════════════
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin','*');
-  res.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers','Content-Type');
-  if (req.method==='OPTIONS') return res.status(200).end();
-  const {action, office_id: queryOfficeId, fiscal_year, from_date, to_date} = req.query;
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  const { action, fiscal_year } = req.query;
+
   try {
     const token = await getAccessToken();
 
-    // ── office_id 自動解決（未指定時は最初の事業者を使用） ──
-    async function resolveOfficeId(provided) {
-      if (provided) return provided;
-      try {
-        const data = await mfFetch(token, '/offices');
-        // 形式1: 単一オブジェクト {id, name, ...}
-        if (data?.id) return String(data.id);
-        if (data?.office_id) return String(data.office_id);
-        // 形式A: MFクラウド会計Plus形式 → code を使用（idがない場合）
-        if (data?.code) return String(data.code);
-        // 形式2: 配列 [{id, name, ...}, ...]
-        if (Array.isArray(data) && data.length > 0) return String(data[0].id || data[0].office_id || data[0].code);
-        // 形式3: {data: [...]} or {offices: [...]}
-        const list = data?.data || data?.offices;
-        if (Array.isArray(list) && list.length > 0) return String(list[0].id || list[0].office_id || list[0].code);
-        if (list && !Array.isArray(list) && (list.id || list.office_id || list.code)) {
-          return String(list.id || list.office_id || list.code);
-        }
-        console.warn('[mf-sync] resolveOfficeId: unknown format, keys:', Object.keys(data));
-      } catch(e) {
-        console.warn('[mf-sync] resolveOfficeId failed:', e.message);
-      }
-      return null;
+    // ── 事業者情報 ──
+    if (action === 'offices') {
+      return res.status(200).json({ ok: true, data: await mfFetch(token, '/offices') });
     }
 
-    // ── accounting_period_id 自動解決 + 日付範囲抽出 ──
-    async function resolveAccountingPeriod(fiscalYear) {
-      try {
-        const data = await mfFetch(token, '/offices');
-        const periods = data?.accounting_periods || [];
-        if (!Array.isArray(periods) || periods.length === 0) return { id: null, start_date: null, end_date: null, raw: null };
-
-        let target = null;
-        if (fiscalYear) {
-          const fy = parseInt(fiscalYear);
-          target = periods.find(p => {
-            const start = new Date(p.start_date || p.start || '');
-            if (isNaN(start)) return false;
-            return start.getFullYear() === fy && start.getMonth() >= 3 && start.getMonth() <= 6;
-          });
-        }
-        if (!target) target = periods.find(p => p.is_current || p.current);
-        if (!target) target = periods[0];
-
-        // 全フィールドを探索してID候補を検出
-        const id = target.id || target.period_id || target.accounting_period_id
-                || target.uid || target.uuid || target.code || null;
-        return {
-          id: id ? String(id) : null,
-          start_date: target.start_date || target.start || null,
-          end_date: target.end_date || target.end || null,
-          raw: target,
-          allPeriods: periods,
-        };
-      } catch(e) {
-        console.warn('[mf-sync] resolveAccountingPeriod failed:', e.message);
-      }
-      return { id: null, start_date: null, end_date: null, raw: null };
+    // ── 勘定科目一覧 ──
+    if (action === 'accounts') {
+      return res.status(200).json({ ok: true, data: await mfFetch(token, '/accounts') });
     }
 
-    if (action==='debug') {
+    // ── 診断（動作するエンドポイントの確認） ──
+    if (action === 'debug') {
       const results = {};
-      // 基本エンドポイント
-      for (const ep of ['/offices','/accounts','/journals','/partners','/sections','/items','/tax_rates']) {
-        try { const d=await mfFetch(token,ep); results[ep]={ok:true,keys:Object.keys(d)}; }
-        catch(e){ results[ep]={ok:false,error:e.message.slice(0,200)}; }
-      }
-      // ID解決
-      const oid = await resolveOfficeId(queryOfficeId);
-      const period = await resolveAccountingPeriod(fiscal_year);
-      results._resolved_office_id = oid;
-      results._resolved_accounting_period_id = period.id;
-      results._resolved_period_dates = { start: period.start_date, end: period.end_date };
-      // 生periods（全フィールド）を確認用に返却
-      results._accounting_periods_raw = (period.allPeriods || []).map(p => p);
-
-      const fy = fiscal_year || '2025';
-      // 複数パラメータ組み合わせ
-      const paramVariants = [
-        period.start_date && period.end_date ? { from: period.start_date, to: period.end_date } : null,
-        period.start_date && period.end_date ? { start_date: period.start_date, end_date: period.end_date } : null,
-        period.id ? { accounting_period_id: period.id } : null,
-        period.id && oid ? { accounting_period_id: period.id, office_id: oid } : null,
-        { fiscal_year: fy },
-        oid ? { office_id: oid, fiscal_year: fy } : null,
-      ].filter(Boolean);
-
-      // URLパターン（より多くの候補を試行）
-      const endpointVariants = [
-        // 標準パス
-        '/reports/trial_pl',
-        '/reports/trial_pl_by_months',
-        '/reports/trial_pl_three_years',
-        '/reports/trial_bs',
-        '/reports/trial_bs_by_months',
-        '/reports/trial_bs_three_years',
-        // 代替パス候補
-        '/trial_balances/pl',
-        '/trial_balances/bs',
-        '/accounting_reports/trial_pl',
-        '/accounting_reports/trial_bs',
-        // ネステッド形式
-        oid ? `/offices/${oid}/reports/trial_pl` : null,
-        oid ? `/offices/${oid}/reports/trial_bs` : null,
-        oid ? `/offices/${oid}/trial_balances/pl` : null,
-        // 期間ネステッド
-        period.id ? `/accounting_periods/${period.id}/reports/trial_pl` : null,
-        period.id ? `/accounting_periods/${period.id}/reports/trial_bs` : null,
-      ].filter(Boolean);
-
-      for (const ep of endpointVariants) {
-        for (const params of paramVariants) {
-          const key = ep + ' [' + Object.keys(params).join(',') + ']';
-          try {
-            const d = await mfFetch(token, ep, params);
-            results[key] = { ok: true, keys: Object.keys(d).slice(0, 10) };
-            break;
-          } catch(e) {
-            results[key] = { ok: false, error: e.message.slice(0, 120) };
-          }
+      for (const ep of ['/offices', '/accounts', '/journals', '/items', '/sections', '/partners']) {
+        try {
+          const d = await mfFetch(token, ep, ep === '/journals' ? { limit: 1 } : {});
+          results[ep] = { ok: true, keys: Object.keys(d).slice(0, 10) };
+        } catch (e) {
+          results[ep] = { ok: false, error: e.message.slice(0, 200) };
         }
       }
-      return res.status(200).json({ok:true,results});
+      // 会計期間情報
+      try {
+        const off = await mfFetch(token, '/offices');
+        results._accounting_periods = (off?.accounting_periods || []).map(p => ({
+          start_date: p.start_date, end_date: p.end_date, keys: Object.keys(p),
+        }));
+      } catch (e) { results._accounting_periods_err = e.message.slice(0, 100); }
+      return res.status(200).json({ ok: true, results });
     }
 
-    // 生の /offices レスポンスをそのまま返す（デバッグ用）
-    if (action==='raw_offices') {
-      const data = await mfFetch(token, '/offices');
-      return res.status(200).json({ok:true,data});
-    }
-    if (action==='offices') return res.status(200).json({ok:true,data:await mfFetch(token,'/offices')});
-    if (action==='accounts_nooffice') return res.status(200).json({ok:true,data:await mfFetch(token,'/accounts')});
-    if (action==='accounts') {
-      const oid = await resolveOfficeId(queryOfficeId);
-      return res.status(200).json({ok:true,data:await mfFetch(token,'/accounts',oid?{office_id:oid}:{})});
-    }
-    if (action==='journals') {
-      const oid = await resolveOfficeId(queryOfficeId);
-      const p = {};
-      if (oid) p.office_id = oid;
-      if (from_date) p.start_date = from_date;
-      if (to_date) p.end_date = to_date;
-      return res.status(200).json({ok:true,data:await mfFetch(token,'/journals',p)});
-    }
-    // ── レポート取得: 複数のURLパターン × パラメータを試行 ──
-    async function fetchReportWithFallback(kind, fy) {
-      const oid = await resolveOfficeId(queryOfficeId);
-      const period = await resolveAccountingPeriod(fy);
-      const apid = period.id;
-      const paramVariants = [
-        period.start_date && period.end_date ? { from: period.start_date, to: period.end_date } : null,
-        period.start_date && period.end_date ? { start_date: period.start_date, end_date: period.end_date } : null,
-        apid ? { accounting_period_id: apid } : null,
-        apid && oid ? { accounting_period_id: apid, office_id: oid } : null,
-        fy ? { fiscal_year: fy } : null,
-        fy && oid ? { fiscal_year: fy, office_id: oid } : null,
-      ].filter(Boolean);
+    // ── 全データ取得（仕訳ベース: PL + BS + CF を一括計算） ──
+    if (action === 'all_for_dashboard' || action === 'pl_for_dashboard' || action === 'bs_for_dashboard' || action === 'cf_for_dashboard') {
+      if (!fiscal_year) return res.status(400).json({ error: 'fiscal_year が必要です' });
 
-      const base = kind === 'pl' ? 'trial_pl' : 'trial_bs';
-      const endpointVariants = [
-        `/reports/${base}_by_months`,
-        `/reports/${base}`,
-        `/reports/${base}_three_years`,
-        `/trial_balances/${kind}`,
-        oid ? `/offices/${oid}/reports/${base}_by_months` : null,
-        oid ? `/offices/${oid}/reports/${base}` : null,
-        apid ? `/accounting_periods/${apid}/reports/${base}` : null,
-      ].filter(Boolean);
+      const period = await resolveFiscalPeriod(token, fiscal_year);
+      const journals = await fetchAllJournals(token, period.start, period.end);
+      const result = buildFromJournals(journals, fiscal_year);
 
-      const attempts = [];
-      for (const ep of endpointVariants) {
-        for (const params of paramVariants) {
-          try {
-            const data = await mfFetch(token, ep, params);
-            return { data, usedEndpoint: ep, usedParams: params, oid, apid, attempts };
-          } catch(e) {
-            attempts.push(`${ep} [${Object.keys(params).join(',')}]: ${e.message.slice(0,80)}`);
-          }
-        }
+      // action に応じて必要な部分だけ返す
+      const response = {
+        ok: true,
+        fiscal_year,
+        period,
+        journal_count: result.journalCount,
+        method: 'journals',
+      };
+
+      if (action === 'all_for_dashboard' || action === 'pl_for_dashboard') {
+        response.pl = result.pl;
       }
-      return { error: 'all patterns failed', oid, apid, attempts };
+      if (action === 'all_for_dashboard' || action === 'bs_for_dashboard') {
+        response.bs = result.bs;
+      }
+      if (action === 'all_for_dashboard' || action === 'cf_for_dashboard') {
+        response.cf = result.cf;
+      }
+
+      return res.status(200).json(response);
     }
 
-    if (action==='trial_pl') {
-      const result = await fetchReportWithFallback('pl', fiscal_year);
-      if (!result.data) {
-        return res.status(404).json({ error: 'PL取得失敗', detail: result.attempts, office_id: result.oid, accounting_period_id: result.apid });
-      }
-      return res.status(200).json({ok:true, data:result.data, _endpoint:result.usedEndpoint, _params:result.usedParams});
+    // ── /offices 生レスポンス ──
+    if (action === 'raw_offices') {
+      return res.status(200).json({ ok: true, data: await mfFetch(token, '/offices') });
     }
-    if (action==='trial_bs') {
-      const result = await fetchReportWithFallback('bs', fiscal_year);
-      if (!result.data) {
-        return res.status(404).json({ error: 'BS取得失敗', detail: result.attempts, office_id: result.oid, accounting_period_id: result.apid });
-      }
-      return res.status(200).json({ok:true, data:result.data, _endpoint:result.usedEndpoint, _params:result.usedParams});
-    }
-    if (action==='pl_for_dashboard') {
-      if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});
-      const result = await fetchReportWithFallback('pl', fiscal_year);
-      if (!result.data) {
-        return res.status(404).json({
-          error: `PLデータ取得失敗 (office_id=${result.oid||'未取得'}, accounting_period_id=${result.apid||'未取得'})`,
-          detail: result.attempts
-        });
-      }
-      return res.status(200).json({
-        ok: true, fiscal_year,
-        office_id: result.oid, accounting_period_id: result.apid,
-        _endpoint: result.usedEndpoint, _params: result.usedParams,
-        converted: convertPl(result.data, fiscal_year), raw: result.data
-      });
-    }
-    if (action==='bs_for_dashboard') {
-      if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});
-      const result = await fetchReportWithFallback('bs', fiscal_year);
-      if (!result.data) {
-        return res.status(404).json({
-          error: `BSデータ取得失敗 (office_id=${result.oid||'未取得'}, accounting_period_id=${result.apid||'未取得'})`,
-          detail: result.attempts
-        });
-      }
-      return res.status(200).json({
-        ok: true, fiscal_year,
-        office_id: result.oid, accounting_period_id: result.apid,
-        _endpoint: result.usedEndpoint, _params: result.usedParams,
-        converted: convertBs(result.data, fiscal_year), raw: result.data
-      });
-    }
-    if (action==='cf_for_dashboard') {
-      if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});
-      const fy = parseInt(fiscal_year);
-      const period = PERIODS[fy] || { start: fy+'-04-01', end: (fy+1)+'-03-31' };
-      const oid = await resolveOfficeId(queryOfficeId);
-      const p = { start_date: period.start, end_date: period.end };
-      if (oid) p.office_id = oid;
-      let allJournals = [];
-      for (let page = 1; page <= 20; page++) {
-        p.page = page;
-        const data = await mfFetch(token, '/journals', p);
-        allJournals = allJournals.concat(data.journals || data.data || []);
-        if (page >= (data.metadata?.total_pages || data.total_pages || 1)) break;
-      }
-      return res.status(200).json({ok:true, fiscal_year, office_id:oid, total_journals:allJournals.length, converted:convertCf(allJournals,fiscal_year)});
-    }
-    return res.status(400).json({error:'Unknown action: '+action});
-  } catch(err) {
+
+    return res.status(400).json({ error: 'Unknown action: ' + action });
+  } catch (err) {
     console.error('[mf-sync]', err);
-    return res.status(500).json({error:err.message});
+    return res.status(500).json({ error: err.message });
   }
 }
