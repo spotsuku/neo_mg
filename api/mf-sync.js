@@ -128,13 +128,24 @@ function categorizeCf(acctName, isIn) {
 // ══════════════════════════════════════════
 async function fetchAllJournals(token, startDate, endDate) {
   const allJournals = [];
-  for (let page = 1; page <= 50; page++) {
-    const params = { start_date: startDate, end_date: endDate, page };
+  const perPage = 500; // MF APIの最大値
+  for (let page = 1; page <= 100; page++) {
+    const params = { start_date: startDate, end_date: endDate, page, per_page: perPage };
     const data = await mfFetch(token, '/journals', params);
     const journals = data.journals || data.data || [];
     allJournals.push(...journals);
-    const totalPages = data.metadata?.total_pages || data.total_pages || 1;
-    if (page >= totalPages) break;
+
+    // ページネーション終了判定（複数の形式に対応）
+    const totalPages = data.metadata?.total_pages || data.total_pages || null;
+    const totalCount = data.metadata?.total_count || data.total_count || data.total_entries || null;
+
+    console.log(`[mf-sync] journals page ${page}: got ${journals.length}, total so far: ${allJournals.length}, totalPages=${totalPages}, totalCount=${totalCount}`);
+
+    // 終了条件: 空ページ / 最終ページ / 件数到達
+    if (journals.length === 0) break;
+    if (totalPages && page >= totalPages) break;
+    if (totalCount && allJournals.length >= totalCount) break;
+    if (journals.length < perPage) break; // 取得件数がper_page未満 → 最終ページ
   }
   return allJournals;
 }
