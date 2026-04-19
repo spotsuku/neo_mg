@@ -278,7 +278,7 @@ function buildFromJournals(journals, fiscalYear) {
           date: j.transaction_date || '',
           debit: debitAcct,
           credit: creditAcct,
-          val: amount,
+          val: debitAmount || creditAmount,
           desc,
           dir: isDebitCash ? 'in' : isCreditCash ? 'out' : '-',
           cat: isDebitCash ? categorizeCf(creditAcct || desc, true) : isCreditCash ? categorizeCf(debitAcct || desc, false) : '-',
