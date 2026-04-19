@@ -203,6 +203,9 @@ function buildFromJournals(journals, fiscalYear) {
   // サンプル仕訳（プレビュー用）
   const samples = [];
 
+  // ── 勘定科目別の集計内訳（MF推移表との突合用） ──
+  const acctBreakdown = {}; // { 勘定科目名: { debit合計, credit合計, 純額, 分類先 } }
+
   journals.forEach(j => {
     const txDate = new Date(j.transaction_date || j.date || j.posted_at || '');
     if (isNaN(txDate)) return;
@@ -211,13 +214,22 @@ function buildFromJournals(journals, fiscalYear) {
 
     const branches = j.branches || j.entries || j.details || [];
     branches.forEach(b => {
-      // 借方・貸方の勘定科目と金額を抽出（MF APIレスポンス形式のバリエーション対応）
       const debitAcct = b.debitor?.account_name || b.debit_account_name || b.debit?.account_name || '';
       const creditAcct = b.creditor?.account_name || b.credit_account_name || b.credit?.account_name || '';
       const amount = Math.round((b.debitor?.value || b.debit_amount || b.amount || b.creditor?.value || 0) / 1000);
       if (amount === 0) return;
 
       const desc = j.remark || j.description || j.memo || j.summary || '';
+
+      // ── 勘定科目別集計（内訳） ──
+      if (debitAcct) {
+        if (!acctBreakdown[debitAcct]) acctBreakdown[debitAcct] = { debit: 0, credit: 0, category: PL_ACCT_MAP[debitAcct] || BS_ACCT_MAP[debitAcct] || null };
+        acctBreakdown[debitAcct].debit += amount;
+      }
+      if (creditAcct) {
+        if (!acctBreakdown[creditAcct]) acctBreakdown[creditAcct] = { debit: 0, credit: 0, category: PL_ACCT_MAP[creditAcct] || BS_ACCT_MAP[creditAcct] || null };
+        acctBreakdown[creditAcct].credit += amount;
+      }
 
       // ── PL計算: 借方・貸方を別々に追跡して純額を計算 ──
       const plKeyDebit = PL_ACCT_MAP[debitAcct];
@@ -284,11 +296,18 @@ function buildFromJournals(journals, fiscalYear) {
     bsSummary[k] = bsMonthly[k].reduce((t, v) => t + v, 0);
   });
 
+  // 勘定科目別内訳（上位30件、金額降順）
+  const breakdown = Object.entries(acctBreakdown)
+    .map(([name, v]) => ({ name, debit: v.debit, credit: v.credit, net: v.debit - v.credit, category: v.category }))
+    .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
+    .slice(0, 50);
+
   return {
     pl,
     bs: { monthly: bsMonthly, summary: bsSummary },
     cf: { cashIn, cashOut, net: cashIn.map((v, i) => v - cashOut[i]), monthly: cfMonthly, samples },
     journalCount: journals.length,
+    breakdown,
   };
 }
 

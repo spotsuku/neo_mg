@@ -7722,6 +7722,16 @@ function mfInit() {
       </div>
     </details>
   </div>
+
+  <!-- 勘定科目別内訳（MF推移表との突合用） -->
+  <div id="mf-preview-breakdown" style="display:none;margin-top:12px">
+    <details open>
+      <summary style="font-size:11px;font-weight:700;color:var(--text3);cursor:pointer">📊 勘定科目別の集計内訳（MF推移表と比較用）</summary>
+      <div class="scroll-x" style="margin-top:8px">
+        <div id="mf-preview-breakdown-table"></div>
+      </div>
+    </details>
+  </div>
 </div>
 `;
   s.insertAdjacentHTML('afterbegin', html);
@@ -7929,6 +7939,7 @@ window.mfFetch = async function(type) {
       cf: cfData,
       totalJournals: d.journal_count || d.total_journals || 0,
       method: d.method || 'unknown',
+      breakdown: d.breakdown || [],
     };
     mfRenderPreview();
 
@@ -8066,6 +8077,35 @@ function mfRenderPreview() {
     } else {
       samplesEl.style.display = 'none';
     }
+  }
+
+  // ── 勘定科目別内訳を表示 ──
+  const bdEl = document.getElementById('mf-preview-breakdown');
+  const bdTblEl = document.getElementById('mf-preview-breakdown-table');
+  const breakdown = p.breakdown || [];
+  if (breakdown.length > 0) {
+    bdEl.style.display = 'block';
+    bdTblEl.innerHTML = `<table class="dt" style="font-size:10px;min-width:600px">
+      <thead><tr>
+        <th class="l" style="min-width:150px">勘定科目名</th>
+        <th style="text-align:right;min-width:90px">借方合計(千円)</th>
+        <th style="text-align:right;min-width:90px">貸方合計(千円)</th>
+        <th style="text-align:right;min-width:90px">純額(千円)</th>
+        <th class="l" style="min-width:80px">→ 分類先</th>
+      </tr></thead>
+      <tbody>${breakdown.map(r => {
+        const netClr = r.net > 0 ? 'color:var(--tc-red)' : r.net < 0 ? 'color:var(--tc-green)' : '';
+        return `<tr>
+          <td style="font-size:10px;font-weight:600">${r.name}</td>
+          <td style="text-align:right;font-size:10px">${r.debit ? r.debit.toLocaleString() : '—'}</td>
+          <td style="text-align:right;font-size:10px">${r.credit ? r.credit.toLocaleString() : '—'}</td>
+          <td style="text-align:right;font-size:10px;font-weight:700;${netClr}">${r.net !== 0 ? r.net.toLocaleString() : '—'}</td>
+          <td style="font-size:10px;color:var(--tc-blue)">${r.category || '(未分類)'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  } else {
+    bdEl.style.display = 'none';
   }
 
   card.style.display = 'block';
