@@ -8141,26 +8141,33 @@ function mfRenderPreview() {
         { v:'investPay', l:'投資' },
         { v:'salesOtherPay', l:'その他出金' },
       ];
-      cfmapTbl.innerHTML = `<table class="dt" style="font-size:10px;min-width:700px">
+      const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      cfmapTbl.innerHTML = `<table class="dt" style="font-size:10px;min-width:900px">
         <thead><tr>
-          <th class="l" style="min-width:200px">相手方科目名</th>
+          <th class="l" style="min-width:240px">相手方（勘定科目 / 補助科目・取引先）</th>
           <th class="l">方向</th>
           <th style="text-align:right">件数</th>
           <th style="text-align:right">合計(千円)</th>
           <th class="l" style="min-width:170px">CFカテゴリ</th>
+          <th class="l" style="min-width:220px">摘要サンプル</th>
           <th class="l">状態</th>
         </tr></thead>
-        <tbody>${entries.map(([acct, info]) => {
+        <tbody>${entries.map(([ident, info]) => {
           const cats = info.direction === 'in' ? inCats : outCats;
           const options = cats.map(c => `<option value="${c.v}" ${c.v===info.category?'selected':''}>${c.l}</option>`).join('');
+          const sampleText = (info.samples || []).map(s => `<div style="font-size:9px;color:var(--text3);line-height:1.3">• ${esc(s)}</div>`).join('');
+          const mainLabel = info.subName || info.partnerName
+            ? `<div style="font-weight:600">${esc(info.accountName)}</div><div style="font-size:9px;color:var(--text3);margin-top:1px">→ ${esc(info.subName || info.partnerName)}</div>`
+            : `<div style="font-weight:600">${esc(info.accountName || ident)}</div>`;
           return `<tr>
-            <td style="font-size:10px;font-weight:600">${acct}</td>
+            <td style="font-size:10px">${mainLabel}</td>
             <td style="font-size:10px"><span class="badge ${info.direction==='in'?'bg':'br'}">${info.direction==='in'?'入金':'出金'}</span></td>
             <td style="text-align:right;font-size:10px">${info.count}</td>
             <td style="text-align:right;font-size:10px;font-weight:700">${info.total.toLocaleString()}</td>
             <td style="font-size:10px">
-              <select class="mf-cf-cat-select" data-acct="${acct.replace(/"/g,'&quot;')}" data-dir="${info.direction}" onchange="mfSaveCfOverride(this)" style="padding:2px 4px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:3px;min-width:150px">${options}</select>
+              <select class="mf-cf-cat-select" data-acct="${esc(ident)}" data-dir="${info.direction}" onchange="mfSaveCfOverride(this)" style="padding:2px 4px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:3px;min-width:150px">${options}</select>
             </td>
+            <td style="font-size:9px">${sampleText || '<span style="color:var(--text3)">—</span>'}</td>
             <td style="font-size:10px">${info.overridden ? '<span class="badge bg">記憶済</span>' : '<span style="color:var(--text3)">自動</span>'}</td>
           </tr>`;
         }).join('')}</tbody>

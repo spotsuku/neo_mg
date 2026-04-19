@@ -251,6 +251,7 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
 
   // カテゴリ解決関数: overrides が最優先、次にルールベース
   const resolveCfCategory = (acctName, isIn) => {
+    if (!acctName) return null;
     if (cfCategoryOverrides[acctName]) return cfCategoryOverrides[acctName];
     return categorizeCf(acctName, isIn);
   };
@@ -302,29 +303,64 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
       const isDebitCash = cashNames.some(c => debitAcct.includes(c));
       const isCreditCash = cashNames.some(c => creditAcct.includes(c));
 
-      if (isDebitCash) {
+      // 預金間振替（両側が現預金）は CF 集計から除外
+      const isCashToCash = isDebitCash && isCreditCash;
+
+      // 補助科目・取引先を使ってより詳細な識別子を作る
+      const debitSub  = b.debitor?.sub_account_name || '';
+      const creditSub = b.creditor?.sub_account_name || '';
+      const debitPartner  = b.debitor?.trade_partner_name || '';
+      const creditPartner = b.creditor?.trade_partner_name || '';
+      // 識別子: 勘定科目 / 補助科目（あれば） / 取引先（あれば）
+      const makeIdent = (acct, sub, partner) => {
+        const parts = [acct];
+        if (sub) parts.push(sub);
+        else if (partner) parts.push(partner);
+        return parts.join(' / ');
+      };
+
+      if (isDebitCash && !isCashToCash) {
         cashIn[idx] += debitAmount;
         cfMonthly.cfIn[idx] += debitAmount;
-        const counterpartAcct = creditAcct || '(摘要: ' + desc.slice(0, 20) + ')';
-        const cat = resolveCfCategory(counterpartAcct, true);
+        // 相手方は creditor 側
+        const counterpartIdent = makeIdent(creditAcct || '(摘要)', creditSub, creditPartner);
+        const counterpartKey = creditAcct; // ルール判定は勘定科目名で
+        const cat = resolveCfCategory(counterpartIdent, true) || resolveCfCategory(counterpartKey, true);
         cfMonthly[cat][idx] += debitAmount;
-        // 仕分けマップに記録
-        if (!cfAccountMap[counterpartAcct]) {
-          cfAccountMap[counterpartAcct] = { direction: 'in', category: cat, count: 0, total: 0, overridden: !!cfCategoryOverrides[counterpartAcct] };
+        if (!cfAccountMap[counterpartIdent]) {
+          cfAccountMap[counterpartIdent] = {
+            direction: 'in', category: cat, count: 0, total: 0,
+            overridden: !!cfCategoryOverrides[counterpartIdent],
+            accountName: creditAcct, subName: creditSub, partnerName: creditPartner,
+            samples: [],
+          };
         }
-        cfAccountMap[counterpartAcct].count++;
-        cfAccountMap[counterpartAcct].total += debitAmount;
+        cfAccountMap[counterpartIdent].count++;
+        cfAccountMap[counterpartIdent].total += debitAmount;
+        // 摘要サンプル（最大3件）
+        if (cfAccountMap[counterpartIdent].samples.length < 3 && desc) {
+          cfAccountMap[counterpartIdent].samples.push(desc.slice(0, 60));
+        }
       }
-      if (isCreditCash) {
+      if (isCreditCash && !isCashToCash) {
         cashOut[idx] += creditAmount;
-        const counterpartAcct = debitAcct || '(摘要: ' + desc.slice(0, 20) + ')';
-        const cat = resolveCfCategory(counterpartAcct, false);
+        const counterpartIdent = makeIdent(debitAcct || '(摘要)', debitSub, debitPartner);
+        const counterpartKey = debitAcct;
+        const cat = resolveCfCategory(counterpartIdent, false) || resolveCfCategory(counterpartKey, false);
         cfMonthly[cat][idx] += creditAmount;
-        if (!cfAccountMap[counterpartAcct]) {
-          cfAccountMap[counterpartAcct] = { direction: 'out', category: cat, count: 0, total: 0, overridden: !!cfCategoryOverrides[counterpartAcct] };
+        if (!cfAccountMap[counterpartIdent]) {
+          cfAccountMap[counterpartIdent] = {
+            direction: 'out', category: cat, count: 0, total: 0,
+            overridden: !!cfCategoryOverrides[counterpartIdent],
+            accountName: debitAcct, subName: debitSub, partnerName: debitPartner,
+            samples: [],
+          };
         }
-        cfAccountMap[counterpartAcct].count++;
-        cfAccountMap[counterpartAcct].total += creditAmount;
+        cfAccountMap[counterpartIdent].count++;
+        cfAccountMap[counterpartIdent].total += creditAmount;
+        if (cfAccountMap[counterpartIdent].samples.length < 3 && desc) {
+          cfAccountMap[counterpartIdent].samples.push(desc.slice(0, 60));
+        }
       }
 
       if (samples.length < 100) {
