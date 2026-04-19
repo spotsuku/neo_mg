@@ -143,7 +143,8 @@ function categorizeCf(acctName, isIn) {
 // ══════════════════════════════════════════
 //  仕訳から PL / BS / CF を一括計算
 // ══════════════════════════════════════════
-async function fetchAllJournals(token, startDate, endDate) {
+async function fetchAllJournals(token, startDate, endDate, options = {}) {
+  const { includeUnrealized = false } = options;
   const allJournals = [];
   const perPage = 500; // MF APIの最大値
   for (let page = 1; page <= 100; page++) {
@@ -152,22 +153,30 @@ async function fetchAllJournals(token, startDate, endDate) {
     const journals = data.journals || data.data || [];
     allJournals.push(...journals);
 
-    // ページネーション終了判定（複数の形式に対応）
+    // ページネーション終了判定
     const totalPages = data.metadata?.total_pages || data.total_pages || null;
     const totalCount = data.metadata?.total_count || data.total_count || data.total_entries || null;
 
     console.log(`[mf-sync] journals page ${page}: got ${journals.length}, total so far: ${allJournals.length}, totalPages=${totalPages}, totalCount=${totalCount}`);
 
-    // 終了条件: 空ページ / 最終ページ / 件数到達
     if (journals.length === 0) break;
     if (totalPages && page >= totalPages) break;
     if (totalCount && allJournals.length >= totalCount) break;
-    if (journals.length < perPage) break; // 取得件数がper_page未満 → 最終ページ
+    if (journals.length < perPage) break;
   }
-  return allJournals;
+
+  // 未実現仕訳を除外（MF推移表の「未実現仕訳：除く」設定と一致）
+  if (!includeUnrealized) {
+    const beforeCount = allJournals.length;
+    const filtered = allJournals.filter(j => j.is_realized !== false);
+    console.log(`[mf-sync] realized filter: ${beforeCount} → ${filtered.length} (excluded ${beforeCount - filtered.length} unrealized)`);
+    return { journals: filtered, totalFetched: beforeCount, excludedUnrealized: beforeCount - filtered.length };
+  }
+  return { journals: allJournals, totalFetched: allJournals.length, excludedUnrealized: 0 };
 }
 
-function buildFromJournals(journals, fiscalYear) {
+function buildFromJournals(journals, fiscalYear, options = {}) {
+  const { taxExclusive = true } = options;
   const monthIdx = buildMonthIndex(fiscalYear);
   const n = monthIdx.length;
 
@@ -216,47 +225,54 @@ function buildFromJournals(journals, fiscalYear) {
     branches.forEach(b => {
       const debitAcct = b.debitor?.account_name || b.debit_account_name || b.debit?.account_name || '';
       const creditAcct = b.creditor?.account_name || b.credit_account_name || b.credit?.account_name || '';
-      const amount = Math.round((b.debitor?.value || b.debit_amount || b.amount || b.creditor?.value || 0) / 1000);
+      // 金額: 税抜モードなら value - tax_value、税込モードなら value
+      const rawDebit  = (b.debitor?.value || b.debit_amount || 0);
+      const rawCredit = (b.creditor?.value || 0);
+      const taxDebit  = taxExclusive ? (b.debitor?.tax_value || 0) : 0;
+      const taxCredit = taxExclusive ? (b.creditor?.tax_value || 0) : 0;
+      const debitAmount  = Math.round((rawDebit - taxDebit) / 1000);
+      const creditAmount = Math.round((rawCredit - taxCredit) / 1000);
+      const amount = debitAmount || creditAmount;
       if (amount === 0) return;
 
       const desc = j.remark || j.description || j.memo || j.summary || '';
 
       // ── 勘定科目別集計（内訳） ──
-      if (debitAcct) {
+      if (debitAcct && debitAmount > 0) {
         if (!acctBreakdown[debitAcct]) acctBreakdown[debitAcct] = { debit: 0, credit: 0, category: PL_ACCT_MAP[debitAcct] || BS_ACCT_MAP[debitAcct] || null };
-        acctBreakdown[debitAcct].debit += amount;
+        acctBreakdown[debitAcct].debit += debitAmount;
       }
-      if (creditAcct) {
+      if (creditAcct && creditAmount > 0) {
         if (!acctBreakdown[creditAcct]) acctBreakdown[creditAcct] = { debit: 0, credit: 0, category: PL_ACCT_MAP[creditAcct] || BS_ACCT_MAP[creditAcct] || null };
-        acctBreakdown[creditAcct].credit += amount;
+        acctBreakdown[creditAcct].credit += creditAmount;
       }
 
-      // ── PL計算: 借方・貸方を別々に追跡して純額を計算 ──
+      // ── PL計算: 借方は debitAmount、貸方は creditAmount で集計 ──
       const plKeyDebit = PL_ACCT_MAP[debitAcct];
       const plKeyCredit = PL_ACCT_MAP[creditAcct];
-      if (plKeyDebit) plDebit[plKeyDebit][idx] += amount;
-      if (plKeyCredit) plCredit[plKeyCredit][idx] += amount;
+      if (plKeyDebit) plDebit[plKeyDebit][idx] += debitAmount;
+      if (plKeyCredit) plCredit[plKeyCredit][idx] += creditAmount;
 
-      // ── BS計算: 借方増 / 貸方増 をトラッキング ──
+      // ── BS計算: 借方増 / 貸方増 ──
       const bsKeyDebit = BS_ACCT_MAP[debitAcct];
       const bsKeyCredit = BS_ACCT_MAP[creditAcct];
-      if (bsKeyDebit) bsDelta[bsKeyDebit][idx] += amount;  // 借方 → 資産増 / 負債減
-      if (bsKeyCredit) bsDelta[bsKeyCredit][idx] -= amount; // 貸方 → 資産減 / 負債増
+      if (bsKeyDebit) bsDelta[bsKeyDebit][idx] += debitAmount;
+      if (bsKeyCredit) bsDelta[bsKeyCredit][idx] -= creditAmount;
 
       // ── CF計算: 現預金の借方=入金、貸方=出金 ──
       const isDebitCash = cashNames.some(c => debitAcct.includes(c));
       const isCreditCash = cashNames.some(c => creditAcct.includes(c));
 
       if (isDebitCash) {
-        cashIn[idx] += amount;
-        cfMonthly.cfIn[idx] += amount;
+        cashIn[idx] += debitAmount;
+        cfMonthly.cfIn[idx] += debitAmount;
         const cat = categorizeCf(creditAcct || desc, true);
-        cfMonthly[cat][idx] += amount;
+        cfMonthly[cat][idx] += debitAmount;
       }
       if (isCreditCash) {
-        cashOut[idx] += amount;
+        cashOut[idx] += creditAmount;
         const cat = categorizeCf(debitAcct || desc, false);
-        cfMonthly[cat][idx] += amount;
+        cfMonthly[cat][idx] += creditAmount;
       }
 
       if (samples.length < 100) {
@@ -369,9 +385,13 @@ export default async function handler(req, res) {
     if (action === 'all_for_dashboard' || action === 'pl_for_dashboard' || action === 'bs_for_dashboard' || action === 'cf_for_dashboard') {
       if (!fiscal_year) return res.status(400).json({ error: 'fiscal_year が必要です' });
 
+      // クエリパラメータで未実現仕訳含む/税抜計算を切替可能
+      const includeUnrealized = req.query.include_unrealized === 'true';
+      const taxExclusive = req.query.tax_exclusive !== 'false'; // デフォルトは税抜（MF標準と一致）
+
       const period = await resolveFiscalPeriod(token, fiscal_year);
-      const journals = await fetchAllJournals(token, period.start, period.end);
-      const result = buildFromJournals(journals, fiscal_year);
+      const fetchResult = await fetchAllJournals(token, period.start, period.end, { includeUnrealized });
+      const result = buildFromJournals(fetchResult.journals, fiscal_year, { taxExclusive });
 
       // action に応じて必要な部分だけ返す
       const response = {
@@ -379,8 +399,11 @@ export default async function handler(req, res) {
         fiscal_year,
         period,
         journal_count: result.journalCount,
+        total_fetched: fetchResult.totalFetched,
+        excluded_unrealized: fetchResult.excludedUnrealized,
+        settings: { include_unrealized: includeUnrealized, tax_exclusive: taxExclusive },
         method: 'journals',
-        breakdown: result.breakdown, // 全actionで内訳を返す（MF突合用）
+        breakdown: result.breakdown,
       };
 
       if (action === 'all_for_dashboard' || action === 'pl_for_dashboard') {

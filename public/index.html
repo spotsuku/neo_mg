@@ -7668,6 +7668,16 @@ function mfInit() {
     <!-- ステップ2: データ取得 -->
     <div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:10px">
       <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:8px">② データ取得（Chromeで連携したAPIから取得）</div>
+      <div style="display:flex;gap:12px;font-size:10px;color:var(--text3);margin-bottom:8px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+          <input type="checkbox" id="mf-tax-exclusive" checked style="margin:0">
+          税抜で計算（MF推移表の既定と一致）
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+          <input type="checkbox" id="mf-include-unrealized" style="margin:0">
+          未実現仕訳を含める（MF既定：除く）
+        </label>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
         <button id="mf-btn-trial_pl" onclick="mfFetch('trial_pl')" style="background:#7c3aed;color:#fff;border:none;padding:10px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700">
           📈 PL試算表を取得
@@ -7919,7 +7929,9 @@ window.mfFetch = async function(type) {
 
   try {
     const actionMap = { journals: 'cf_for_dashboard', trial_pl: 'pl_for_dashboard', trial_bs: 'bs_for_dashboard' };
-    const url = `/api/mf-sync?action=${actionMap[type]}&fiscal_year=${fy}`;
+    const taxEx = document.getElementById('mf-tax-exclusive')?.checked ?? true;
+    const incUn = document.getElementById('mf-include-unrealized')?.checked ?? false;
+    const url = `/api/mf-sync?action=${actionMap[type]}&fiscal_year=${fy}&tax_exclusive=${taxEx}&include_unrealized=${incUn}`;
     const r = await fetch(url);
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || '取得失敗');
@@ -7945,7 +7957,10 @@ window.mfFetch = async function(type) {
 
     log.style.color = 'var(--tc-green)';
     const jCount = d.journal_count || d.total_journals || 0;
-    log.textContent = `✓ ${labels[type]} 取得完了（${jCount}件の仕訳から計算）→ 下のプレビューを確認`;
+    const excluded = d.excluded_unrealized || 0;
+    const taxLabel = d.settings?.tax_exclusive === false ? '税込' : '税抜';
+    const unLabel = excluded > 0 ? `、未実現${excluded}件除外` : '';
+    log.textContent = `✓ ${labels[type]} 取得完了（${jCount}件の仕訳／${taxLabel}${unLabel}）→ 下のプレビューを確認`;
     document.getElementById('mf-preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   } catch(e) {
