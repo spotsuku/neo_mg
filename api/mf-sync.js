@@ -338,14 +338,22 @@ export default async function handler(req, res) {
     // ── 診断（動作するエンドポイントの確認） ──
     if (action === 'debug') {
       const results = {};
-      // 基本エンドポイント（/journals は per_page=1 で実データ取得の縮小版を確認）
-      for (const ep of ['/offices', '/accounts', '/journals']) {
+      // 基本エンドポイント
+      for (const ep of ['/offices', '/accounts']) {
         try {
-          const d = await mfFetch(token, ep, ep === '/journals' ? { per_page: 1 } : {});
+          const d = await mfFetch(token, ep);
           results[ep] = { ok: true, keys: Object.keys(d).slice(0, 10) };
         } catch (e) {
           results[ep] = { ok: false, error: e.message.slice(0, 200) };
         }
+      }
+      // /journals は日付必須のため期間指定付きで確認
+      try {
+        const period = await resolveFiscalPeriod(token, fiscal_year || '2025');
+        const d = await mfFetch(token, '/journals', { start_date: period.start, end_date: period.end, per_page: 1 });
+        results['/journals'] = { ok: true, keys: Object.keys(d).slice(0, 10), sample_keys: (d.journals?.[0] ? Object.keys(d.journals[0]).slice(0, 15) : []) };
+      } catch (e) {
+        results['/journals'] = { ok: false, error: e.message.slice(0, 200) };
       }
       // 会計期間情報
       try {
