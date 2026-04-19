@@ -7725,7 +7725,9 @@ function mfInit() {
       <summary style="font-size:11px;font-weight:700;color:var(--text3);cursor:pointer">🏷 CF仕分けの編集・記憶（相手方科目 → CFカテゴリ）</summary>
       <div style="margin-top:8px">
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-          <span style="font-size:10px;color:var(--text3)">各相手方科目のCFカテゴリを編集すると、次回取得時に自動適用されます（localStorageに保存）</span>
+          <span style="font-size:10px;color:var(--text3)">各相手先のCFカテゴリを編集すると、次回取得時に自動適用されます（localStorageに保存）</span>
+          <button class="btn btn-p" style="font-size:10px;padding:3px 10px;font-weight:700" onclick="mfAiCategorize()" id="mf-ai-categorize-btn">🤖 AIで一括仕分け</button>
+          <button class="btn btn-g" style="font-size:10px;padding:3px 10px;font-weight:700;display:none" onclick="mfAcceptAllAi()" id="mf-accept-ai-btn">✓ AI提案を全て記憶</button>
           <button class="btn" style="font-size:10px;padding:3px 8px" onclick="mfClearCfOverrides()">🗑 記憶をリセット</button>
           <span id="mf-cfmap-saved" style="font-size:10px;color:var(--tc-green);display:none">✓ 保存しました</span>
         </div>
@@ -8325,6 +8327,178 @@ window.mfClearCfOverrides = function() {
   document.querySelectorAll('#mf-preview-cfmap-table tr td:last-child').forEach(td => {
     td.innerHTML = '<span style="color:var(--text3)">自動</span>';
   });
+};
+
+// ── AI一括仕分け（Claude APIで全相手方のカテゴリを推定） ──
+window.mfAiCategorize = async function() {
+  const p = window._mfPending;
+  if (!p?.cf?.accountMap) { alert('CFデータが無いため実行できません'); return; }
+  const entries = Object.entries(p.cf.accountMap);
+  if (entries.length === 0) { alert('仕分け対象がありません'); return; }
+
+  const btn = document.getElementById('mf-ai-categorize-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ AI分析中...';
+
+  const saved = document.getElementById('mf-cfmap-saved');
+  saved.style.display = 'inline';
+  saved.style.color = 'var(--text3)';
+  saved.textContent = `🤖 ${entries.length}件の相手先をAIで分析中...`;
+
+  try {
+    // カテゴリ候補定義
+    const categories = {
+      in: [
+        { v:'cfInFee', l:'売上入金(会費)', hint:'NEO会費・メンバーシップ・入会金' },
+        { v:'cfInTraining', l:'売上入金(研修)', hint:'研修・セミナー・トレーニング' },
+        { v:'cfInOther', l:'売上入金(他)', hint:'協賛金・イベント売上・雑収入等' },
+        { v:'loanIn', l:'新規借入', hint:'銀行等からの借入着金' },
+        { v:'capitalIn', l:'資本金払込', hint:'株主からの出資' },
+      ],
+      out: [
+        { v:'salaryPay', l:'給与・社保', hint:'給与/賞与/役員報酬/社会保険料' },
+        { v:'bizComPay', l:'業務委託', hint:'業務委託料・フリーランス外注' },
+        { v:'expertPay', l:'専門家報酬', hint:'税理士/弁護士/社労士/顧問料' },
+        { v:'rentPay', l:'家賃', hint:'オフィス・社宅・駐車場家賃' },
+        { v:'telPay', l:'通信費', hint:'電話・インターネット・携帯' },
+        { v:'toolsPay', l:'ツール', hint:'SaaS・サブスク・AWS・Google等' },
+        { v:'entertainPay', l:'交際費', hint:'接待・会食・贈答' },
+        { v:'taxPay', l:'税金', hint:'法人税・消費税・印紙税・租税公課' },
+        { v:'suppliesPay', l:'消耗品', hint:'事務用品・備品・書籍' },
+        { v:'adSportsPay', l:'広告費', hint:'Web広告/Meta/Google/媒体費' },
+        { v:'eventCostPay', l:'イベント', hint:'会場費・運営外注・音響設営' },
+        { v:'recruitPay', l:'採用費', hint:'求人広告・Wantedly・Indeed' },
+        { v:'loanOut', l:'借入返済', hint:'借入金の返済' },
+        { v:'investPay', l:'投資', hint:'設備投資・固定資産購入・事業投資' },
+        { v:'salesOtherPay', l:'その他出金', hint:'上記に該当しない支出' },
+      ]
+    };
+
+    // バッチサイズ15で分割処理
+    const batchSize = 15;
+    const results = {};
+    for (let i = 0; i < entries.length; i += batchSize) {
+      const batch = entries.slice(i, i + batchSize);
+      const batchList = batch.map(([ident, info], idx) => {
+        const globalIdx = i + idx + 1;
+        const samples = (info.samples || []).join(' / ') || '(摘要なし)';
+        return `${globalIdx}. [${info.direction === 'in' ? '入金' : '出金'}] ${info.accountName}${info.subName ? ' / ' + info.subName : info.partnerName ? ' / ' + info.partnerName : ''}
+   件数: ${info.count}, 合計: ${info.total.toLocaleString()}千円
+   摘要: ${samples}`;
+      }).join('\n\n');
+
+      const catList = (dir) => categories[dir].map(c => `    - ${c.v}: ${c.l}（${c.hint}）`).join('\n');
+      const prompt = `あなたは経理の専門家です。以下の企業の取引相手について、資金繰り（キャッシュフロー）上のカテゴリを判定してください。
+
+会社: 株式会社スポーツネーション（NEO福岡 - 経営者コミュニティ運営）
+事業内容: NEOメンバーシップ会費・研修・イベント運営
+
+入金カテゴリ:
+${catList('in')}
+
+出金カテゴリ:
+${catList('out')}
+
+取引一覧（番号で返答してください）:
+${batchList}
+
+判定ルール:
+- 勘定科目名・補助科目（取引先名）・摘要を総合的に見て最適なカテゴリを選ぶ
+- 「売掛金/普通預金」の相手方＝売上入金 → 摘要から会費/研修/その他を判定
+- 「未払金」相手方→支払内容から判断（業務委託/広告/専門家等）
+- 相手先名が具体的企業名ならその業種で判断（例: Google/AWS→ツール、Indeed→採用費）
+- 判断不明な出金は salesOtherPay、入金は cfInOther
+
+JSON形式のみで返答（説明不要）:
+{
+  "1": {"cat": "カテゴリキー", "reason": "判断理由を20文字以内"},
+  "2": {"cat": "...", "reason": "..."}
+}`;
+
+      const res = await callAI(prompt, 3000);
+      // JSONを抽出
+      const jsonMatch = res.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) { console.warn('AI response no JSON:', res.slice(0, 200)); continue; }
+      try {
+        const parsed = JSON.parse(jsonMatch[0].replace(/```json|```/g, '').trim());
+        Object.entries(parsed).forEach(([key, val]) => {
+          const globalIdx = parseInt(key);
+          if (globalIdx > 0 && globalIdx <= entries.length) {
+            const [ident] = entries[globalIdx - 1];
+            results[ident] = val;
+          }
+        });
+      } catch(e) {
+        console.warn('AI JSON parse failed:', e, jsonMatch[0].slice(0, 200));
+      }
+
+      saved.textContent = `🤖 AI分析中... ${Math.min(i + batchSize, entries.length)}/${entries.length}`;
+    }
+
+    // 結果をUIに反映（ドロップダウンを更新、黄色ハイライト）
+    let changeCount = 0;
+    document.querySelectorAll('.mf-cf-cat-select').forEach(sel => {
+      const ident = sel.dataset.acct;
+      const r = results[ident];
+      if (!r) return;
+      if (sel.value !== r.cat) {
+        sel.value = r.cat;
+        sel.style.background = 'rgba(239,159,39,.15)';
+        sel.style.border = '1px solid var(--tc-amber)';
+        sel.dataset.aiSuggestion = '1';
+        sel.dataset.aiReason = r.reason || '';
+        sel.title = `🤖 AI提案: ${r.reason || ''}`;
+        changeCount++;
+        // 状態セルに「AI提案」バッジ
+        const row = sel.closest('tr');
+        const statusCell = row?.querySelector('td:last-child');
+        if (statusCell) statusCell.innerHTML = '<span class="badge" style="background:rgba(239,159,39,.15);color:var(--tc-amber)">AI提案</span>';
+      }
+    });
+
+    saved.style.color = 'var(--tc-green)';
+    saved.textContent = `✓ AI分析完了: ${changeCount}件の提案があります。確認後「✓ AI提案を全て記憶」で保存`;
+
+    const acceptBtn = document.getElementById('mf-accept-ai-btn');
+    if (acceptBtn && changeCount > 0) acceptBtn.style.display = 'inline-block';
+
+  } catch(e) {
+    console.error('[mfAiCategorize]', e);
+    saved.style.color = 'var(--tc-red)';
+    saved.textContent = '❌ AI分析失敗: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🤖 AIで一括仕分け';
+  }
+};
+
+// ── AI提案を全て受け入れてlocalStorageに記憶 ──
+window.mfAcceptAllAi = function() {
+  let overrides = {};
+  try { overrides = JSON.parse(localStorage.getItem('mfCfCategoryOverrides') || '{}'); } catch(e) {}
+
+  let count = 0;
+  document.querySelectorAll('.mf-cf-cat-select').forEach(sel => {
+    if (sel.dataset.aiSuggestion === '1') {
+      const ident = sel.dataset.acct;
+      overrides[ident] = sel.value;
+      // ハイライトを外し、状態を「記憶済」に
+      sel.style.background = '';
+      sel.style.border = '';
+      delete sel.dataset.aiSuggestion;
+      const row = sel.closest('tr');
+      const statusCell = row?.querySelector('td:last-child');
+      if (statusCell) statusCell.innerHTML = '<span class="badge bg">記憶済</span>';
+      count++;
+    }
+  });
+
+  localStorage.setItem('mfCfCategoryOverrides', JSON.stringify(overrides));
+  const saved = document.getElementById('mf-cfmap-saved');
+  saved.style.color = 'var(--tc-green)';
+  saved.textContent = `✓ ${count}件のAI提案を記憶しました（次回取得時に自動適用）`;
+
+  document.getElementById('mf-accept-ai-btn').style.display = 'none';
 };
 
 window.mfCancelPreview = function() {
