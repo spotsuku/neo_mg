@@ -175,8 +175,7 @@ async function fetchAllJournals(token, startDate, endDate, options = {}) {
   return { journals: allJournals, totalFetched: allJournals.length, excludedUnrealized: 0 };
 }
 
-function buildFromJournals(journals, fiscalYear, options = {}) {
-  const { taxExclusive = true } = options;
+function buildFromJournals(journals, fiscalYear) {
   const monthIdx = buildMonthIndex(fiscalYear);
   const n = monthIdx.length;
 
@@ -225,13 +224,11 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
     branches.forEach(b => {
       const debitAcct = b.debitor?.account_name || b.debit_account_name || b.debit?.account_name || '';
       const creditAcct = b.creditor?.account_name || b.credit_account_name || b.credit?.account_name || '';
-      // 金額: 税抜モードなら value - tax_value、税込モードなら value
-      const rawDebit  = (b.debitor?.value || b.debit_amount || 0);
-      const rawCredit = (b.creditor?.value || 0);
-      const taxDebit  = taxExclusive ? (b.debitor?.tax_value || 0) : 0;
-      const taxCredit = taxExclusive ? (b.creditor?.tax_value || 0) : 0;
-      const debitAmount  = Math.round((rawDebit - taxDebit) / 1000);
-      const creditAmount = Math.round((rawCredit - taxCredit) / 1000);
+      // MF仕訳の value は税抜処理の場合「既に税抜金額」
+      // tax_value は上乗せ分の消費税額（value に含まれていない）
+      // したがって PL/BS計算では value をそのまま使う（tax_value を引かない）
+      const debitAmount  = Math.round((b.debitor?.value || b.debit_amount || 0) / 1000);
+      const creditAmount = Math.round((b.creditor?.value || 0) / 1000);
       const amount = debitAmount || creditAmount;
       if (amount === 0) return;
 
@@ -385,13 +382,11 @@ export default async function handler(req, res) {
     if (action === 'all_for_dashboard' || action === 'pl_for_dashboard' || action === 'bs_for_dashboard' || action === 'cf_for_dashboard') {
       if (!fiscal_year) return res.status(400).json({ error: 'fiscal_year が必要です' });
 
-      // クエリパラメータで未実現仕訳含む/税抜計算を切替可能
       const includeUnrealized = req.query.include_unrealized === 'true';
-      const taxExclusive = req.query.tax_exclusive !== 'false'; // デフォルトは税抜（MF標準と一致）
 
       const period = await resolveFiscalPeriod(token, fiscal_year);
       const fetchResult = await fetchAllJournals(token, period.start, period.end, { includeUnrealized });
-      const result = buildFromJournals(fetchResult.journals, fiscal_year, { taxExclusive });
+      const result = buildFromJournals(fetchResult.journals, fiscal_year);
 
       // action に応じて必要な部分だけ返す
       const response = {
@@ -401,7 +396,6 @@ export default async function handler(req, res) {
         journal_count: result.journalCount,
         total_fetched: fetchResult.totalFetched,
         excluded_unrealized: fetchResult.excludedUnrealized,
-        settings: { include_unrealized: includeUnrealized, tax_exclusive: taxExclusive },
         method: 'journals',
         breakdown: result.breakdown,
       };
