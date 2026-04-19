@@ -7719,6 +7719,23 @@ function mfInit() {
     <div id="mf-preview-table"></div>
   </div>
 
+  <!-- CF仕分けの編集（記憶機能） -->
+  <div id="mf-preview-cfmap" style="display:none;margin-top:12px">
+    <details open>
+      <summary style="font-size:11px;font-weight:700;color:var(--text3);cursor:pointer">🏷 CF仕分けの編集・記憶（相手方科目 → CFカテゴリ）</summary>
+      <div style="margin-top:8px">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+          <span style="font-size:10px;color:var(--text3)">各相手方科目のCFカテゴリを編集すると、次回取得時に自動適用されます（localStorageに保存）</span>
+          <button class="btn" style="font-size:10px;padding:3px 8px" onclick="mfClearCfOverrides()">🗑 記憶をリセット</button>
+          <span id="mf-cfmap-saved" style="font-size:10px;color:var(--tc-green);display:none">✓ 保存しました</span>
+        </div>
+        <div class="scroll-x">
+          <div id="mf-preview-cfmap-table"></div>
+        </div>
+      </div>
+    </details>
+  </div>
+
   <!-- サンプル仕訳（CF時のみ） -->
   <div id="mf-preview-samples" style="display:none;margin-top:12px">
     <details>
@@ -7926,7 +7943,13 @@ window.mfFetch = async function(type) {
   try {
     const actionMap = { journals: 'cf_for_dashboard', trial_pl: 'pl_for_dashboard', trial_bs: 'bs_for_dashboard' };
     const incUn = document.getElementById('mf-include-unrealized')?.checked ?? false;
-    const url = `/api/mf-sync?action=${actionMap[type]}&fiscal_year=${fy}&include_unrealized=${incUn}`;
+    // CFカテゴリ上書き（localStorage から読込）
+    let cfOverrides = {};
+    try { cfOverrides = JSON.parse(localStorage.getItem('mfCfCategoryOverrides') || '{}'); } catch(e) {}
+    const ovQuery = Object.keys(cfOverrides).length > 0
+      ? `&cf_overrides=${encodeURIComponent(JSON.stringify(cfOverrides))}`
+      : '';
+    const url = `/api/mf-sync?action=${actionMap[type]}&fiscal_year=${fy}&include_unrealized=${incUn}${ovQuery}`;
     const r = await fetch(url);
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || '取得失敗');
@@ -8086,6 +8109,66 @@ function mfRenderPreview() {
       { label:'　投資',                 key:'investPay',   isOut:true },
     ], (key, i) => (monthly[key] && monthly[key][i]) || 0);
 
+    // ── CF仕分け編集テーブル（相手方科目 → CFカテゴリ） ──
+    const cfmapEl = document.getElementById('mf-preview-cfmap');
+    const cfmapTbl = document.getElementById('mf-preview-cfmap-table');
+    const accountMap = p.cf?.accountMap || {};
+    const entries = Object.entries(accountMap).sort((a,b) => b[1].total - a[1].total);
+    if (entries.length > 0) {
+      cfmapEl.style.display = 'block';
+      // カテゴリ選択肢（入金系と出金系）
+      const inCats = [
+        { v:'cfInFee', l:'売上入金(会費)' },
+        { v:'cfInTraining', l:'売上入金(研修)' },
+        { v:'cfInOther', l:'売上入金(他)' },
+        { v:'loanIn', l:'新規借入' },
+        { v:'capitalIn', l:'資本金払込' },
+      ];
+      const outCats = [
+        { v:'salaryPay', l:'給与・社保' },
+        { v:'bizComPay', l:'業務委託' },
+        { v:'expertPay', l:'専門家報酬' },
+        { v:'rentPay', l:'家賃' },
+        { v:'telPay', l:'通信費' },
+        { v:'toolsPay', l:'ツール' },
+        { v:'entertainPay', l:'交際費' },
+        { v:'taxPay', l:'税金' },
+        { v:'suppliesPay', l:'消耗品' },
+        { v:'adSportsPay', l:'広告費' },
+        { v:'eventCostPay', l:'イベント' },
+        { v:'recruitPay', l:'採用費' },
+        { v:'loanOut', l:'借入返済' },
+        { v:'investPay', l:'投資' },
+        { v:'salesOtherPay', l:'その他出金' },
+      ];
+      cfmapTbl.innerHTML = `<table class="dt" style="font-size:10px;min-width:700px">
+        <thead><tr>
+          <th class="l" style="min-width:200px">相手方科目名</th>
+          <th class="l">方向</th>
+          <th style="text-align:right">件数</th>
+          <th style="text-align:right">合計(千円)</th>
+          <th class="l" style="min-width:170px">CFカテゴリ</th>
+          <th class="l">状態</th>
+        </tr></thead>
+        <tbody>${entries.map(([acct, info]) => {
+          const cats = info.direction === 'in' ? inCats : outCats;
+          const options = cats.map(c => `<option value="${c.v}" ${c.v===info.category?'selected':''}>${c.l}</option>`).join('');
+          return `<tr>
+            <td style="font-size:10px;font-weight:600">${acct}</td>
+            <td style="font-size:10px"><span class="badge ${info.direction==='in'?'bg':'br'}">${info.direction==='in'?'入金':'出金'}</span></td>
+            <td style="text-align:right;font-size:10px">${info.count}</td>
+            <td style="text-align:right;font-size:10px;font-weight:700">${info.total.toLocaleString()}</td>
+            <td style="font-size:10px">
+              <select class="mf-cf-cat-select" data-acct="${acct.replace(/"/g,'&quot;')}" data-dir="${info.direction}" onchange="mfSaveCfOverride(this)" style="padding:2px 4px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:3px;min-width:150px">${options}</select>
+            </td>
+            <td style="font-size:10px">${info.overridden ? '<span class="badge bg">記憶済</span>' : '<span style="color:var(--text3)">自動</span>'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+    } else {
+      cfmapEl.style.display = 'none';
+    }
+
     // サンプル仕訳
     if (p.cf?.samples && p.cf.samples.length > 0) {
       samplesEl.style.display = 'block';
@@ -8195,6 +8278,46 @@ function mfBuildTable(months, monthNames, rows, getter) {
 
 window.mfToggleAllCommit = function(checked) {
   document.querySelectorAll('.mf-commit-cb').forEach(cb => { cb.checked = checked; });
+};
+
+// ── CFカテゴリの上書き保存（localStorage） ──
+window.mfSaveCfOverride = function(sel) {
+  const acct = sel.dataset.acct;
+  const cat = sel.value;
+  if (!acct) return;
+  let overrides = {};
+  try { overrides = JSON.parse(localStorage.getItem('mfCfCategoryOverrides') || '{}'); } catch(e) {}
+  overrides[acct] = cat;
+  localStorage.setItem('mfCfCategoryOverrides', JSON.stringify(overrides));
+  // 状態バッジを「記憶済」に更新
+  const row = sel.closest('tr');
+  if (row) {
+    const statusCell = row.querySelector('td:last-child');
+    if (statusCell) statusCell.innerHTML = '<span class="badge bg">記憶済</span>';
+  }
+  // 保存通知
+  const saved = document.getElementById('mf-cfmap-saved');
+  if (saved) {
+    saved.style.display = 'inline';
+    saved.textContent = `✓ 「${acct}」を記憶しました（次回自動適用）`;
+    clearTimeout(window._mfSaveTimer);
+    window._mfSaveTimer = setTimeout(() => { saved.style.display = 'none'; }, 3000);
+  }
+};
+
+window.mfClearCfOverrides = function() {
+  if (!confirm('CF仕分けの記憶をすべて削除しますか？')) return;
+  localStorage.removeItem('mfCfCategoryOverrides');
+  const saved = document.getElementById('mf-cfmap-saved');
+  if (saved) {
+    saved.style.display = 'inline';
+    saved.textContent = '✓ 記憶をリセットしました（次回取得時から自動分類のみ）';
+    setTimeout(() => { saved.style.display = 'none'; }, 3000);
+  }
+  // 画面上の状態バッジをリセット
+  document.querySelectorAll('#mf-preview-cfmap-table tr td:last-child').forEach(td => {
+    td.innerHTML = '<span style="color:var(--text3)">自動</span>';
+  });
 };
 
 window.mfCancelPreview = function() {

@@ -35,29 +35,13 @@ function buildMonthIndex(fiscalYear) {
   return months;
 }
 
-// 会計期間 start/end を /offices から解決
+// 会計期間: 当社は4月〜翌年3月（MFの期間設定によらず固定）
 async function resolveFiscalPeriod(token, fiscalYear) {
-  try {
-    const data = await mfFetch(token, '/offices');
-    const periods = data?.accounting_periods || [];
-    const fy = parseInt(fiscalYear);
-    // fy年の4月〜6月開始の期間を優先
-    let target = periods.find(p => {
-      const s = new Date(p.start_date || '');
-      return !isNaN(s) && s.getFullYear() === fy && s.getMonth() >= 3 && s.getMonth() <= 6;
-    });
-    if (!target) target = periods.find(p => {
-      const s = new Date(p.start_date || '');
-      return !isNaN(s) && s.getFullYear() === fy;
-    });
-    if (!target) target = periods[0];
-    return {
-      start: target?.start_date || `${fy}-04-01`,
-      end: target?.end_date || `${fy + 1}-03-31`,
-    };
-  } catch (e) {
-    return { start: `${fiscalYear}-04-01`, end: `${parseInt(fiscalYear) + 1}-03-31` };
-  }
+  const fy = parseInt(fiscalYear);
+  return {
+    start: `${fy}-04-01`,
+    end: `${fy + 1}-03-31`,
+  };
 }
 
 // ══════════════════════════════════════════
@@ -175,7 +159,8 @@ async function fetchAllJournals(token, startDate, endDate, options = {}) {
   return { journals: allJournals, totalFetched: allJournals.length, excludedUnrealized: 0 };
 }
 
-function buildFromJournals(journals, fiscalYear) {
+function buildFromJournals(journals, fiscalYear, options = {}) {
+  const { cfCategoryOverrides = {} } = options;
   const monthIdx = buildMonthIndex(fiscalYear);
   const n = monthIdx.length;
 
@@ -213,6 +198,16 @@ function buildFromJournals(journals, fiscalYear) {
 
   // ── 勘定科目別の集計内訳（MF推移表との突合用） ──
   const acctBreakdown = {}; // { 勘定科目名: { debit合計, credit合計, 純額, 分類先 } }
+
+  // ── CF仕分けマップ（相手方科目名 → CFカテゴリ） ──
+  // 現預金との仕訳で使われた相手方科目を記録（編集・記憶用）
+  const cfAccountMap = {}; // { 勘定科目名: { direction: 'in'|'out', category, count, total, overridden: bool } }
+
+  // カテゴリ解決関数: overrides が最優先、次にルールベース
+  const resolveCfCategory = (acctName, isIn) => {
+    if (cfCategoryOverrides[acctName]) return cfCategoryOverrides[acctName];
+    return categorizeCf(acctName, isIn);
+  };
 
   journals.forEach(j => {
     const txDate = new Date(j.transaction_date || j.date || j.posted_at || '');
@@ -264,13 +259,26 @@ function buildFromJournals(journals, fiscalYear) {
       if (isDebitCash) {
         cashIn[idx] += debitAmount;
         cfMonthly.cfIn[idx] += debitAmount;
-        const cat = categorizeCf(creditAcct || desc, true);
+        const counterpartAcct = creditAcct || '(摘要: ' + desc.slice(0, 20) + ')';
+        const cat = resolveCfCategory(counterpartAcct, true);
         cfMonthly[cat][idx] += debitAmount;
+        // 仕分けマップに記録
+        if (!cfAccountMap[counterpartAcct]) {
+          cfAccountMap[counterpartAcct] = { direction: 'in', category: cat, count: 0, total: 0, overridden: !!cfCategoryOverrides[counterpartAcct] };
+        }
+        cfAccountMap[counterpartAcct].count++;
+        cfAccountMap[counterpartAcct].total += debitAmount;
       }
       if (isCreditCash) {
         cashOut[idx] += creditAmount;
-        const cat = categorizeCf(debitAcct || desc, false);
+        const counterpartAcct = debitAcct || '(摘要: ' + desc.slice(0, 20) + ')';
+        const cat = resolveCfCategory(counterpartAcct, false);
         cfMonthly[cat][idx] += creditAmount;
+        if (!cfAccountMap[counterpartAcct]) {
+          cfAccountMap[counterpartAcct] = { direction: 'out', category: cat, count: 0, total: 0, overridden: !!cfCategoryOverrides[counterpartAcct] };
+        }
+        cfAccountMap[counterpartAcct].count++;
+        cfAccountMap[counterpartAcct].total += creditAmount;
       }
 
       if (samples.length < 100) {
@@ -281,7 +289,7 @@ function buildFromJournals(journals, fiscalYear) {
           val: debitAmount || creditAmount,
           desc,
           dir: isDebitCash ? 'in' : isCreditCash ? 'out' : '-',
-          cat: isDebitCash ? categorizeCf(creditAcct || desc, true) : isCreditCash ? categorizeCf(debitAcct || desc, false) : '-',
+          cat: isDebitCash ? resolveCfCategory(creditAcct || desc, true) : isCreditCash ? resolveCfCategory(debitAcct || desc, false) : '-',
         });
       }
     });
@@ -330,6 +338,15 @@ function buildFromJournals(journals, fiscalYear) {
     cfMonthlyRounded[k] = cfMonthly[k].map(v => Math.round(v));
   });
 
+  // CF仕分けマップ（千円単位に丸めて返却）
+  const cfAccountMapRounded = {};
+  Object.keys(cfAccountMap).forEach(k => {
+    cfAccountMapRounded[k] = {
+      ...cfAccountMap[k],
+      total: Math.round(cfAccountMap[k].total),
+    };
+  });
+
   return {
     pl,
     bs: { monthly: bsMonthly, summary: bsSummary },
@@ -338,7 +355,8 @@ function buildFromJournals(journals, fiscalYear) {
       cashOut: cashOutRounded,
       net: cashInRounded.map((v, i) => v - cashOutRounded[i]),
       monthly: cfMonthlyRounded,
-      samples
+      samples,
+      accountMap: cfAccountMapRounded,
     },
     journalCount: journals.length,
     breakdown,
@@ -404,10 +422,16 @@ export default async function handler(req, res) {
       if (!fiscal_year) return res.status(400).json({ error: 'fiscal_year が必要です' });
 
       const includeUnrealized = req.query.include_unrealized === 'true';
+      // CFカテゴリ上書き: フロントエンドから localStorage の内容を送信
+      let cfCategoryOverrides = {};
+      if (req.query.cf_overrides) {
+        try { cfCategoryOverrides = JSON.parse(req.query.cf_overrides); }
+        catch (e) { console.warn('[mf-sync] cf_overrides parse failed:', e.message); }
+      }
 
       const period = await resolveFiscalPeriod(token, fiscal_year);
       const fetchResult = await fetchAllJournals(token, period.start, period.end, { includeUnrealized });
-      const result = buildFromJournals(fetchResult.journals, fiscal_year);
+      const result = buildFromJournals(fetchResult.journals, fiscal_year, { cfCategoryOverrides });
 
       // action に応じて必要な部分だけ返す
       const response = {
