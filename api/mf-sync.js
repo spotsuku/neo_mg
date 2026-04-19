@@ -226,11 +226,12 @@ function buildFromJournals(journals, fiscalYear) {
       const creditAcct = b.creditor?.account_name || b.credit_account_name || b.credit?.account_name || '';
       // MF仕訳の value は税抜処理の場合「既に税抜金額」
       // tax_value は上乗せ分の消費税額（value に含まれていない）
-      // したがって PL/BS計算では value をそのまま使う（tax_value を引かない）
-      const debitAmount  = Math.round((b.debitor?.value || b.debit_amount || 0) / 1000);
-      const creditAmount = Math.round((b.creditor?.value || 0) / 1000);
-      const amount = debitAmount || creditAmount;
-      if (amount === 0) return;
+      // 丸め誤差を避けるため、集計は円単位で行い、最後に千円に丸める
+      const debitYen  = Number(b.debitor?.value || b.debit_amount || 0);
+      const creditYen = Number(b.creditor?.value || 0);
+      const debitAmount  = debitYen / 1000;  // 千円（小数含む）
+      const creditAmount = creditYen / 1000;
+      if (debitAmount === 0 && creditAmount === 0) return;
 
       const desc = j.remark || j.description || j.memo || j.summary || '';
 
@@ -286,39 +287,59 @@ function buildFromJournals(journals, fiscalYear) {
     });
   });
 
-  // ── PL 純額計算 ──
+  // ── PL 純額計算（円単位の小数から千円に最終丸め） ──
   // 収益(rev/rev_other): 貸方 − 借方（返品・値引は借方で相殺）
   // 費用(labor/outsource/adv/gaichu/other/cogs): 借方 − 貸方（戻し処理は貸方で相殺）
   PL_KEYS.forEach(k => {
     const isRev = (k === 'rev' || k === 'rev_other');
     for (let i = 0; i < n; i++) {
-      pl[k].actual[i] = isRev
+      const net = isRev
         ? (plCredit[k][i] - plDebit[k][i])
         : (plDebit[k][i] - plCredit[k][i]);
+      pl[k].actual[i] = Math.round(net); // 集計後に千円に丸める
     }
   });
 
-  // BS: 借方-貸方の純額を残高として扱う
-  // 資産は借方増で正、負債・純資産は貸方増で正
+  // BS: 借方-貸方の純額を残高として扱う（最終丸め）
   BS_KEYS.forEach(k => {
     const isLiabOrEq = ['payable', 'borrowing', 'other_cl', 'capital', 'retained'].includes(k);
     for (let i = 0; i < n; i++) {
-      bsMonthly[k][i] = isLiabOrEq ? -bsDelta[k][i] : bsDelta[k][i];
+      const raw = isLiabOrEq ? -bsDelta[k][i] : bsDelta[k][i];
+      bsMonthly[k][i] = Math.round(raw);
     }
-    // 全期間合計をサマリーに
     bsSummary[k] = bsMonthly[k].reduce((t, v) => t + v, 0);
   });
 
-  // 勘定科目別内訳（上位30件、金額降順）
+  // 勘定科目別内訳（累積円→千円に最終丸め）
   const breakdown = Object.entries(acctBreakdown)
-    .map(([name, v]) => ({ name, debit: v.debit, credit: v.credit, net: v.debit - v.credit, category: v.category }))
+    .map(([name, v]) => ({
+      name,
+      debit: Math.round(v.debit),
+      credit: Math.round(v.credit),
+      net: Math.round(v.debit - v.credit),
+      category: v.category
+    }))
     .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
     .slice(0, 50);
+
+  // CF最終丸め
+  const cashInRounded = cashIn.map(v => Math.round(v));
+  const cashOutRounded = cashOut.map(v => Math.round(v));
+  const cfMonthlyRounded = {};
+  Object.keys(cfMonthly).forEach(k => {
+    cfMonthlyRounded[k] = cfMonthly[k].map(v => Math.round(v));
+  });
 
   return {
     pl,
     bs: { monthly: bsMonthly, summary: bsSummary },
-    cf: { cashIn, cashOut, net: cashIn.map((v, i) => v - cashOut[i]), monthly: cfMonthly, samples },
+    cf: {
+      cashIn: cashInRounded,
+      cashOut: cashOutRounded,
+      net: cashInRounded.map((v, i) => v - cashOutRounded[i]),
+      monthly: cfMonthlyRounded,
+      samples
+    },
     journalCount: journals.length,
     breakdown,
   };
