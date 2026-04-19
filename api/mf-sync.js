@@ -338,9 +338,10 @@ export default async function handler(req, res) {
     // ── 診断（動作するエンドポイントの確認） ──
     if (action === 'debug') {
       const results = {};
-      for (const ep of ['/offices', '/accounts', '/journals', '/items', '/sections', '/partners']) {
+      // 基本エンドポイント（/journals は per_page=1 で実データ取得の縮小版を確認）
+      for (const ep of ['/offices', '/accounts', '/journals']) {
         try {
-          const d = await mfFetch(token, ep, ep === '/journals' ? { limit: 1 } : {});
+          const d = await mfFetch(token, ep, ep === '/journals' ? { per_page: 1 } : {});
           results[ep] = { ok: true, keys: Object.keys(d).slice(0, 10) };
         } catch (e) {
           results[ep] = { ok: false, error: e.message.slice(0, 200) };
