@@ -8004,30 +8004,47 @@ function mfRenderPreview() {
     aiEl.style.display = 'none';
     samplesEl.style.display = 'none';
     tblEl.innerHTML = mfBuildTable(months, monthNames, [
-      { label:'売上（売上高）',        key:'rev',       isRev:true },
-      { label:'売上(その他・会費等)', key:'rev_other', isRev:true },
-      { label:'人件費',                 key:'labor',     isOut:true },
-      { label:'業務委託',               key:'outsource', isOut:true },
-      { label:'広告販促',               key:'adv',       isOut:true },
-      { label:'外注費',                 key:'gaichu',    isOut:true },
-      { label:'その他販管費',           key:'other',     isOut:true },
-      { label:'原価',                   key:'cogs',      isOut:true },
-    ], (key, i) => (p.pl[key]?.actual?.[i]) || 0);
+      { label:'【営業収益】',           key:'__header__' },
+      { label:'　売上高',                key:'rev',       isRev:true },
+      { label:'【売上原価】',           key:'__header__' },
+      { label:'　原価',                  key:'cogs',      isOut:true },
+      { label:'　　粗利',                key:'__calc__', isRev:true, formula: (i) => ((p.pl.rev?.actual?.[i]) || 0) - ((p.pl.cogs?.actual?.[i]) || 0) },
+      { label:'【販管費】',             key:'__header__' },
+      { label:'　人件費',                key:'labor',     isOut:true },
+      { label:'　業務委託',              key:'outsource', isOut:true },
+      { label:'　広告販促',              key:'adv',       isOut:true },
+      { label:'　外注費',                key:'gaichu',    isOut:true },
+      { label:'　その他販管費',          key:'other',     isOut:true },
+      { label:'　　営業利益',            key:'__calc__', isRev:true, formula: (i) => {
+        const rev = (p.pl.rev?.actual?.[i]) || 0;
+        const cogs = (p.pl.cogs?.actual?.[i]) || 0;
+        const opex = ['labor','outsource','adv','gaichu','other'].reduce((t,k) => t + ((p.pl[k]?.actual?.[i]) || 0), 0);
+        return rev - cogs - opex;
+      }},
+      { label:'【営業外収益】',         key:'__header__' },
+      { label:'　その他収益（会費等）',  key:'rev_other', isRev:true },
+    ], (key, i, row) => {
+      if (row?.key === '__calc__') return row.formula(i);
+      return (p.pl[key]?.actual?.[i]) || 0;
+    });
 
   } else if (p.type === 'trial_bs') {
     aiEl.style.display = 'none';
     samplesEl.style.display = 'none';
     const monthly = p.bs.monthly || {};
     tblEl.innerHTML = mfBuildTable(months, monthNames, [
-      { label:'現預金',         key:'cash',       isRev:true },
-      { label:'売掛金',         key:'receivable', isRev:true },
-      { label:'その他流動資産', key:'other_ca',   isRev:true },
-      { label:'固定資産',       key:'fixed',      isRev:true },
-      { label:'買掛金・未払金', key:'payable',    isOut:true },
-      { label:'借入金',         key:'borrowing',  isOut:true },
-      { label:'その他流動負債', key:'other_cl',   isOut:true },
-      { label:'資本金',         key:'capital',    isRev:true },
-      { label:'利益剰余金',     key:'retained',   isRev:true },
+      { label:'【資産の部】',         key:'__header__' },
+      { label:'　現預金',              key:'cash',       isRev:true },
+      { label:'　売掛金',              key:'receivable', isRev:true },
+      { label:'　その他流動資産',      key:'other_ca',   isRev:true },
+      { label:'　固定資産',            key:'fixed',      isRev:true },
+      { label:'【負債の部】',         key:'__header__' },
+      { label:'　買掛金・未払金',      key:'payable',    isOut:true },
+      { label:'　借入金',              key:'borrowing',  isOut:true },
+      { label:'　その他流動負債',      key:'other_cl',   isOut:true },
+      { label:'【純資産の部】',       key:'__header__' },
+      { label:'　資本金',              key:'capital',    isRev:true },
+      { label:'　利益剰余金',          key:'retained',   isRev:true },
     ], (key, i) => (monthly[key] && monthly[key][i]) || 0);
 
   } else if (p.type === 'journals') {
@@ -8043,27 +8060,30 @@ function mfRenderPreview() {
       各仕訳の摘要・勘定科目名から、下記CF科目に自動仕分けしました。`;
 
     tblEl.innerHTML = mfBuildTable(months, monthNames, [
-      { label:'売上入金(会費)',   key:'cfInFee',     isRev:true },
-      { label:'売上入金(研修)',   key:'cfInTraining', isRev:true },
-      { label:'売上入金(他)',     key:'cfInOther',   isRev:true },
-      { label:'新規借入',         key:'loanIn',      isRev:true },
-      { label:'資本金払込',       key:'capitalIn',   isRev:true },
-      { label:'──',              key:'__sep__' },
-      { label:'給与・社保',       key:'salaryPay',   isOut:true },
-      { label:'業務委託',         key:'bizComPay',   isOut:true },
-      { label:'専門家報酬',       key:'expertPay',   isOut:true },
-      { label:'家賃',             key:'rentPay',     isOut:true },
-      { label:'通信費',           key:'telPay',      isOut:true },
-      { label:'ツール',           key:'toolsPay',    isOut:true },
-      { label:'広告費',           key:'adSportsPay', isOut:true },
-      { label:'採用費',           key:'recruitPay',  isOut:true },
-      { label:'イベント',         key:'eventCostPay', isOut:true },
-      { label:'交際費',           key:'entertainPay', isOut:true },
-      { label:'税金',             key:'taxPay',      isOut:true },
-      { label:'消耗品',           key:'suppliesPay', isOut:true },
-      { label:'借入返済',         key:'loanOut',     isOut:true },
-      { label:'投資',             key:'investPay',   isOut:true },
-      { label:'その他出金',       key:'salesOtherPay', isOut:true },
+      { label:'【営業収入】',           key:'__header__' },
+      { label:'　売上入金(会費)',       key:'cfInFee',     isRev:true },
+      { label:'　売上入金(研修)',       key:'cfInTraining', isRev:true },
+      { label:'　売上入金(他)',         key:'cfInOther',   isRev:true },
+      { label:'【財務収入】',           key:'__header__' },
+      { label:'　新規借入',             key:'loanIn',      isRev:true },
+      { label:'　資本金払込',           key:'capitalIn',   isRev:true },
+      { label:'【営業支出】',           key:'__header__' },
+      { label:'　給与・社保',           key:'salaryPay',   isOut:true },
+      { label:'　業務委託',             key:'bizComPay',   isOut:true },
+      { label:'　専門家報酬',           key:'expertPay',   isOut:true },
+      { label:'　家賃',                 key:'rentPay',     isOut:true },
+      { label:'　通信費',               key:'telPay',      isOut:true },
+      { label:'　ツール',               key:'toolsPay',    isOut:true },
+      { label:'　広告費',               key:'adSportsPay', isOut:true },
+      { label:'　採用費',               key:'recruitPay',  isOut:true },
+      { label:'　イベント',             key:'eventCostPay', isOut:true },
+      { label:'　交際費',               key:'entertainPay', isOut:true },
+      { label:'　税金',                 key:'taxPay',      isOut:true },
+      { label:'　消耗品',               key:'suppliesPay', isOut:true },
+      { label:'　その他出金',           key:'salesOtherPay', isOut:true },
+      { label:'【財務支出】',           key:'__header__' },
+      { label:'　借入返済',             key:'loanOut',     isOut:true },
+      { label:'　投資',                 key:'investPay',   isOut:true },
     ], (key, i) => (monthly[key] && monthly[key][i]) || 0);
 
     // サンプル仕訳
@@ -8129,20 +8149,43 @@ function mfBuildTable(months, monthNames, rows, getter) {
     </tr></thead><tbody>`;
 
   rows.forEach(row => {
+    // セパレーター
     if (row.key === '__sep__') {
       html += `<tr><td colspan="${months.length + 2}" style="height:4px;background:var(--border2)"></td></tr>`;
       return;
     }
-    html += `<tr><td class="l" style="font-size:11px;padding-left:8px;position:sticky;left:0;background:var(--bg2);z-index:1">${row.label}</td>`;
+    // セクション見出し（太字 + 背景色）
+    if (row.key === '__header__') {
+      html += `<tr><td colspan="${months.length + 2}" style="padding:5px 8px;background:var(--bg3);font-size:11px;font-weight:700;color:var(--text);border-top:1px solid var(--border2)">${row.label}</td></tr>`;
+      return;
+    }
+    // 計算行（粗利・営業利益）は border-top + 強調表示
+    const isCalc = row.key === '__calc__';
+    const labelStyle = isCalc
+      ? 'font-size:11px;padding:5px 8px;position:sticky;left:0;background:var(--bg2);z-index:1;font-weight:700;border-top:1px solid var(--border2)'
+      : 'font-size:11px;padding-left:8px;position:sticky;left:0;background:var(--bg2);z-index:1';
+    html += `<tr><td class="l" style="${labelStyle}">${row.label}</td>`;
     let total = 0;
     months.forEach((m, i) => {
-      const v = getter(row.key, i) || 0;
+      const v = getter(row.key, i, row) || 0;
       total += v;
-      const clr = v === 0 ? 'color:var(--text3)' : (row.isOut ? 'color:var(--tc-red)' : (row.isRev ? 'color:var(--tc-green)' : ''));
-      html += `<td style="text-align:right;padding:3px 6px;font-size:10px;${clr}">${v !== 0 ? v.toLocaleString() : '—'}</td>`;
+      const valClr = isCalc
+        ? (v >= 0 ? 'color:var(--tc-green);font-weight:700' : 'color:var(--tc-red);font-weight:700')
+        : (v === 0 ? 'color:var(--text3)' : (row.isOut ? 'color:var(--tc-red)' : (row.isRev ? 'color:var(--tc-green)' : '')));
+      const rowStyle = isCalc ? 'border-top:1px solid var(--border2)' : '';
+      const cellVal = isCalc
+        ? (v >= 0 ? v.toLocaleString() : '▲' + Math.abs(v).toLocaleString())
+        : (v !== 0 ? v.toLocaleString() : '—');
+      html += `<td style="text-align:right;padding:3px 6px;font-size:10px;${valClr};${rowStyle}">${cellVal}</td>`;
     });
-    const totClr = total === 0 ? 'color:var(--text3)' : (row.isOut ? 'color:var(--tc-red)' : (row.isRev ? 'color:var(--tc-green)' : ''));
-    html += `<td style="text-align:right;padding:3px 6px;font-size:10px;font-weight:700;background:var(--bg3);${totClr}">${total !== 0 ? total.toLocaleString() : '—'}</td>`;
+    const totClr = isCalc
+      ? (total >= 0 ? 'color:var(--tc-green);font-weight:700' : 'color:var(--tc-red);font-weight:700')
+      : (total === 0 ? 'color:var(--text3)' : (row.isOut ? 'color:var(--tc-red)' : (row.isRev ? 'color:var(--tc-green)' : '')));
+    const totRowStyle = isCalc ? ';border-top:1px solid var(--border2)' : '';
+    const totVal = isCalc
+      ? (total >= 0 ? total.toLocaleString() : '▲' + Math.abs(total).toLocaleString())
+      : (total !== 0 ? total.toLocaleString() : '—');
+    html += `<td style="text-align:right;padding:3px 6px;font-size:10px;font-weight:700;background:var(--bg3);${totClr}${totRowStyle}">${totVal}</td>`;
     html += '</tr>';
   });
 
