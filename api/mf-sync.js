@@ -372,6 +372,7 @@ export default async function handler(req, res) {
         period,
         journal_count: result.journalCount,
         method: 'journals',
+        breakdown: result.breakdown, // 全actionで内訳を返す（MF突合用）
       };
 
       if (action === 'all_for_dashboard' || action === 'pl_for_dashboard') {
