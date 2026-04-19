@@ -35,12 +35,42 @@ function buildMonthIndex(fiscalYear) {
   return months;
 }
 
-// 会計期間: 当社は4月〜翌年3月（MFの期間設定によらず固定）
-async function resolveFiscalPeriod(token, fiscalYear) {
+// 会計期間: MFの会計期間を取得し、御社の4月〜3月に該当する期間を特定
+async function resolveFiscalPeriods(token, fiscalYear) {
   const fy = parseInt(fiscalYear);
+  const ourStart = new Date(`${fy}-04-01`);
+  const ourEnd   = new Date(`${fy + 1}-03-31`);
+
+  try {
+    const data = await mfFetch(token, '/offices');
+    const periods = data?.accounting_periods || [];
+
+    // MFの各会計期間のうち、御社の4月〜3月と重複するものを抽出
+    const overlapping = periods.filter(p => {
+      const pStart = new Date(p.start_date);
+      const pEnd   = new Date(p.end_date);
+      return pStart <= ourEnd && pEnd >= ourStart;
+    }).map(p => ({
+      start: p.start_date,
+      end: p.end_date,
+    }));
+
+    if (overlapping.length > 0) {
+      return {
+        periods: overlapping,
+        filterStart: `${fy}-04-01`,
+        filterEnd: `${fy + 1}-03-31`,
+      };
+    }
+  } catch(e) {
+    console.warn('[mf-sync] resolveFiscalPeriods failed:', e.message);
+  }
+
+  // フォールバック: そのまま4月〜3月
   return {
-    start: `${fy}-04-01`,
-    end: `${fy + 1}-03-31`,
+    periods: [{ start: `${fy}-04-01`, end: `${fy + 1}-03-31` }],
+    filterStart: `${fy}-04-01`,
+    filterEnd: `${fy + 1}-03-31`,
   };
 }
 
@@ -127,36 +157,52 @@ function categorizeCf(acctName, isIn) {
 // ══════════════════════════════════════════
 //  仕訳から PL / BS / CF を一括計算
 // ══════════════════════════════════════════
-async function fetchAllJournals(token, startDate, endDate, options = {}) {
+async function fetchAllJournals(token, periodsInfo, options = {}) {
   const { includeUnrealized = false } = options;
   const allJournals = [];
-  const perPage = 500; // MF APIの最大値
-  for (let page = 1; page <= 100; page++) {
-    const params = { start_date: startDate, end_date: endDate, page, per_page: perPage };
-    const data = await mfFetch(token, '/journals', params);
-    const journals = data.journals || data.data || [];
-    allJournals.push(...journals);
+  const perPage = 500;
 
-    // ページネーション終了判定
-    const totalPages = data.metadata?.total_pages || data.total_pages || null;
-    const totalCount = data.metadata?.total_count || data.total_count || data.total_entries || null;
+  // MFの各会計期間ごとに仕訳を取得
+  for (const period of periodsInfo.periods) {
+    console.log(`[mf-sync] fetching journals for period ${period.start} ~ ${period.end}`);
+    for (let page = 1; page <= 100; page++) {
+      const params = { start_date: period.start, end_date: period.end, page, per_page: perPage };
+      const data = await mfFetch(token, '/journals', params);
+      const journals = data.journals || data.data || [];
+      allJournals.push(...journals);
 
-    console.log(`[mf-sync] journals page ${page}: got ${journals.length}, total so far: ${allJournals.length}, totalPages=${totalPages}, totalCount=${totalCount}`);
+      const totalPages = data.metadata?.total_pages || data.total_pages || null;
+      const totalCount = data.metadata?.total_count || data.total_count || null;
 
-    if (journals.length === 0) break;
-    if (totalPages && page >= totalPages) break;
-    if (totalCount && allJournals.length >= totalCount) break;
-    if (journals.length < perPage) break;
+      console.log(`[mf-sync] page ${page}: got ${journals.length}, total so far: ${allJournals.length}`);
+
+      if (journals.length === 0) break;
+      if (totalPages && page >= totalPages) break;
+      if (totalCount && allJournals.length >= totalCount) break;
+      if (journals.length < perPage) break;
+    }
   }
 
-  // 未実現仕訳を除外（MF推移表の「未実現仕訳：除く」設定と一致）
+  // 御社の4月〜3月でフィルター（MF期間が広い場合に必要）
+  const filterStart = periodsInfo.filterStart;
+  const filterEnd = periodsInfo.filterEnd;
+  let filtered = allJournals;
+  if (filterStart && filterEnd) {
+    filtered = allJournals.filter(j => {
+      const d = j.transaction_date || '';
+      return d >= filterStart && d <= filterEnd;
+    });
+    console.log(`[mf-sync] date filter ${filterStart}~${filterEnd}: ${allJournals.length} → ${filtered.length}`);
+  }
+
+  // 未実現仕訳を除外
   if (!includeUnrealized) {
-    const beforeCount = allJournals.length;
-    const filtered = allJournals.filter(j => j.is_realized !== false);
+    const beforeCount = filtered.length;
+    filtered = filtered.filter(j => j.is_realized !== false);
     console.log(`[mf-sync] realized filter: ${beforeCount} → ${filtered.length} (excluded ${beforeCount - filtered.length} unrealized)`);
-    return { journals: filtered, totalFetched: beforeCount, excludedUnrealized: beforeCount - filtered.length };
+    return { journals: filtered, totalFetched: allJournals.length, excludedUnrealized: beforeCount - filtered.length };
   }
-  return { journals: allJournals, totalFetched: allJournals.length, excludedUnrealized: 0 };
+  return { journals: filtered, totalFetched: allJournals.length, excludedUnrealized: 0 };
 }
 
 function buildFromJournals(journals, fiscalYear, options = {}) {
@@ -399,11 +445,12 @@ export default async function handler(req, res) {
           results[ep] = { ok: false, error: e.message.slice(0, 200) };
         }
       }
-      // /journals は日付必須のため期間指定付きで確認
+      // /journals は日付必須のためMFの最新期間で確認
       try {
-        const period = await resolveFiscalPeriod(token, fiscal_year || '2025');
-        const d = await mfFetch(token, '/journals', { start_date: period.start, end_date: period.end, per_page: 1 });
-        results['/journals'] = { ok: true, keys: Object.keys(d).slice(0, 10), sample_keys: (d.journals?.[0] ? Object.keys(d.journals[0]).slice(0, 15) : []) };
+        const pi = await resolveFiscalPeriods(token, fiscal_year || '2025');
+        const lastPeriod = pi.periods[pi.periods.length - 1] || { start: '2025-07-01', end: '2026-03-31' };
+        const d = await mfFetch(token, '/journals', { start_date: lastPeriod.start, end_date: lastPeriod.end, per_page: 1 });
+        results['/journals'] = { ok: true, keys: Object.keys(d).slice(0, 10), periods_used: pi.periods.length };
       } catch (e) {
         results['/journals'] = { ok: false, error: e.message.slice(0, 200) };
       }
@@ -429,15 +476,15 @@ export default async function handler(req, res) {
         catch (e) { console.warn('[mf-sync] cf_overrides parse failed:', e.message); }
       }
 
-      const period = await resolveFiscalPeriod(token, fiscal_year);
-      const fetchResult = await fetchAllJournals(token, period.start, period.end, { includeUnrealized });
+      const periodsInfo = await resolveFiscalPeriods(token, fiscal_year);
+      const fetchResult = await fetchAllJournals(token, periodsInfo, { includeUnrealized });
       const result = buildFromJournals(fetchResult.journals, fiscal_year, { cfCategoryOverrides });
 
       // action に応じて必要な部分だけ返す
       const response = {
         ok: true,
         fiscal_year,
-        period,
+        period: periodsInfo,
         journal_count: result.journalCount,
         total_fetched: fetchResult.totalFetched,
         excluded_unrealized: fetchResult.excludedUnrealized,
@@ -465,9 +512,10 @@ export default async function handler(req, res) {
 
     // ── /journals 生レスポンス（先頭3件のみ、フィールド構造確認用） ──
     if (action === 'raw_journals') {
-      const period = await resolveFiscalPeriod(token, fiscal_year || '2025');
+      const pi = await resolveFiscalPeriods(token, fiscal_year || '2025');
+      const lastPeriod = pi.periods[pi.periods.length - 1] || { start: '2025-07-01', end: '2026-03-31' };
       const data = await mfFetch(token, '/journals', {
-        start_date: period.start, end_date: period.end, page: 1, per_page: 3
+        start_date: lastPeriod.start, end_date: lastPeriod.end, page: 1, per_page: 3
       });
       return res.status(200).json({
         ok: true, period,
