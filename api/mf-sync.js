@@ -114,9 +114,12 @@ export default async function handler(req, res) {
     const token = await getAccessToken();
     if (action==='debug') {
       const results={};
-      for (const ep of ['/offices','/accounts','/partners','/sections']) {
-        try { const d=await mfFetch(token,ep); results[ep]={ok:true,keys:Object.keys(d)}; }
-        catch(e){ results[ep]={ok:false,error:e.message.slice(0,100)}; }
+      const eps=['/offices','/accounts','/partners','/sections','/items',
+        '/trial_pl','/trial_bs','/trial_pl_three_years','/trial_bs_three_years',
+        '/trial_pl_sections','/reports/trial_pl','/reports/trial_bs'];
+      for (const ep of eps) {
+        try { const d=await mfFetch(token,ep); results[ep]={ok:true,keys:Object.keys(d||{})}; }
+        catch(e){ results[ep]={ok:false,error:e.message.slice(0,120)}; }
       }
       return res.status(200).json({ok:true,results});
     }
@@ -130,43 +133,45 @@ export default async function handler(req, res) {
       if (to_date) p.end_date=to_date;
       return res.status(200).json({ok:true,data:await mfFetch(token,'/journals',p)});
     }
+    const PL_ENDPOINTS = ['/trial_pl_three_years','/trial_pl','/trial_pl_sections','/reports/trial_pl_three_years','/reports/trial_pl'];
+    const BS_ENDPOINTS = ['/trial_bs_three_years','/trial_bs','/reports/trial_bs_three_years','/reports/trial_bs'];
     if (action==='trial_pl') {
       const p={}; if(office_id)p.office_id=office_id; if(fiscal_year)p.fiscal_year=fiscal_year;
-      let data, lastErr;
-      for (const ep of ['/reports/trial_pl_three_years','/reports/trial_pl']) {
-        try { data=await mfFetch(token,ep,p); break; } catch(e){ lastErr=e; }
+      let data, lastErr, usedEp;
+      for (const ep of PL_ENDPOINTS) {
+        try { data=await mfFetch(token,ep,p); usedEp=ep; break; } catch(e){ lastErr=e; }
       }
       if (!data) throw lastErr;
-      return res.status(200).json({ok:true,data});
+      return res.status(200).json({ok:true,endpoint:usedEp,data});
     }
     if (action==='trial_bs') {
       const p={}; if(office_id)p.office_id=office_id; if(fiscal_year)p.fiscal_year=fiscal_year;
-      let data, lastErr;
-      for (const ep of ['/reports/trial_bs_three_years','/reports/trial_bs']) {
-        try { data=await mfFetch(token,ep,p); break; } catch(e){ lastErr=e; }
+      let data, lastErr, usedEp;
+      for (const ep of BS_ENDPOINTS) {
+        try { data=await mfFetch(token,ep,p); usedEp=ep; break; } catch(e){ lastErr=e; }
       }
       if (!data) throw lastErr;
-      return res.status(200).json({ok:true,data});
+      return res.status(200).json({ok:true,endpoint:usedEp,data});
     }
     if (action==='pl_for_dashboard') {
       if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});
       const p={fiscal_year}; if(office_id)p.office_id=office_id;
-      let raw, lastErr;
-      for (const ep of ['/reports/trial_pl_three_years','/reports/trial_pl']) {
-        try { raw=await mfFetch(token,ep,p); break; } catch(e){ lastErr=e; }
+      let raw, lastErr, usedEp;
+      for (const ep of PL_ENDPOINTS) {
+        try { raw=await mfFetch(token,ep,p); usedEp=ep; break; } catch(e){ lastErr=e; }
       }
       if (!raw) return res.status(404).json({error:'PLデータ取得失敗: '+(lastErr?.message||'')});
-      return res.status(200).json({ok:true, fiscal_year, converted:convertPl(raw,fiscal_year), raw});
+      return res.status(200).json({ok:true, fiscal_year, endpoint:usedEp, converted:convertPl(raw,fiscal_year), raw});
     }
     if (action==='bs_for_dashboard') {
       if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});
       const p={fiscal_year}; if(office_id)p.office_id=office_id;
-      let raw, lastErr;
-      for (const ep of ['/reports/trial_bs_three_years','/reports/trial_bs']) {
-        try { raw=await mfFetch(token,ep,p); break; } catch(e){ lastErr=e; }
+      let raw, lastErr, usedEp;
+      for (const ep of BS_ENDPOINTS) {
+        try { raw=await mfFetch(token,ep,p); usedEp=ep; break; } catch(e){ lastErr=e; }
       }
       if (!raw) return res.status(404).json({error:'BSデータ取得失敗: '+(lastErr?.message||'')});
-      return res.status(200).json({ok:true, fiscal_year, converted:convertBs(raw), raw});
+      return res.status(200).json({ok:true, fiscal_year, endpoint:usedEp, converted:convertBs(raw), raw});
     }
     if (action==='cf_for_dashboard') {
       if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});
