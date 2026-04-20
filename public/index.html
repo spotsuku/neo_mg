@@ -7695,10 +7695,11 @@ function mfInit() {
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
     <div>
       <div style="font-size:13px;font-weight:700" id="mf-preview-title">📋 取得データのプレビュー</div>
-      <div style="font-size:10px;color:var(--text3)" id="mf-preview-subtitle">内容を確認し、反映する月にチェックを入れてから「③ 反映する」を押してください</div>
+      <div style="font-size:10px;color:var(--text3)" id="mf-preview-subtitle">内容を確認し、反映する月にチェックを入れてから「④ 反映する」を押してください</div>
     </div>
-    <div style="display:flex;gap:6px">
-      <button class="btn btn-g" style="font-weight:700;font-size:12px;padding:8px 18px" onclick="mfCommit()">✓ ③ 反映する</button>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-p" style="font-weight:700;font-size:12px;padding:8px 14px" onclick="mfRefetchWithOverrides()" id="mf-refetch-btn">🔄 ③ 仕分け変更を反映して再計算</button>
+      <button class="btn btn-g" style="font-weight:700;font-size:12px;padding:8px 18px" onclick="mfCommit()">✓ ④ 本番に反映する</button>
       <button class="btn" style="font-size:11px" onclick="mfCancelPreview()">✕ キャンセル</button>
     </div>
   </div>
@@ -8504,6 +8505,24 @@ window.mfAcceptAllAi = function() {
 window.mfCancelPreview = function() {
   window._mfPending = null;
   document.getElementById('mf-preview-card').style.display = 'none';
+};
+
+// ── 仕分け変更を反映して再計算（再取得） ──
+window.mfRefetchWithOverrides = function() {
+  const p = window._mfPending;
+  if (!p) return;
+  // 現在未保存のdropdown変更もlocalStorageに保存
+  document.querySelectorAll('.mf-cf-cat-select').forEach(sel => {
+    const ident = sel.dataset.acct;
+    if (!ident) return;
+    let overrides = {};
+    try { overrides = JSON.parse(localStorage.getItem('mfCfCategoryOverrides') || '{}'); } catch(e) {}
+    overrides[ident] = sel.value;
+    localStorage.setItem('mfCfCategoryOverrides', JSON.stringify(overrides));
+  });
+  // 再取得
+  document.getElementById('mf-preview-card').style.display = 'none';
+  mfFetch(p.type);
 };
 
 // ── プレビュー → DB反映 ──
