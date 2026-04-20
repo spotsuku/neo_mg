@@ -98,6 +98,78 @@ function convertCf(journals, fiscalYear) {
   });
   return {cashIn, cashOut, net: cashIn.map((v,i)=>v-cashOut[i])};
 }
+// 仕訳から PL を集計（試算表APIが404の場合のフォールバック）
+function computePlFromJournals(journals, fiscalYear) {
+  const monthIdx = buildMonthIndex(fiscalYear);
+  const n = monthIdx.length;
+  const PL_KEYS = ['rev','labor','outsource','adv','gaichu','other','cogs'];
+  const result = {};
+  PL_KEYS.forEach(k => { result[k] = {actual: new Array(n).fill(0)}; });
+  const classify = (name) => {
+    if (!name) return null;
+    for (const key of Object.keys(ACCT_MAP)) {
+      if (name.includes(key)) return ACCT_MAP[key];
+    }
+    return null;
+  };
+  journals.forEach(j => {
+    const d = new Date(j.transaction_date);
+    const idx = monthIdx.findIndex(m => m.year===d.getFullYear() && m.month===d.getMonth()+1);
+    if (idx<0) return;
+    (j.branches||[]).forEach(b => {
+      const debit = b.debitor?.account_name||'';
+      const credit = b.creditor?.account_name||'';
+      const val = Math.round((b.debitor?.value||0)/1000);
+      if (!val) return;
+      // 収益は貸方に計上（creditor）
+      const revKey = classify(credit);
+      if (revKey==='rev') result.rev.actual[idx] += val;
+      // 費用は借方に計上（debitor）
+      const expKey = classify(debit);
+      if (expKey && expKey!=='rev') result[expKey].actual[idx] += val;
+    });
+  });
+  return result;
+}
+// 仕訳から BS を集計（opening balance は不明なので累積差分ベースの概算）
+function computeBsFromJournals(journals) {
+  const result = {cash:0, receivable:0, payable:0, assets:{}, liabilities:{}, equity:{}};
+  const add = (bucket, name, v) => { bucket[name] = (bucket[name]||0) + v; };
+  journals.forEach(j => {
+    (j.branches||[]).forEach(b => {
+      const debit = b.debitor?.account_name||'';
+      const credit = b.creditor?.account_name||'';
+      const val = Math.round((b.debitor?.value||0)/1000);
+      if (!val) return;
+      if (/現金|普通預金|当座預金/.test(debit)) result.cash += val;
+      if (/現金|普通預金|当座預金/.test(credit)) result.cash -= val;
+      if (/売掛金|未収/.test(debit)) result.receivable += val;
+      if (/売掛金|未収/.test(credit)) result.receivable -= val;
+      if (/買掛金|未払/.test(credit)) result.payable += val;
+      if (/買掛金|未払/.test(debit)) result.payable -= val;
+      if (debit) add(result.assets, debit, val);
+      if (credit) add(result.liabilities, credit, val);
+    });
+  });
+  result.totalAssets = Object.values(result.assets).reduce((s,v)=>s+v,0);
+  result.totalLiabilities = Object.values(result.liabilities).reduce((s,v)=>s+v,0);
+  result.totalEquity = 0;
+  result._approximated = true;
+  return result;
+}
+async function fetchAllJournals(token, fy, office_id) {
+  const period = PERIODS[fy] || {start:fy+'-07-01', end:(parseInt(fy)+1)+'-03-31'};
+  const p = {start_date:period.start, end_date:period.end};
+  if (office_id) p.office_id = office_id;
+  let all = [];
+  for (let page=1; page<=20; page++) {
+    p.page = page;
+    const data = await mfFetch(token, '/journals', p);
+    all = all.concat(data.journals||[]);
+    if (page >= (data.metadata?.total_pages||1)) break;
+  }
+  return all;
+}
 const PERIODS = {
   2025:{start:'2025-07-01',end:'2026-03-31'},
   2024:{start:'2024-07-01',end:'2025-06-30'},
@@ -160,8 +232,16 @@ export default async function handler(req, res) {
       for (const ep of PL_ENDPOINTS) {
         try { raw=await mfFetch(token,ep,p); usedEp=ep; break; } catch(e){ lastErr=e; }
       }
-      if (!raw) return res.status(404).json({error:'PLデータ取得失敗: '+(lastErr?.message||'')});
-      return res.status(200).json({ok:true, fiscal_year, endpoint:usedEp, converted:convertPl(raw,fiscal_year), raw});
+      if (raw) {
+        return res.status(200).json({ok:true, fiscal_year, endpoint:usedEp, converted:convertPl(raw,fiscal_year), raw});
+      }
+      // フォールバック: 仕訳から集計
+      try {
+        const journals = await fetchAllJournals(token, fiscal_year, office_id);
+        return res.status(200).json({ok:true, fiscal_year, source:'journals', total_journals:journals.length, converted:computePlFromJournals(journals,fiscal_year)});
+      } catch(e) {
+        return res.status(404).json({error:'PLデータ取得失敗: '+(lastErr?.message||e.message)});
+      }
     }
     if (action==='bs_for_dashboard') {
       if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});
@@ -170,22 +250,20 @@ export default async function handler(req, res) {
       for (const ep of BS_ENDPOINTS) {
         try { raw=await mfFetch(token,ep,p); usedEp=ep; break; } catch(e){ lastErr=e; }
       }
-      if (!raw) return res.status(404).json({error:'BSデータ取得失敗: '+(lastErr?.message||'')});
-      return res.status(200).json({ok:true, fiscal_year, endpoint:usedEp, converted:convertBs(raw), raw});
+      if (raw) {
+        return res.status(200).json({ok:true, fiscal_year, endpoint:usedEp, converted:convertBs(raw), raw});
+      }
+      // フォールバック: 仕訳から集計（opening balance 不明のため概算）
+      try {
+        const journals = await fetchAllJournals(token, fiscal_year, office_id);
+        return res.status(200).json({ok:true, fiscal_year, source:'journals', total_journals:journals.length, converted:computeBsFromJournals(journals)});
+      } catch(e) {
+        return res.status(404).json({error:'BSデータ取得失敗: '+(lastErr?.message||e.message)});
+      }
     }
     if (action==='cf_for_dashboard') {
       if (!fiscal_year) return res.status(400).json({error:'fiscal_year が必要です'});
-      const fy=parseInt(fiscal_year);
-      const period=PERIODS[fy]||{start:fy+'-07-01',end:(fy+1)+'-03-31'};
-      const p={start_date:period.start,end_date:period.end};
-      if(office_id)p.office_id=office_id;
-      let allJournals=[];
-      for(let page=1;page<=20;page++){
-        p.page=page;
-        const data=await mfFetch(token,'/journals',p);
-        allJournals=allJournals.concat(data.journals||[]);
-        if(page>=(data.metadata?.total_pages||1))break;
-      }
+      const allJournals = await fetchAllJournals(token, fiscal_year, office_id);
       return res.status(200).json({ok:true,fiscal_year,total_journals:allJournals.length,converted:convertCf(allJournals,fiscal_year)});
     }
     return res.status(400).json({error:'Unknown action: '+action});
