@@ -490,6 +490,15 @@ export default async function handler(req, res) {
       } catch (e) {
         results['/journals'] = { ok: false, error: e.message.slice(0, 200) };
       }
+      // 通帳データ系エンドポイントを試行
+      for (const ep of ['/walletables', '/wallet_txns', '/deals', '/transactions', '/bank_txns', '/account_transactions', '/bank_account_transactions', '/wallet_transactions']) {
+        try {
+          const d = await mfFetch(token, ep, { per_page: 1 });
+          results[ep] = { ok: true, keys: Object.keys(d).slice(0, 10) };
+        } catch (e) {
+          results[ep] = { ok: false, error: e.message.slice(0, 150) };
+        }
+      }
       // 会計期間情報
       try {
         const off = await mfFetch(token, '/offices');
@@ -544,6 +553,80 @@ export default async function handler(req, res) {
     // ── /offices 生レスポンス ──
     if (action === 'raw_offices') {
       return res.status(200).json({ ok: true, data: await mfFetch(token, '/offices') });
+    }
+
+    // ── 通帳データ取得（税理士仕訳前の生データ） ──
+    // MF APIの複数候補を試し、動作するエンドポイントから取得
+    if (action === 'bank_transactions' || action === 'raw_bank') {
+      const pi = await resolveFiscalPeriods(token, fiscal_year || '2025');
+      const filterStart = pi.filterStart;
+      const filterEnd = pi.filterEnd;
+
+      // 候補エンドポイント（優先順）
+      const endpoints = [
+        { path: '/wallet_txns', txKey: 'wallet_txns' },
+        { path: '/walletables', txKey: 'walletables' },
+        { path: '/deals', txKey: 'deals' },
+        { path: '/transactions', txKey: 'transactions' },
+        { path: '/bank_txns', txKey: 'bank_txns' },
+        { path: '/account_transactions', txKey: 'account_transactions' },
+      ];
+
+      let found = null;
+      const attempts = [];
+
+      for (const { path, txKey } of endpoints) {
+        // 各MF期間ごとに取得
+        const allTxns = [];
+        let epOk = false;
+        try {
+          for (const period of pi.periods) {
+            for (let page = 1; page <= 50; page++) {
+              const params = { start_date: period.start, end_date: period.end, page, per_page: 500 };
+              const d = await mfFetch(token, path, params);
+              const list = d[txKey] || d.data || d.transactions || (Array.isArray(d) ? d : []);
+              if (!Array.isArray(list)) break;
+              allTxns.push(...list);
+              const totalPages = d.metadata?.total_pages || d.total_pages || null;
+              if (list.length === 0) break;
+              if (totalPages && page >= totalPages) break;
+              if (list.length < 500) break;
+            }
+          }
+          epOk = allTxns.length > 0;
+          attempts.push({ endpoint: path, ok: true, count: allTxns.length });
+          if (epOk) { found = { path, txns: allTxns }; break; }
+        } catch (e) {
+          attempts.push({ endpoint: path, ok: false, error: e.message.slice(0, 120) });
+        }
+      }
+
+      if (!found) {
+        return res.status(404).json({
+          error: '通帳データAPIが見つかりませんでした。アクセス権限を確認してください。',
+          attempts,
+        });
+      }
+
+      // フィルタリング（御社の4月〜3月）
+      let filtered = found.txns;
+      if (filterStart && filterEnd) {
+        filtered = filtered.filter(t => {
+          const d = t.transaction_date || t.date || t.updated_date || '';
+          return d >= filterStart && d <= filterEnd;
+        });
+      }
+
+      return res.status(200).json({
+        ok: true,
+        fiscal_year,
+        period: pi,
+        endpoint_used: found.path,
+        total_fetched: found.txns.length,
+        after_filter: filtered.length,
+        transactions: filtered,
+        attempts,
+      });
     }
 
     // ── /journals 生レスポンス（先頭3件のみ、フィールド構造確認用） ──
