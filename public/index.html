@@ -594,12 +594,11 @@ td.actual.editable-cell {
 
   <!-- ══ タブ切り替え ══ -->
   <div class="pa-toggle" style="margin-bottom:1rem">
-    <button class="pa-btn active" onclick="setImportTab('bank',this)">🏦 通帳明細AI仕分け</button>
-    <button class="pa-btn" onclick="setImportTab('csv',this)">📄 マネーフォワードCSV</button>
+    <button class="pa-btn active" onclick="setImportTab('csv',this)">📄 マネーフォワードCSV</button>
   </div>
 
-  <!-- ══ 通帳明細AI仕分け ══ -->
-  <div id="import-bank">
+  <!-- ══ 通帳明細AI仕分け（非表示：機能停止） ══ -->
+  <div id="import-bank" style="display:none">
     <div class="g2">
       <div class="card" style="grid-column:1/-1">
         <div class="ct">通帳明細をペースト → AIが自動仕分け</div>
@@ -645,7 +644,7 @@ td.actual.editable-cell {
   </div>
 
   <!-- ══ マネーフォワードCSV ══ -->
-  <div id="import-csv" style="display:none">
+  <div id="import-csv">
     <div class="g2">
       <div class="card">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:.75rem">
@@ -2874,10 +2873,11 @@ function renderCFView(d) {
 //  IMPORT TAB TOGGLE
 // ───────────────────────────────────────────
 function setImportTab(tab, el) {
+  // 通帳明細AI仕分けは廃止。強制的にCSVのみを表示
   document.querySelectorAll('#sec-import .pa-btn').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
-  document.getElementById('import-bank').style.display = tab === 'bank' ? '' : 'none';
-  document.getElementById('import-csv').style.display  = tab === 'csv'  ? '' : 'none';
+  document.getElementById('import-bank').style.display = 'none';
+  document.getElementById('import-csv').style.display  = '';
 }
 
 // ───────────────────────────────────────────
@@ -8615,18 +8615,189 @@ window.mfCommit = async function() {
     return;
   }
 
-  const typeLbl = { trial_pl: 'PL試算表', trial_bs: 'BS試算表', journals: '仕訳(CF)' }[p.type];
-  const monthLabels = commitMonths.map(m => MF_MONTH_NAMES[m.idx]).join('・');
-  if (!confirm(`${p.fy}年度 ${typeLbl} を以下の月に反映します。\n\n対象月: ${monthLabels}\n\n実績データとして反映しますか？`)) return;
-
   const db = window.DB[String(p.fy)];
   if (!db) { alert('DB が見つかりません'); return; }
 
+  // 本番反映の最終確認モーダルを表示
+  mfShowCommitConfirmModal(p, commitMonths, db);
+};
+
+// ── PL / BS / CF の反映対象キー定義（ラベル付き）──
+const MF_COMMIT_KEYS = {
+  trial_pl: [
+    { k:'rev',       l:'売上'        },
+    { k:'cogs',      l:'売上原価'    },
+    { k:'labor',     l:'人件費'      },
+    { k:'outsource', l:'業務委託'    },
+    { k:'adv',       l:'広告販促'    },
+    { k:'gaichu',    l:'外注費'      },
+    { k:'other',     l:'その他販管費'},
+  ],
+  trial_bs: [
+    { k:'cash',       l:'現預金'              },
+    { k:'receivable', l:'売掛金'              },
+    { k:'other_ca',   l:'その他流動資産'      },
+    { k:'fixed',      l:'固定資産'            },
+    { k:'payable',    l:'買掛金・未払'        },
+    { k:'borrowing',  l:'借入金'              },
+    { k:'other_cl',   l:'その他流動負債'      },
+    { k:'capital',    l:'資本金'              },
+    { k:'retained',   l:'利益剰余金'          },
+  ],
+  journals: [
+    { k:'cfIn',          l:'売上入金（合計）' },
+    { k:'cfInFee',       l:'会費入金'         },
+    { k:'cfInTraining',  l:'研修入金'         },
+    { k:'cfInOther',     l:'その他入金'       },
+    { k:'loanIn',        l:'新規借入'         },
+    { k:'capitalIn',     l:'資本金入金'       },
+    { k:'salaryPay',     l:'人件費・税金'     },
+    { k:'bizComPay',     l:'業務委託'         },
+    { k:'expertPay',     l:'専門家外注'       },
+    { k:'rentPay',       l:'家賃'             },
+    { k:'telPay',        l:'通信費'           },
+    { k:'entertainPay',  l:'交際・会議'       },
+    { k:'taxPay',        l:'租税公課'         },
+    { k:'toolsPay',      l:'ツール費用'       },
+    { k:'suppliesPay',   l:'消耗品'           },
+    { k:'adSportsPay',   l:'広告・協賛'       },
+    { k:'eventCostPay',  l:'イベント運営'     },
+    { k:'recruitPay',    l:'採用・研修'       },
+    { k:'annualFeePay',  l:'年会費'           },
+    { k:'investPay',     l:'事業投資'         },
+    { k:'loanOut',       l:'借入返済'         },
+    { k:'salesOtherPay', l:'その他出金'       },
+    { k:'expensePay',    l:'経費精算'         },
+  ],
+};
+
+// ── 新値を取り出すヘルパ（PL/BS/CF 共通化） ──
+function mfGetNewValue(p, key, idx) {
+  if (p.type === 'trial_pl') {
+    const arr = p.pl?.[key]?.actual;
+    return Number(arr?.[idx]) || 0;
+  }
+  if (p.type === 'trial_bs') {
+    return Number(p.bs?.monthly?.[key]?.[idx]) || 0;
+  }
+  if (p.type === 'journals') {
+    return Number(p.cf?.monthly?.[key]?.[idx]) || 0;
+  }
+  return 0;
+}
+
+// ── 現在のDB値を取り出すヘルパ ──
+function mfGetCurrentDbValue(db, type, key, idx) {
+  if (type === 'trial_pl')  return Number(db?.pl?.actual?.[key]?.[idx]) || 0;
+  if (type === 'journals')  return Number(db?.cf?.actual?.[key]?.[idx]) || 0;
+  if (type === 'trial_bs')  return Number(db?.bs?.actual?.[idx]?.[key]) || 0;
+  return 0;
+}
+
+// ── 本番反映前 最終確認モーダル（現在値 → 新値 の差分プレビュー） ──
+window.mfShowCommitConfirmModal = function(p, commitMonths, db) {
+  const typeLbl = { trial_pl: 'PL試算表', trial_bs: 'BS試算表', journals: '仕訳(CF)' }[p.type];
+  const keys = MF_COMMIT_KEYS[p.type] || [];
+  const monthLabels = commitMonths.map(m => MF_MONTH_NAMES[m.idx]);
+
+  // 差分計算: 各 key × month で currentValue, newValue, diff を算出
+  let totalChanges = 0;
+  const rowsHtml = keys.map(({ k, l }) => {
+    let hasChange = false;
+    const cells = commitMonths.map((m) => {
+      const cur = mfGetCurrentDbValue(db, p.type, k, m.idx);
+      const nw  = mfGetNewValue(p, k, m.idx);
+      const diff = nw - cur;
+      if (diff !== 0) { hasChange = true; totalChanges++; }
+      let cls = 'color:var(--text3)';
+      let sign = '';
+      if (diff > 0) { cls = 'color:var(--tc-green);font-weight:700'; sign = '+'; }
+      else if (diff < 0) { cls = 'color:var(--tc-red);font-weight:700'; sign = ''; }
+      const curTxt = cur ? cur.toLocaleString() : '—';
+      const nwTxt = nw ? nw.toLocaleString() : '—';
+      const diffTxt = diff === 0 ? '—' : `${sign}${diff.toLocaleString()}`;
+      return `<td style="padding:4px 6px;border-left:1px solid var(--border)">
+        <div style="font-size:9px;color:var(--text3)">現: ${curTxt}</div>
+        <div style="font-size:10px;font-weight:600">→ ${nwTxt}</div>
+        <div style="font-size:9px;${cls}">${diffTxt}</div>
+      </td>`;
+    }).join('');
+    const rowStyle = hasChange ? '' : 'opacity:.45';
+    return `<tr style="${rowStyle}">
+      <td class="l" style="font-size:11px;padding:4px 8px;position:sticky;left:0;background:var(--bg2);z-index:1">${l}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  // 既存モーダル削除
+  const existing = document.getElementById('mf-commit-confirm-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'mf-commit-confirm-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:1300;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:2rem';
+  modal.innerHTML = `
+    <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rl);padding:1.25rem 1.5rem;width:min(1100px,95vw);max-height:88vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.5)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.75rem">
+        <div>
+          <div style="font-size:15px;font-weight:700">🔒 本番反映 最終確認 — ${p.fy}年度 ${typeLbl}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">反映すると下記の月×科目の実績データが上書きされます。現在値と新値を確認してください。</div>
+        </div>
+        <button class="btn" style="font-size:11px" onclick="document.getElementById('mf-commit-confirm-modal').remove()">✕</button>
+      </div>
+
+      <div style="background:var(--bg3);border-radius:var(--r);padding:8px 12px;font-size:11px;margin-bottom:.75rem">
+        <span style="color:var(--text3)">対象年度：</span><strong>${p.fy}年度</strong>
+        　<span style="color:var(--text3)">対象月：</span><strong>${monthLabels.join('・')}</strong>（${commitMonths.length}ヶ月）
+        　<span style="color:var(--text3)">変更セル数：</span><strong style="color:${totalChanges>0?'var(--tc-amber)':'var(--tc-green)'}">${totalChanges}</strong>
+      </div>
+
+      <div class="scroll-x" style="border:1px solid var(--border);border-radius:var(--r);margin-bottom:.75rem">
+        <table class="dt" style="font-size:10px;min-width:${150 + commitMonths.length * 110}px">
+          <thead><tr>
+            <th class="l" style="min-width:140px;padding:6px 8px;position:sticky;left:0;background:var(--bg3);z-index:2">科目</th>
+            ${monthLabels.map(m => `<th style="min-width:100px;padding:6px 8px;border-left:1px solid var(--border)">${m}</th>`).join('')}
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+
+      <div style="background:rgba(239,159,39,0.12);border:1px solid rgba(239,159,39,0.3);border-radius:var(--r);padding:8px 12px;font-size:10px;color:var(--tc-amber);margin-bottom:1rem">
+        ⚠ 反映後は月次PL/CFの実績が上書きされます。反映前に自動でバックアップが作成されます。
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" style="font-size:12px" onclick="document.getElementById('mf-commit-confirm-modal').remove()">✕ キャンセル</button>
+        <button class="btn btn-g" id="mf-commit-confirm-btn" style="font-weight:700;font-size:12px;padding:8px 20px" onclick="mfCommitConfirmed()">✓ 反映を確定</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  // 確定時に使うため一時保存
+  window._mfPendingCommit = { p, commitMonths };
+};
+
+// ── 最終確認後の実書込 ──
+window.mfCommitConfirmed = async function() {
+  const pend = window._mfPendingCommit;
+  if (!pend) return;
+  const { p, commitMonths } = pend;
+  const db = window.DB[String(p.fy)];
+  if (!db) { alert('DB が見つかりません'); return; }
+  const btn = document.getElementById('mf-commit-confirm-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 反映中...'; }
+
+  const typeLbl = { trial_pl: 'PL試算表', trial_bs: 'BS試算表', journals: '仕訳(CF)' }[p.type];
+  const monthLabels = commitMonths.map(m => MF_MONTH_NAMES[m.idx]).join('・');
   let applied = 0;
 
   try {
+    // 反映前に自動バックアップ
+    if (typeof saveVersion === 'function') {
+      try { saveVersion(`[自動バックアップ] マネフォ反映前 — ${p.fy}年度 ${typeLbl} ${monthLabels}`, String(p.fy)); }
+      catch(e) { console.warn('[mfCommit] saveVersion failed:', e); }
+    }
+
     if (p.type === 'trial_pl') {
-      // DBには rev_other は無いので、オプションで rev に合算するか破棄
       const keys = ['rev','labor','outsource','adv','gaichu','other','cogs'];
       keys.forEach(k => {
         if (!db.pl.actual[k]) db.pl.actual[k] = new Array(db.months.length).fill(0);
@@ -8652,7 +8823,6 @@ window.mfCommit = async function() {
         });
         if (hasVal) { db.bs.actual[m.idx] = row; applied++; }
       });
-      // BS_DATA 年次サマリー更新（最新月から）
       if (typeof BS_DATA !== 'undefined' && p.bs?.summary) {
         const s = p.bs.summary;
         if (s.cash !== undefined) BS_DATA.assets.cash.actual = s.cash;
@@ -8693,11 +8863,13 @@ window.mfCommit = async function() {
     log.style.color = 'var(--tc-green)';
     log.textContent = `✅ ${p.fy}年度 ${typeLbl} を ${monthLabels} に反映しました（${applied}項更新）`;
 
-    // プレビューを閉じる
+    // モーダル・プレビュー閉じる
+    const modal = document.getElementById('mf-commit-confirm-modal');
+    if (modal) modal.remove();
     window._mfPending = null;
+    window._mfPendingCommit = null;
     document.getElementById('mf-preview-card').style.display = 'none';
 
-    // トースト
     const toast = document.createElement('div');
     toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--bg-green);color:var(--tc-green);border:1px solid var(--tc-green);border-radius:var(--rl);padding:12px 20px;font-size:13px;font-weight:700;z-index:9999';
     toast.textContent = `✓ ${typeLbl} を ${commitMonths.length}ヶ月分反映しました`;
@@ -8705,8 +8877,9 @@ window.mfCommit = async function() {
     setTimeout(() => { toast.style.opacity='0'; toast.style.transition='opacity .4s'; setTimeout(()=>toast.remove(),500); }, 3500);
 
   } catch (err) {
-    console.error('[mfCommit]', err);
+    console.error('[mfCommitConfirmed]', err);
     alert('反映中にエラー: ' + err.message);
+    if (btn) { btn.disabled = false; btn.textContent = '✓ 反映を確定'; }
   }
 };
 
