@@ -746,14 +746,14 @@ td.actual.editable-cell {
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
         <div>
-          <div class="ct" style="margin-bottom:2px">取込済みデータ一覧</div>
-          <div style="font-size:10px;color:var(--text3)">DBに保存されている実績データ。確認後「本番に反映」で月次PL/CFに即反映されます</div>
+          <div class="ct" style="margin-bottom:2px"><span id="il-year-badge">取込済みデータ一覧</span></div>
+          <div style="font-size:10px;color:var(--text3)">DBに保存されている実績データ（千円単位）。<strong style="color:var(--tc-amber)">確認後「本番に反映」</strong>で月次PL/CFに即反映されます。<br>反映時は<strong>自動でバックアップ</strong>が作成されます（バージョン履歴から元に戻せます）。</div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-p" style="font-weight:700;font-size:11px;padding:7px 14px;border:1px solid var(--tc-amber)" onclick="openVersionPanel()" title="本番反映前に手動でバックアップを作成">🕐 今すぐバックアップ</button>
           <button class="btn btn-g" style="font-weight:700;font-size:12px;padding:7px 16px" onclick="applyImportedToProd()">
             ✓ 本番に反映
           </button>
-          <button class="btn" style="font-size:10px" onclick="openVersionPanel()">🕐 バックアップ</button>
         </div>
       </div>
       <div id="imported-list" style="font-size:11px;color:var(--text3)">取込済みデータはありません</div>
@@ -4844,10 +4844,10 @@ function showApplyConfirmModal(filledMonths, monthLabels, d) {
     <div style="background:var(--bg2);border-radius:var(--rl);padding:1.5rem;width:680px;max-width:95vw;max-height:85vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.4)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
         <div>
-          <div style="font-size:14px;font-weight:700">✓ 本番に反映</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">以下のデータを月次PL/CFに反映します</div>
+          <div style="font-size:14px;font-weight:700">✓ 本番に反映 — ${currentYear}年度</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">以下のデータを月次PL/CFに反映します（単位: 千円）</div>
         </div>
-        <button class="btn" onclick="document.getElementById('apply-prod-modal').remove()" style="font-size:11px">─</button>
+        <button class="btn" onclick="document.getElementById('apply-prod-modal').remove()" style="font-size:11px">✕</button>
       </div>
 
       <!-- 対象月 -->
@@ -4866,18 +4866,21 @@ function showApplyConfirmModal(filledMonths, monthLabels, d) {
         </table>
       </div>
 
-      <!-- 警告 -->
+      <!-- 警告 + 自動バックアップ通知 -->
+      <div style="background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.35);border-radius:var(--r);padding:8px 12px;font-size:10px;color:var(--tc-green);margin-bottom:.5rem">
+        ✅ <strong>反映時に自動でバックアップが作成されます。</strong>万が一元に戻したい場合は「バージョン履歴」から復元できます。
+      </div>
       <div style="background:rgba(239,159,39,0.12);border:1px solid rgba(239,159,39,0.3);border-radius:var(--r);padding:8px 12px;font-size:10px;color:var(--tc-amber);margin-bottom:1rem">
         ⚠ 反映すると月次PL/CFの該当月の実績データが上書きされます。<br>
-        事前に「🕐 バックアップ」でバージョン保存することを推奨します。
+        より手動で管理したい場合は下の「🕐 先に手動バックアップ」を押してからご確認ください。
       </div>
 
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="btn" style="font-size:11px" onclick="openVersionPanel();document.getElementById('apply-prod-modal').remove()">🕐 先にバックアップ</button>
-        <button class="btn" style="font-size:11px" onclick="document.getElementById('apply-prod-modal').remove()">キャンセル</button>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <button class="btn" style="font-size:11px" onclick="document.getElementById('apply-prod-modal').remove()">✕ キャンセル</button>
+        <button class="btn" style="font-size:11px;border:1px solid var(--tc-amber)" onclick="openVersionPanel();document.getElementById('apply-prod-modal').remove()">🕐 先に手動バックアップ</button>
         <button class="btn btn-g" style="font-weight:700;font-size:12px;padding:7px 18px"
           onclick="commitImportedToProd()">
-          ✓ 反映する
+          ✓ 反映する（自動バックアップあり）
         </button>
       </div>
     </div>`;
@@ -4995,6 +4998,12 @@ async function loadImportedList() {
   const el = document.getElementById('imported-list');
   const d = DB[currentYear];
 
+  // タイトルに年度を明記
+  const yearBadge = document.getElementById('il-year-badge');
+  if (yearBadge) {
+    yearBadge.innerHTML = `<span style="color:var(--tc-blue);font-weight:700">${currentYear}年度</span> 取込済みデータ一覧`;
+  }
+
   // 実績・予算どちらかでも1項目でもデータがある月を対象に
   const hasData = (i) => {
     const pl = d.pl;
@@ -5008,7 +5017,10 @@ async function loadImportedList() {
 
   const activeMonths = d.months.filter((m, i) => hasData(i));
   if (activeMonths.length === 0) {
-    el.innerHTML = '<span style="color:var(--text3)">取込済みデータはありません</span>';
+    el.innerHTML = `<div style="color:var(--text3);padding:20px 0;text-align:center">
+      <div style="font-size:13px;margin-bottom:4px">${currentYear}年度 取込済みデータはありません</div>
+      <div style="font-size:10px">上の「マネフォ クラウド会計 自動連携」からデータを取得してください</div>
+    </div>`;
     return;
   }
   // 表示用: アクティブ月のグローバルインデックス
@@ -5118,8 +5130,17 @@ async function loadImportedList() {
         `<button id="il-tab-${k}" onclick="ilSetTab('${k}')" class="btn${tab===k?' btn-p':''}" style="font-size:10px;padding:3px 10px">${v}</button>`
       ).join('')}
     </div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
-      ※ 上＝予算、下＝実績、バッジ＝予実達成率
+    <div style="background:var(--bg3);border-radius:var(--r);padding:8px 12px;margin-bottom:8px;font-size:10px;line-height:1.6">
+      <strong style="color:var(--text);font-size:11px">📖 表の見方</strong>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px;color:var(--text2)">
+        <span><span style="color:var(--text3)">上段（グレー小）</span>＝ <strong>予算</strong>（千円）</span>
+        <span><span class="g">下段（緑・赤）</span>＝ <strong>実績</strong>（千円）</span>
+        <span><span class="badge bg" style="font-size:9px">NN%</span> / <span class="badge br" style="font-size:9px">NN%</span>＝ <strong>予実達成率</strong>（予算比）</span>
+        <span style="color:var(--text3)">─ ＝ データなし</span>
+      </div>
+      <div style="color:var(--text3);margin-top:3px;font-size:9px">
+        売上・入金など収益系は「実績 ≥ 予算」が緑（達成）、人件費・支出など費用系は「実績 ≤ 予算」が緑（予算内）。
+      </div>
     </div>
     <div class="scroll-x">
     <table class="dt" style="min-width:${140 + activeMonths.length * 88}px">
