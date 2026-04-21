@@ -7969,6 +7969,8 @@ window.mfFetch = async function(type) {
     const bsData = d.bs || { monthly: converted.monthly, summary: converted.summary };
     const cfData = d.cf || converted;
 
+    // 新規フェッチごとに内訳フィルタをリセット（type に応じた初期値は描画時に設定）
+    window._mfBreakdownFilter = null;
     window._mfPending = {
       type, fy, selectedMonths,
       pl: plData,
@@ -8233,11 +8235,39 @@ function mfRenderPreview() {
       { v:'capital', l:'BS純資産: 資本金' },
       { v:'retained', l:'BS純資産: 利益剰余金' },
     ];
+    const PL_SET = new Set(PL_CATS.map(c => c.v));
+    const BS_SET = new Set(BS_CATS.map(c => c.v));
     let plOverrides = {}, bsOverrides = {};
     try { plOverrides = JSON.parse(localStorage.getItem('mfPlCategoryOverrides') || '{}'); } catch(e) {}
     try { bsOverrides = JSON.parse(localStorage.getItem('mfBsCategoryOverrides') || '{}'); } catch(e) {}
     const esc2 = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    bdTblEl.innerHTML = `<table class="dt" style="font-size:10px;min-width:720px">
+    // breakdown に現在の分類先カテゴリを付与（overrides 優先）
+    const enriched = breakdown.map(r => {
+      const overridden = plOverrides[r.name] !== undefined || bsOverrides[r.name] !== undefined;
+      const currentCat = overridden ? (plOverrides[r.name] || bsOverrides[r.name]) : (r.category || '');
+      const bucket = PL_SET.has(currentCat) ? 'pl' : BS_SET.has(currentCat) ? 'bs' : 'none';
+      return { ...r, currentCat, bucket, overridden };
+    });
+    // フィルタのデフォルト: BS取得時は BS科目のみ、PL取得時は PL科目のみ、CF取得時は全て
+    const defaultFilter = p.type === 'trial_bs' ? 'bs' : p.type === 'trial_pl' ? 'pl' : 'all';
+    window._mfBreakdownFilter = window._mfBreakdownFilter || defaultFilter;
+    const filter = window._mfBreakdownFilter;
+    const visible = enriched.filter(r => {
+      if (filter === 'all') return true;
+      if (filter === 'pl') return r.bucket === 'pl' || r.bucket === 'none';
+      if (filter === 'bs') return r.bucket === 'bs' || r.bucket === 'none';
+      return true;
+    });
+    const btnStyle = (active) => `padding:4px 10px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid var(--border2);${active?'background:var(--text);color:var(--bg);font-weight:700':'background:var(--bg2);color:var(--text3)'}`;
+    bdTblEl.innerHTML = `
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <span style="font-size:10px;color:var(--text3)">表示:</span>
+      <button type="button" style="${btnStyle(filter==='all')}" onclick="mfSetBreakdownFilter('all')">全て (${enriched.length})</button>
+      <button type="button" style="${btnStyle(filter==='pl')}" onclick="mfSetBreakdownFilter('pl')">PL科目のみ (${enriched.filter(r=>r.bucket==='pl').length})</button>
+      <button type="button" style="${btnStyle(filter==='bs')}" onclick="mfSetBreakdownFilter('bs')">BS科目のみ (${enriched.filter(r=>r.bucket==='bs').length})</button>
+      <span style="font-size:10px;color:var(--text3);margin-left:8px">未分類を含めて表示（仕訳に登場した全科目）</span>
+    </div>
+    <table class="dt" style="font-size:10px;min-width:720px">
       <thead><tr>
         <th class="l" style="min-width:150px">勘定科目名</th>
         <th style="text-align:right;min-width:90px">借方合計(千円)</th>
@@ -8246,17 +8276,15 @@ function mfRenderPreview() {
         <th class="l" style="min-width:180px">→ 分類先（変更可）</th>
         <th class="l" style="min-width:70px">状態</th>
       </tr></thead>
-      <tbody>${breakdown.map(r => {
+      <tbody>${visible.map(r => {
         const netClr = r.net > 0 ? 'color:var(--tc-red)' : r.net < 0 ? 'color:var(--tc-green)' : '';
-        const overridden = plOverrides[r.name] !== undefined || bsOverrides[r.name] !== undefined;
-        const currentCat = overridden ? (plOverrides[r.name] || bsOverrides[r.name]) : (r.category || '');
         const optsHtml = [
-          `<option value="" ${currentCat===''?'selected':''}>（未分類）</option>`,
+          `<option value="" ${r.currentCat===''?'selected':''}>（未分類）</option>`,
           '<optgroup label="PL">',
-          ...PL_CATS.map(c => `<option value="${c.v}" ${c.v===currentCat?'selected':''}>${c.l}</option>`),
+          ...PL_CATS.map(c => `<option value="${c.v}" ${c.v===r.currentCat?'selected':''}>${c.l}</option>`),
           '</optgroup>',
           '<optgroup label="BS">',
-          ...BS_CATS.map(c => `<option value="${c.v}" ${c.v===currentCat?'selected':''}>${c.l}</option>`),
+          ...BS_CATS.map(c => `<option value="${c.v}" ${c.v===r.currentCat?'selected':''}>${c.l}</option>`),
           '</optgroup>',
         ].join('');
         return `<tr>
@@ -8267,11 +8295,14 @@ function mfRenderPreview() {
           <td>
             <select class="mf-bd-cat-select" data-acct="${esc2(r.name)}" onchange="mfSavePlBsOverride(this)" style="padding:2px 4px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:3px;min-width:170px">${optsHtml}</select>
           </td>
-          <td style="font-size:10px">${overridden ? '<span class="badge bg">記憶済</span>' : '<span style="color:var(--text3)">自動</span>'}</td>
+          <td style="font-size:10px">${r.overridden ? '<span class="badge bg">記憶済</span>' : '<span style="color:var(--text3)">自動</span>'}</td>
         </tr>`;
       }).join('')}</tbody>
     </table>
-    <div style="font-size:10px;color:var(--text3);margin-top:6px">※ 分類先を変更したら上の「🔄 ③ 仕分け変更を反映して再計算」を押してください。次回以降も記憶されます。</div>`;
+    <div style="font-size:10px;color:var(--text3);margin-top:6px">
+      ※ 複式簿記では 1 本の仕訳が PL と BS の両方を動かすため、この突合表には PL・BS 両方の科目が登場します。<br>
+      分類先を変更したら上の「🔄 ③ 仕分け変更を反映して再計算」を押してください。次回以降も記憶されます。
+    </div>`;
   } else {
     bdEl.style.display = 'none';
   }
@@ -8551,6 +8582,12 @@ window.mfAcceptAllAi = function() {
 window.mfCancelPreview = function() {
   window._mfPending = null;
   document.getElementById('mf-preview-card').style.display = 'none';
+};
+
+// ── 勘定科目別内訳テーブルの表示フィルタ切替 ──
+window.mfSetBreakdownFilter = function(filter) {
+  window._mfBreakdownFilter = filter;
+  if (typeof mfRenderPreview === 'function') mfRenderPreview();
 };
 
 // ── PL/BS 勘定科目の分類先上書き保存 ──
