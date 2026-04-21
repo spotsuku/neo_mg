@@ -645,7 +645,8 @@ td.actual.editable-cell {
 
   <!-- ══ マネーフォワードCSV ══ -->
   <div id="import-csv">
-    <div class="g2">
+    <!-- CSV手動取込は廃止。マネフォ自動連携で代替するため非表示 -->
+    <div class="g2" style="display:none">
       <div class="card">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:.75rem">
           <div class="ct" style="margin:0">ファイル取込</div>
@@ -5010,92 +5011,107 @@ async function loadImportedList() {
     el.innerHTML = '<span style="color:var(--text3)">取込済みデータはありません</span>';
     return;
   }
+  // 表示用: アクティブ月のグローバルインデックス
+  const activeIdx = activeMonths.map(m => d.months.indexOf(m));
 
   const cfA = (key, i) => { const v = d.cf?.actual?.[key]?.[i]; return (v !== undefined && v !== null && v !== '') ? Number(v) : null; };
   const cfB = (key, i) => { const v = d.cf?.budget?.[key]?.[i]; return (v !== undefined && v !== null && v !== '') ? Number(v) : null; };
   const plA = (key, i) => { const v = d.pl?.actual?.[key]?.[i]; return (v !== undefined && v !== null && v !== '') ? Number(v) : null; };
   const plB = (key, i) => { const v = d.pl?.budget?.[key]?.[i]; return (v !== undefined && v !== null && v !== '') ? Number(v) : null; };
-  const fmt = (v, cls='') => v !== null ? `<span class="${cls}">${Math.round(v).toLocaleString()}</span>` : '<span style="color:var(--text3)">─</span>';
-  const fmtBA = (b, a, isOut=false) => {
-    const rate = (b && a !== null) ? Math.round(a / b * 100) : null;
+  const fmtNum = (v) => v !== null && v !== undefined ? Math.round(v).toLocaleString() : '─';
+  const cellPair = (b, a, isOut=false) => {
+    // 予算（小・上）/ 実績＋バッジ（大・下）
+    const rate = (b && a !== null && a !== undefined) ? Math.round(a / b * 100) : null;
     const good = rate !== null ? (isOut ? rate <= 100 : rate >= 100) : null;
     const badge = rate !== null ? `<span class="badge ${good?'bg':'br'}" style="font-size:9px;margin-left:3px">${rate}%</span>` : '';
-    return `${fmt(a, a !== null && !isOut ? 'g' : '')}${badge}`;
+    const aTxt = a !== null && a !== undefined ? Math.round(a).toLocaleString() : '─';
+    const bTxt = b !== null && b !== undefined ? Math.round(b).toLocaleString() : '─';
+    const aCls = (a !== null && a !== undefined && !isOut) ? 'g' : '';
+    return `<div style="font-size:10px;color:var(--text3);text-align:right">${bTxt}</div>
+            <div style="text-align:right"><span class="${aCls}">${aTxt}</span>${badge}</div>`;
+  };
+  const cellSingle = (a, cls='') => {
+    const aTxt = a !== null && a !== undefined ? Math.round(a).toLocaleString() : '─';
+    return `<div style="text-align:right"><span class="${cls}">${aTxt}</span></div>`;
+  };
+  const cellCalc = (v) => {
+    if (v === null || v === undefined) return '<div style="text-align:right;color:var(--text3)">─</div>';
+    const r = Math.round(v);
+    return `<div style="text-align:right"><span class="${r>=0?'g':'r'}">${r>=0?'+':'▲'}${Math.abs(r).toLocaleString()}</span></div>`;
   };
 
-  // タブ切り替え
-  const tabs = ['pl','cf','cf-out','cf-detail'];
-  const tabLabels = { pl:'PL（千円）', cf:'CF収入（千円）', 'cf-out':'CF出金（千円）', 'cf-detail':'CF詳細（千円）' };
+  // タブ定義
+  const tabLabels = { pl:'PL（千円）', cf:'CF収入（千円）', 'cf-out':'CF出金（千円）', 'cf-detail':'CF詳細（千円）', bs:'BS（千円）' };
   let currentTab = 'pl';
+
+  // 各タブで「行 = 科目」「列 = 月」のメトリクス定義を返す
+  const buildMetrics = (tab) => {
+    if (tab === 'pl') {
+      return [
+        { label:'売上',     kind:'pair', get:(i)=>({a:plA('rev',i),       b:plB('rev',i)}) },
+        { label:'人件費',   kind:'pair', isOut:true, get:(i)=>({a:plA('labor',i),     b:plB('labor',i)}) },
+        { label:'業務委託', kind:'pair', isOut:true, get:(i)=>({a:plA('outsource',i), b:plB('outsource',i)}) },
+        { label:'広告',     kind:'pair', isOut:true, get:(i)=>({a:plA('adv',i),       b:plB('adv',i)}) },
+        { label:'外注費',   kind:'pair', isOut:true, get:(i)=>({a:plA('gaichu',i),    b:plB('gaichu',i)}) },
+        { label:'その他',   kind:'pair', isOut:true, get:(i)=>({a:plA('other',i),     b:plB('other',i)}) },
+        { label:'営業利益', kind:'calc', get:(i)=>{
+            const ra=plA('rev',i);
+            const opexA=['labor','outsource','adv','gaichu','other'].reduce((t,k)=>t+(plA(k,i)||0),0);
+            return ra !== null ? ra - opexA : null;
+          }
+        },
+      ];
+    }
+    if (tab === 'cf') {
+      return [
+        { label:'売上入金',   kind:'pair', get:(i)=>({a:cfA('cfIn',i),         b:cfB('cfIn',i)}) },
+        { label:'会費',       kind:'single', cls:'g', get:(i)=>cfA('cfInFee',i) },
+        { label:'研修',       kind:'single', cls:'g', get:(i)=>cfA('cfInTraining',i) },
+        { label:'その他収入', kind:'single', cls:'g', get:(i)=>cfA('cfInOther',i) },
+        { label:'新規借入',   kind:'single', cls:'g', get:(i)=>cfA('loanIn',i) },
+        { label:'月末残高',   kind:'single', cls:'g', get:(i)=>cfA('cfClose',i) },
+      ];
+    }
+    if (tab === 'cf-out') {
+      return [
+        { label:'人件費・税金', kind:'pair', isOut:true, get:(i)=>({a:cfA('salaryPay',i),  b:cfB('salaryPay',i)}) },
+        { label:'業務委託',     kind:'pair', isOut:true, get:(i)=>({a:cfA('bizComPay',i),  b:cfB('bizComPay',i)}) },
+        { label:'インセン',     kind:'single', get:(i)=>cfA('incentivePay',i) },
+        { label:'家賃',         kind:'single', get:(i)=>cfA('rentPay',i) },
+        { label:'経費精算',     kind:'single', get:(i)=>cfA('expensePay',i) },
+        { label:'広告費',       kind:'single', get:(i)=>cfA('adSportsPay',i) },
+        { label:'イベント外注', kind:'single', get:(i)=>cfA('eventCostPay',i) },
+        { label:'その他支出',   kind:'single', get:(i)=>cfA('salesOtherPay',i) },
+      ];
+    }
+    if (tab === 'cf-detail') {
+      return [
+        { label:'通信費',     kind:'single', get:(i)=>cfA('telPay',i) },
+        { label:'交際費',     kind:'single', get:(i)=>cfA('entertainPay',i) },
+        { label:'租税公課',   kind:'single', get:(i)=>cfA('taxPay',i) },
+        { label:'ツール',     kind:'single', get:(i)=>cfA('toolsPay',i) },
+        { label:'消耗品',     kind:'single', get:(i)=>cfA('suppliesPay',i) },
+        { label:'採用費',     kind:'single', get:(i)=>cfA('recruitPay',i) },
+        { label:'年会費',     kind:'single', get:(i)=>cfA('annualFeePay',i) },
+        { label:'借入返済',   kind:'single', get:(i)=>cfA('loanOut',i) },
+      ];
+    }
+    // BS
+    return [
+      { label:'現預金',         kind:'pair', get:(i)=>({a:bsA('cash',i),       b:bsB('cash',i)}) },
+      { label:'売掛金',         kind:'pair', get:(i)=>({a:bsA('receivable',i), b:bsB('receivable',i)}) },
+      { label:'その他流動資産', kind:'pair', get:(i)=>({a:bsA('other_ca',i),   b:bsB('other_ca',i)}) },
+      { label:'固定資産',       kind:'pair', get:(i)=>({a:bsA('fixed',i),      b:bsB('fixed',i)}) },
+      { label:'買掛・未払',     kind:'pair', isOut:true, get:(i)=>({a:bsA('payable',i),    b:bsB('payable',i)}) },
+      { label:'借入金',         kind:'pair', isOut:true, get:(i)=>({a:bsA('borrowing',i),  b:bsB('borrowing',i)}) },
+      { label:'資本金',         kind:'pair', get:(i)=>({a:bsA('capital',i),    b:bsB('capital',i)}) },
+      { label:'利益剰余金',     kind:'pair', get:(i)=>({a:bsA('retained',i),   b:bsB('retained',i)}) },
+    ];
+  };
 
   const renderTab = (tab) => {
     currentTab = tab;
-    let cols, getRow;
-
-    if (tab === 'pl') {
-      cols = ['売上', '人件費', '業務委託', '広告', '外注費', 'その他', '営業利益'];
-      getRow = (m, i) => {
-        const ra=plA('rev',i), rb=plB('rev',i);
-        const la=plA('labor',i), lb=plB('labor',i);
-        const oa=plA('outsource',i), ob=plB('outsource',i);
-        const aa=plA('adv',i), ab=plB('adv',i);
-        const ga=plA('gaichu',i), gb=plB('gaichu',i);
-        const xa=plA('other',i), xb=plB('other',i);
-        const opexA = [la,oa,aa,ga,xa].reduce((t,v)=>t+(v||0),0);
-        const opA = ra !== null ? ra - opexA : null;
-        return [
-          `<div style="font-size:10px;color:var(--text3)">${fmt(rb)}</div>${fmtBA(rb,ra)}`,
-          `<div style="font-size:10px;color:var(--text3)">${fmt(lb)}</div>${fmtBA(lb,la,true)}`,
-          `<div style="font-size:10px;color:var(--text3)">${fmt(ob)}</div>${fmtBA(ob,oa,true)}`,
-          `<div style="font-size:10px;color:var(--text3)">${fmt(ab)}</div>${fmtBA(ab,aa,true)}`,
-          `<div style="font-size:10px;color:var(--text3)">${fmt(gb)}</div>${fmtBA(gb,ga,true)}`,
-          `<div style="font-size:10px;color:var(--text3)">${fmt(xb)}</div>${fmtBA(xb,xa,true)}`,
-          opA !== null ? `<span class="${opA>=0?'g':'r'}">${opA>=0?'+':'▲'}${Math.abs(Math.round(opA)).toLocaleString()}</span>` : '─',
-        ];
-      };
-    } else if (tab === 'cf') {
-      cols = ['売上入金','会費','研修','その他収入','新規借入','月末残高'];
-      getRow = (m, i) => [
-        `<div style="font-size:10px;color:var(--text3)">${fmt(cfB('cfIn',i))}</div>${fmtBA(cfB('cfIn',i),cfA('cfIn',i))}`,
-        fmt(cfA('cfInFee',i),'g'), fmt(cfA('cfInTraining',i),'g'),
-        fmt(cfA('cfInOther',i),'g'), fmt(cfA('loanIn',i),'g'),
-        fmt(cfA('cfClose',i),'g'),
-      ];
-    } else if (tab === 'cf-out') {
-      cols = ['人件費・税金','業務委託','インセン','家賃','経費精算','広告費','イベント外注','その他支出'];
-      getRow = (m, i) => [
-        `<div style="font-size:10px;color:var(--text3)">${fmt(cfB('salaryPay',i))}</div>${fmtBA(cfB('salaryPay',i),cfA('salaryPay',i),true)}`,
-        `<div style="font-size:10px;color:var(--text3)">${fmt(cfB('bizComPay',i))}</div>${fmtBA(cfB('bizComPay',i),cfA('bizComPay',i),true)}`,
-        fmt(cfA('incentivePay',i)), fmt(cfA('rentPay',i)),
-        fmt(cfA('expensePay',i)), fmt(cfA('adSportsPay',i)),
-        fmt(cfA('eventCostPay',i)), fmt(cfA('salesOtherPay',i)),
-      ];
-    } else if (tab === 'cf-detail') {
-      cols = ['通信費','交際費','租税公課','ツール','消耗品','採用費','年会費','借入返済'];
-      getRow = (m, i) => [
-        fmt(cfA('telPay',i)), fmt(cfA('entertainPay',i)),
-        fmt(cfA('taxPay',i)), fmt(cfA('toolsPay',i)),
-        fmt(cfA('suppliesPay',i)), fmt(cfA('recruitPay',i)),
-        fmt(cfA('annualFeePay',i)), fmt(cfA('loanOut',i)),
-      ];
-    } else {
-      // BS（貸借対照表）
-      cols = ['現預金','売掛金','その他流動資産','固定資産','買掛金・未払金','借入金','資本金','利益剰余金'];
-      getRow = (m, i) => [
-        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('cash',i))}</div>${fmtBA(bsB('cash',i),bsA('cash',i))}`,
-        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('receivable',i))}</div>${fmtBA(bsB('receivable',i),bsA('receivable',i))}`,
-        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('other_ca',i))}</div>${fmtBA(bsB('other_ca',i),bsA('other_ca',i))}`,
-        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('fixed',i))}</div>${fmtBA(bsB('fixed',i),bsA('fixed',i))}`,
-        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('payable',i))}</div>${fmtBA(bsB('payable',i),bsA('payable',i),true)}`,
-        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('borrowing',i))}</div>${fmtBA(bsB('borrowing',i),bsA('borrowing',i),true)}`,
-        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('capital',i))}</div>${fmtBA(bsB('capital',i),bsA('capital',i))}`,
-        `<div style="font-size:10px;color:var(--text3)">${fmt(bsB('retained',i))}</div>${fmtBA(bsB('retained',i),bsA('retained',i))}`,
-      ];
-    }
-
-    const tabHtml = Object.entries(tabLabels).map(([k,v]) =>
-      `<button onclick="document.getElementById('il-tab-${k}').click()" class="btn${currentTab===k?' btn-p':''}" style="font-size:10px;padding:3px 10px">${v}</button>`
-    ).join('');
+    const metrics = buildMetrics(tab);
 
     let html = `<div style="display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap">
       ${Object.entries(tabLabels).map(([k,v]) =>
@@ -5103,26 +5119,59 @@ async function loadImportedList() {
       ).join('')}
     </div>
     <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
-      ※ 小数字＝予算値、大数字＝実績値、バッジ＝予実達成率
+      ※ 上＝予算、下＝実績、バッジ＝予実達成率
     </div>
     <div class="scroll-x">
-    <table class="dt" style="min-width:${120+cols.length*95}px">
+    <table class="dt" style="min-width:${140 + activeMonths.length * 88}px">
       <thead><tr>
-        <th class="l" style="min-width:50px">月</th>
-        ${cols.map(c=>`<th style="min-width:90px">${c}</th>`).join('')}
+        <th class="l" style="min-width:120px;position:sticky;left:0;background:var(--bg2);z-index:1">科目</th>
+        ${activeMonths.map(m=>`<th style="min-width:80px;text-align:right">${MONTH_LABELS[m]||m}</th>`).join('')}
+        <th style="min-width:90px;text-align:right;background:var(--bg3);border-left:2px solid var(--border2)">合計</th>
       </tr></thead><tbody>`;
 
-    activeMonths.forEach(m => {
-      const i = d.months.indexOf(m);
-      const cells = getRow(m, i);
-      html += `<tr><td class="l" style="font-weight:600">${MONTH_LABELS[m]||m}</td>${cells.map(c=>`<td style="line-height:1.4">${c}</td>`).join('')}</tr>`;
+    metrics.forEach(metric => {
+      // 行ヘッダ
+      html += `<tr><td class="l" style="font-weight:600;font-size:11px;position:sticky;left:0;background:var(--bg2);z-index:1">${metric.label}</td>`;
+      // 月別セル
+      let totA = 0, totB = 0, hasA = false, hasB = false;
+      activeIdx.forEach(i => {
+        if (metric.kind === 'pair') {
+          const { a, b } = metric.get(i);
+          if (a !== null && a !== undefined) { totA += Number(a); hasA = true; }
+          if (b !== null && b !== undefined) { totB += Number(b); hasB = true; }
+          html += `<td>${cellPair(b, a, metric.isOut)}</td>`;
+        } else if (metric.kind === 'single') {
+          const v = metric.get(i);
+          if (v !== null && v !== undefined) { totA += Number(v); hasA = true; }
+          html += `<td>${cellSingle(v, metric.cls || '')}</td>`;
+        } else if (metric.kind === 'calc') {
+          const v = metric.get(i);
+          if (v !== null && v !== undefined) { totA += Number(v); hasA = true; }
+          html += `<td>${cellCalc(v)}</td>`;
+        }
+      });
+      // 合計列
+      const totBg = 'background:var(--bg3);border-left:2px solid var(--border2);font-weight:700';
+      if (metric.kind === 'pair') {
+        const rate = (hasB && totB>0 && hasA) ? Math.round(totA / totB * 100) : null;
+        const good = rate !== null ? (metric.isOut ? rate <= 100 : rate >= 100) : null;
+        const badge = rate !== null ? `<span class="badge ${good?'bg':'br'}" style="font-size:9px;margin-left:3px">${rate}%</span>` : '';
+        html += `<td style="${totBg}">
+          <div style="font-size:10px;color:var(--text3);text-align:right">${hasB?totB.toLocaleString():'─'}</div>
+          <div style="text-align:right"><span class="${(hasA && !metric.isOut)?'g':''}">${hasA?totA.toLocaleString():'─'}</span>${badge}</div>
+        </td>`;
+      } else if (metric.kind === 'calc') {
+        html += `<td style="${totBg}">${cellCalc(hasA ? totA : null)}</td>`;
+      } else {
+        html += `<td style="${totBg}"><div style="text-align:right">${hasA ? totA.toLocaleString() : '─'}</div></td>`;
+      }
+      html += '</tr>';
     });
 
     html += '</tbody></table></div>';
     el.innerHTML = html;
   };
 
-  // グローバルにタブ切り替え関数を公開
   window.ilSetTab = (tab) => renderTab(tab);
   renderTab('pl');
 }
