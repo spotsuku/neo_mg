@@ -7946,12 +7946,16 @@ window.mfFetch = async function(type) {
   try {
     const actionMap = { journals: 'cf_for_dashboard', trial_pl: 'pl_for_dashboard', trial_bs: 'bs_for_dashboard' };
     const incUn = document.getElementById('mf-include-unrealized')?.checked ?? false;
-    // CFカテゴリ上書き（localStorage から読込）
-    let cfOverrides = {};
+    // 科目分類の上書き（localStorage から読込 — CF / PL / BS）
+    let cfOverrides = {}, plOverrides = {}, bsOverrides = {};
     try { cfOverrides = JSON.parse(localStorage.getItem('mfCfCategoryOverrides') || '{}'); } catch(e) {}
-    const ovQuery = Object.keys(cfOverrides).length > 0
-      ? `&cf_overrides=${encodeURIComponent(JSON.stringify(cfOverrides))}`
-      : '';
+    try { plOverrides = JSON.parse(localStorage.getItem('mfPlCategoryOverrides') || '{}'); } catch(e) {}
+    try { bsOverrides = JSON.parse(localStorage.getItem('mfBsCategoryOverrides') || '{}'); } catch(e) {}
+    const ovParts = [];
+    if (Object.keys(cfOverrides).length) ovParts.push(`cf_overrides=${encodeURIComponent(JSON.stringify(cfOverrides))}`);
+    if (Object.keys(plOverrides).length) ovParts.push(`pl_overrides=${encodeURIComponent(JSON.stringify(plOverrides))}`);
+    if (Object.keys(bsOverrides).length) ovParts.push(`bs_overrides=${encodeURIComponent(JSON.stringify(bsOverrides))}`);
+    const ovQuery = ovParts.length ? '&' + ovParts.join('&') : '';
     const url = `/api/mf-sync?action=${actionMap[type]}&fiscal_year=${fy}&include_unrealized=${incUn}${ovQuery}`;
     const r = await fetch(url);
     const d = await r.json();
@@ -8207,25 +8211,67 @@ function mfRenderPreview() {
   const breakdown = p.breakdown || [];
   if (breakdown.length > 0) {
     bdEl.style.display = 'block';
-    bdTblEl.innerHTML = `<table class="dt" style="font-size:10px;min-width:600px">
+    // 編集可能な分類先オプション（PL系 / BS系 / 未分類）
+    const PL_CATS = [
+      { v:'rev', l:'PL: 売上' },
+      { v:'rev_other', l:'PL: その他収益' },
+      { v:'cogs', l:'PL: 原価' },
+      { v:'labor', l:'PL: 人件費' },
+      { v:'outsource', l:'PL: 業務委託' },
+      { v:'adv', l:'PL: 広告販促' },
+      { v:'gaichu', l:'PL: 外注' },
+      { v:'other', l:'PL: その他販管費' },
+    ];
+    const BS_CATS = [
+      { v:'cash', l:'BS資産: 現預金' },
+      { v:'receivable', l:'BS資産: 売掛金' },
+      { v:'other_ca', l:'BS資産: その他流動' },
+      { v:'fixed', l:'BS資産: 固定資産' },
+      { v:'payable', l:'BS負債: 買掛・未払' },
+      { v:'borrowing', l:'BS負債: 借入金' },
+      { v:'other_cl', l:'BS負債: その他流動' },
+      { v:'capital', l:'BS純資産: 資本金' },
+      { v:'retained', l:'BS純資産: 利益剰余金' },
+    ];
+    let plOverrides = {}, bsOverrides = {};
+    try { plOverrides = JSON.parse(localStorage.getItem('mfPlCategoryOverrides') || '{}'); } catch(e) {}
+    try { bsOverrides = JSON.parse(localStorage.getItem('mfBsCategoryOverrides') || '{}'); } catch(e) {}
+    const esc2 = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    bdTblEl.innerHTML = `<table class="dt" style="font-size:10px;min-width:720px">
       <thead><tr>
         <th class="l" style="min-width:150px">勘定科目名</th>
         <th style="text-align:right;min-width:90px">借方合計(千円)</th>
         <th style="text-align:right;min-width:90px">貸方合計(千円)</th>
         <th style="text-align:right;min-width:90px">純額(千円)</th>
-        <th class="l" style="min-width:80px">→ 分類先</th>
+        <th class="l" style="min-width:180px">→ 分類先（変更可）</th>
+        <th class="l" style="min-width:70px">状態</th>
       </tr></thead>
       <tbody>${breakdown.map(r => {
         const netClr = r.net > 0 ? 'color:var(--tc-red)' : r.net < 0 ? 'color:var(--tc-green)' : '';
+        const overridden = plOverrides[r.name] !== undefined || bsOverrides[r.name] !== undefined;
+        const currentCat = overridden ? (plOverrides[r.name] || bsOverrides[r.name]) : (r.category || '');
+        const optsHtml = [
+          `<option value="" ${currentCat===''?'selected':''}>（未分類）</option>`,
+          '<optgroup label="PL">',
+          ...PL_CATS.map(c => `<option value="${c.v}" ${c.v===currentCat?'selected':''}>${c.l}</option>`),
+          '</optgroup>',
+          '<optgroup label="BS">',
+          ...BS_CATS.map(c => `<option value="${c.v}" ${c.v===currentCat?'selected':''}>${c.l}</option>`),
+          '</optgroup>',
+        ].join('');
         return `<tr>
-          <td style="font-size:10px;font-weight:600">${r.name}</td>
+          <td style="font-size:10px;font-weight:600">${esc2(r.name)}</td>
           <td style="text-align:right;font-size:10px">${r.debit ? r.debit.toLocaleString() : '—'}</td>
           <td style="text-align:right;font-size:10px">${r.credit ? r.credit.toLocaleString() : '—'}</td>
           <td style="text-align:right;font-size:10px;font-weight:700;${netClr}">${r.net !== 0 ? r.net.toLocaleString() : '—'}</td>
-          <td style="font-size:10px;color:var(--tc-blue)">${r.category || '(未分類)'}</td>
+          <td>
+            <select class="mf-bd-cat-select" data-acct="${esc2(r.name)}" onchange="mfSavePlBsOverride(this)" style="padding:2px 4px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:3px;min-width:170px">${optsHtml}</select>
+          </td>
+          <td style="font-size:10px">${overridden ? '<span class="badge bg">記憶済</span>' : '<span style="color:var(--text3)">自動</span>'}</td>
         </tr>`;
       }).join('')}</tbody>
-    </table>`;
+    </table>
+    <div style="font-size:10px;color:var(--text3);margin-top:6px">※ 分類先を変更したら上の「🔄 ③ 仕分け変更を反映して再計算」を押してください。次回以降も記憶されます。</div>`;
   } else {
     bdEl.style.display = 'none';
   }
@@ -8507,11 +8553,39 @@ window.mfCancelPreview = function() {
   document.getElementById('mf-preview-card').style.display = 'none';
 };
 
+// ── PL/BS 勘定科目の分類先上書き保存 ──
+// 分類先の先頭2文字で PL / BS を自動判別し、対応する localStorage キーに保存
+window.mfSavePlBsOverride = function(sel) {
+  const acct = sel.dataset.acct;
+  const cat = sel.value;
+  if (!acct) return;
+  const PL_KEYS = ['rev','rev_other','cogs','labor','outsource','adv','gaichu','other'];
+  const BS_KEYS = ['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained'];
+  let plOv = {}, bsOv = {};
+  try { plOv = JSON.parse(localStorage.getItem('mfPlCategoryOverrides') || '{}'); } catch(e) {}
+  try { bsOv = JSON.parse(localStorage.getItem('mfBsCategoryOverrides') || '{}'); } catch(e) {}
+  // 既存エントリーがあれば先にクリア（他方に移動する場合に備え）
+  delete plOv[acct]; delete bsOv[acct];
+  if (cat) {
+    if (PL_KEYS.includes(cat)) plOv[acct] = cat;
+    else if (BS_KEYS.includes(cat)) bsOv[acct] = cat;
+  }
+  localStorage.setItem('mfPlCategoryOverrides', JSON.stringify(plOv));
+  localStorage.setItem('mfBsCategoryOverrides', JSON.stringify(bsOv));
+  const row = sel.closest('tr');
+  if (row) {
+    const statusCell = row.querySelector('td:last-child');
+    if (statusCell) statusCell.innerHTML = cat
+      ? '<span class="badge bg">記憶済</span>'
+      : '<span style="color:var(--text3)">自動</span>';
+  }
+};
+
 // ── 仕分け変更を反映して再計算（再取得） ──
 window.mfRefetchWithOverrides = function() {
   const p = window._mfPending;
   if (!p) return;
-  // 現在未保存のdropdown変更もlocalStorageに保存
+  // CFドロップダウンの現在値を localStorage に保存
   document.querySelectorAll('.mf-cf-cat-select').forEach(sel => {
     const ident = sel.dataset.acct;
     if (!ident) return;
@@ -8520,6 +8594,8 @@ window.mfRefetchWithOverrides = function() {
     overrides[ident] = sel.value;
     localStorage.setItem('mfCfCategoryOverrides', JSON.stringify(overrides));
   });
+  // PL/BS内訳ドロップダウンの現在値を localStorage に保存
+  document.querySelectorAll('.mf-bd-cat-select').forEach(sel => mfSavePlBsOverride(sel));
   // 再取得
   document.getElementById('mf-preview-card').style.display = 'none';
   mfFetch(p.type);

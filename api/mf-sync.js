@@ -206,7 +206,14 @@ async function fetchAllJournals(token, periodsInfo, options = {}) {
 }
 
 function buildFromJournals(journals, fiscalYear, options = {}) {
-  const { cfCategoryOverrides = {} } = options;
+  const { cfCategoryOverrides = {}, plCategoryOverrides = {}, bsCategoryOverrides = {} } = options;
+  // ユーザー上書きが最優先、次に静的マップ
+  const resolvePlKey = (name) => plCategoryOverrides[name] !== undefined
+    ? plCategoryOverrides[name] || null
+    : (PL_ACCT_MAP[name] || null);
+  const resolveBsKey = (name) => bsCategoryOverrides[name] !== undefined
+    ? bsCategoryOverrides[name] || null
+    : (BS_ACCT_MAP[name] || null);
   const monthIdx = buildMonthIndex(fiscalYear);
   const n = monthIdx.length;
 
@@ -279,25 +286,25 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
 
       // ── 勘定科目別集計（内訳） ──
       if (debitAcct && debitAmount > 0) {
-        if (!acctBreakdown[debitAcct]) acctBreakdown[debitAcct] = { debit: 0, credit: 0, category: PL_ACCT_MAP[debitAcct] || BS_ACCT_MAP[debitAcct] || null };
+        if (!acctBreakdown[debitAcct]) acctBreakdown[debitAcct] = { debit: 0, credit: 0, category: resolvePlKey(debitAcct) || resolveBsKey(debitAcct) || null };
         acctBreakdown[debitAcct].debit += debitAmount;
       }
       if (creditAcct && creditAmount > 0) {
-        if (!acctBreakdown[creditAcct]) acctBreakdown[creditAcct] = { debit: 0, credit: 0, category: PL_ACCT_MAP[creditAcct] || BS_ACCT_MAP[creditAcct] || null };
+        if (!acctBreakdown[creditAcct]) acctBreakdown[creditAcct] = { debit: 0, credit: 0, category: resolvePlKey(creditAcct) || resolveBsKey(creditAcct) || null };
         acctBreakdown[creditAcct].credit += creditAmount;
       }
 
       // ── PL計算: 借方は debitAmount、貸方は creditAmount で集計 ──
-      const plKeyDebit = PL_ACCT_MAP[debitAcct];
-      const plKeyCredit = PL_ACCT_MAP[creditAcct];
-      if (plKeyDebit) plDebit[plKeyDebit][idx] += debitAmount;
-      if (plKeyCredit) plCredit[plKeyCredit][idx] += creditAmount;
+      const plKeyDebit = resolvePlKey(debitAcct);
+      const plKeyCredit = resolvePlKey(creditAcct);
+      if (plKeyDebit && pl[plKeyDebit]) plDebit[plKeyDebit][idx] += debitAmount;
+      if (plKeyCredit && pl[plKeyCredit]) plCredit[plKeyCredit][idx] += creditAmount;
 
       // ── BS計算: 借方増 / 貸方増 ──
-      const bsKeyDebit = BS_ACCT_MAP[debitAcct];
-      const bsKeyCredit = BS_ACCT_MAP[creditAcct];
-      if (bsKeyDebit) bsDelta[bsKeyDebit][idx] += debitAmount;
-      if (bsKeyCredit) bsDelta[bsKeyCredit][idx] -= creditAmount;
+      const bsKeyDebit = resolveBsKey(debitAcct);
+      const bsKeyCredit = resolveBsKey(creditAcct);
+      if (bsKeyDebit && bsDelta[bsKeyDebit]) bsDelta[bsKeyDebit][idx] += debitAmount;
+      if (bsKeyCredit && bsDelta[bsKeyCredit]) bsDelta[bsKeyCredit][idx] -= creditAmount;
 
       // ── CF計算: 現預金の借方=入金、貸方=出金 ──
       const isDebitCash = cashNames.some(c => debitAcct.includes(c));
@@ -514,16 +521,25 @@ export default async function handler(req, res) {
       if (!fiscal_year) return res.status(400).json({ error: 'fiscal_year が必要です' });
 
       const includeUnrealized = req.query.include_unrealized === 'true';
-      // CFカテゴリ上書き: フロントエンドから localStorage の内容を送信
-      let cfCategoryOverrides = {};
+      // 科目分類の上書き: フロントエンドから localStorage の内容を送信
+      let cfCategoryOverrides = {}, plCategoryOverrides = {}, bsCategoryOverrides = {};
       if (req.query.cf_overrides) {
         try { cfCategoryOverrides = JSON.parse(req.query.cf_overrides); }
         catch (e) { console.warn('[mf-sync] cf_overrides parse failed:', e.message); }
       }
+      if (req.query.pl_overrides) {
+        try { plCategoryOverrides = JSON.parse(req.query.pl_overrides); }
+        catch (e) { console.warn('[mf-sync] pl_overrides parse failed:', e.message); }
+      }
+      if (req.query.bs_overrides) {
+        try { bsCategoryOverrides = JSON.parse(req.query.bs_overrides); }
+        catch (e) { console.warn('[mf-sync] bs_overrides parse failed:', e.message); }
+      }
 
       const periodsInfo = await resolveFiscalPeriods(token, fiscal_year);
       const fetchResult = await fetchAllJournals(token, periodsInfo, { includeUnrealized });
-      const result = buildFromJournals(fetchResult.journals, fiscal_year, { cfCategoryOverrides });
+      const result = buildFromJournals(fetchResult.journals, fiscal_year,
+        { cfCategoryOverrides, plCategoryOverrides, bsCategoryOverrides });
 
       // action に応じて必要な部分だけ返す
       const response = {
