@@ -8087,24 +8087,26 @@ function mfRenderPreview() {
   const months = MF_MONTHS[String(p.fy)] || [];
   const monthNames = MF_MONTH_NAMES;
 
-  // 反映対象月チェックボックス
+  // 反映対象月チェックボックス（= プレビュー表示にも反映）
   const pmEl = document.getElementById('mf-preview-months');
-  pmEl.innerHTML = '<span style="color:var(--text3);font-weight:700">反映対象月:</span>' +
+  pmEl.innerHTML = '<span style="color:var(--text3);font-weight:700">反映対象月</span>' +
+    '<span style="font-size:9px;color:var(--text3);margin-left:4px">（変更するとプレビューも連動します）</span>　' +
     months.map((code, i) => {
       const checked = p.selectedMonths.includes(code);
       return `<label style="display:inline-flex;align-items:center;gap:3px;padding:3px 6px;background:var(--bg2);border:1px solid var(--border2);border-radius:4px;cursor:pointer">
-        <input type="checkbox" class="mf-commit-cb" value="${code}" data-idx="${i}" ${checked ? 'checked' : ''} style="margin:0">
+        <input type="checkbox" class="mf-commit-cb" value="${code}" data-idx="${i}" ${checked ? 'checked' : ''} onchange="mfOnCommitMonthChange()" style="margin:0">
         ${monthNames[i]}
       </label>`;
     }).join('') +
     ' <button class="btn" style="font-size:10px;padding:3px 8px;margin-left:6px" onclick="mfToggleAllCommit(true)">全選択</button>' +
     ' <button class="btn" style="font-size:10px;padding:3px 8px" onclick="mfToggleAllCommit(false)">全解除</button>';
 
-  // 種類別にテーブル描画
+  // 種類別にテーブル描画（反映対象月で絞り込み）
   const tblEl = document.getElementById('mf-preview-table');
   const aiEl = document.getElementById('mf-preview-ai-summary');
   const aiDetailEl = document.getElementById('mf-preview-ai-detail');
   const samplesEl = document.getElementById('mf-preview-samples');
+  const initialVisibleIdxSet = mfGetCommitSelectedIdxSet();
 
   if (p.type === 'trial_pl') {
     aiEl.style.display = 'none';
@@ -8132,7 +8134,7 @@ function mfRenderPreview() {
     ], (key, i, row) => {
       if (row?.key === '__calc__') return row.formula(i);
       return (p.pl[key]?.actual?.[i]) || 0;
-    });
+    }, initialVisibleIdxSet);
 
   } else if (p.type === 'trial_bs') {
     aiEl.style.display = 'none';
@@ -8151,7 +8153,7 @@ function mfRenderPreview() {
       { label:'【純資産の部】',       key:'__header__' },
       { label:'　資本金',              key:'capital',    isRev:true },
       { label:'　利益剰余金',          key:'retained',   isRev:true },
-    ], (key, i) => (monthly[key] && monthly[key][i]) || 0);
+    ], (key, i) => (monthly[key] && monthly[key][i]) || 0, initialVisibleIdxSet);
 
   } else if (p.type === 'journals') {
     // AI仕分けサマリー
@@ -8190,7 +8192,7 @@ function mfRenderPreview() {
       { label:'【財務支出】',           key:'__header__' },
       { label:'　借入返済',             key:'loanOut',     isOut:true },
       { label:'　投資',                 key:'investPay',   isOut:true },
-    ], (key, i) => (monthly[key] && monthly[key][i]) || 0);
+    ], (key, i) => (monthly[key] && monthly[key][i]) || 0, initialVisibleIdxSet);
 
     // ── CF仕分け編集テーブル（相手方科目 → CFカテゴリ） ──
     const cfmapEl = document.getElementById('mf-preview-cfmap');
@@ -8355,23 +8357,26 @@ function mfRenderPreview() {
   card.style.display = 'block';
 }
 
-function mfBuildTable(months, monthNames, rows, getter) {
-  let html = `<table class="dt" style="min-width:${120 + months.length * 75}px;width:100%;font-size:11px">
+function mfBuildTable(months, monthNames, rows, getter, visibleIdxSet) {
+  // visibleIdxSet が指定されていれば、その idx の列のみ表示
+  const isVisible = (i) => !visibleIdxSet || visibleIdxSet.has(i);
+  const visibleMonths = months.map((m, i) => ({ m, i })).filter(x => isVisible(x.i));
+  let html = `<table class="dt" style="min-width:${120 + visibleMonths.length * 75}px;width:100%;font-size:11px">
     <thead><tr>
       <th class="l" style="min-width:140px;font-size:10px;position:sticky;left:0;background:var(--bg2);z-index:1">科目 / 月</th>
-      ${months.map((m, i) => `<th style="min-width:70px;font-size:10px">${monthNames[i]}</th>`).join('')}
+      ${visibleMonths.map(({i}) => `<th style="min-width:70px;font-size:10px">${monthNames[i]}</th>`).join('')}
       <th style="min-width:80px;font-size:10px;background:var(--bg3)">合計</th>
     </tr></thead><tbody>`;
 
   rows.forEach(row => {
     // セパレーター
     if (row.key === '__sep__') {
-      html += `<tr><td colspan="${months.length + 2}" style="height:4px;background:var(--border2)"></td></tr>`;
+      html += `<tr><td colspan="${visibleMonths.length + 2}" style="height:4px;background:var(--border2)"></td></tr>`;
       return;
     }
     // セクション見出し（太字 + 背景色）
     if (row.key === '__header__') {
-      html += `<tr><td colspan="${months.length + 2}" style="padding:5px 8px;background:var(--bg3);font-size:11px;font-weight:700;color:var(--text);border-top:1px solid var(--border2)">${row.label}</td></tr>`;
+      html += `<tr><td colspan="${visibleMonths.length + 2}" style="padding:5px 8px;background:var(--bg3);font-size:11px;font-weight:700;color:var(--text);border-top:1px solid var(--border2)">${row.label}</td></tr>`;
       return;
     }
     // 計算行（粗利・営業利益）は border-top + 強調表示
@@ -8381,7 +8386,7 @@ function mfBuildTable(months, monthNames, rows, getter) {
       : 'font-size:11px;padding-left:8px;position:sticky;left:0;background:var(--bg2);z-index:1';
     html += `<tr><td class="l" style="${labelStyle}">${row.label}</td>`;
     let total = 0;
-    months.forEach((m, i) => {
+    visibleMonths.forEach(({i}) => {
       const v = getter(row.key, i, row) || 0;
       total += v;
       const valClr = isCalc
@@ -8408,8 +8413,101 @@ function mfBuildTable(months, monthNames, rows, getter) {
   return html;
 }
 
+// 現在「反映対象月」でチェック済みの idx を取得
+window.mfGetCommitSelectedIdxSet = function() {
+  const set = new Set();
+  document.querySelectorAll('.mf-commit-cb:checked').forEach(cb => {
+    const idx = parseInt(cb.dataset.idx);
+    if (!isNaN(idx)) set.add(idx);
+  });
+  return set;
+};
+
+// 反映対象月を変更したときにプレビュー表を再描画
+window.mfOnCommitMonthChange = function() {
+  const p = window._mfPending;
+  if (!p) return;
+  const months = MF_MONTHS[String(p.fy)] || [];
+  const monthNames = MF_MONTH_NAMES;
+  const visibleIdxSet = mfGetCommitSelectedIdxSet();
+  const tblEl = document.getElementById('mf-preview-table');
+  if (!tblEl) return;
+  // type ごとに表を再構築（mfRenderPreview 全体は再実行せずテーブルだけ更新）
+  if (p.type === 'trial_pl') {
+    tblEl.innerHTML = mfBuildTable(months, monthNames, [
+      { label:'【営業収益】',           key:'__header__' },
+      { label:'　売上高',                key:'rev',       isRev:true },
+      { label:'【売上原価】',           key:'__header__' },
+      { label:'　原価',                  key:'cogs',      isOut:true },
+      { label:'　　粗利',                key:'__calc__', isRev:true, formula: (i) => ((p.pl.rev?.actual?.[i]) || 0) - ((p.pl.cogs?.actual?.[i]) || 0) },
+      { label:'【販管費】',             key:'__header__' },
+      { label:'　人件費',                key:'labor',     isOut:true },
+      { label:'　業務委託',              key:'outsource', isOut:true },
+      { label:'　広告販促',              key:'adv',       isOut:true },
+      { label:'　外注費',                key:'gaichu',    isOut:true },
+      { label:'　その他販管費',          key:'other',     isOut:true },
+      { label:'　　営業利益',            key:'__calc__', isRev:true, formula: (i) => {
+        const rev = (p.pl.rev?.actual?.[i]) || 0;
+        const cogs = (p.pl.cogs?.actual?.[i]) || 0;
+        const opex = ['labor','outsource','adv','gaichu','other'].reduce((t,k) => t + ((p.pl[k]?.actual?.[i]) || 0), 0);
+        return rev - cogs - opex;
+      }},
+      { label:'【営業外収益】',         key:'__header__' },
+      { label:'　その他収益（会費等）',  key:'rev_other', isRev:true },
+    ], (key, i, row) => {
+      if (row?.key === '__calc__') return row.formula(i);
+      return (p.pl[key]?.actual?.[i]) || 0;
+    }, visibleIdxSet);
+  } else if (p.type === 'trial_bs') {
+    const monthly = p.bs.monthly || {};
+    tblEl.innerHTML = mfBuildTable(months, monthNames, [
+      { label:'【資産の部】',         key:'__header__' },
+      { label:'　現預金',              key:'cash',       isRev:true },
+      { label:'　売掛金',              key:'receivable', isRev:true },
+      { label:'　その他流動資産',      key:'other_ca',   isRev:true },
+      { label:'　固定資産',            key:'fixed',      isRev:true },
+      { label:'【負債の部】',         key:'__header__' },
+      { label:'　買掛金・未払金',      key:'payable',    isOut:true },
+      { label:'　借入金',              key:'borrowing',  isOut:true },
+      { label:'　その他流動負債',      key:'other_cl',   isOut:true },
+      { label:'【純資産の部】',       key:'__header__' },
+      { label:'　資本金',              key:'capital',    isRev:true },
+      { label:'　利益剰余金',          key:'retained',   isRev:true },
+    ], (key, i) => (monthly[key] && monthly[key][i]) || 0, visibleIdxSet);
+  } else if (p.type === 'journals') {
+    const monthly = p.cf.monthly || {};
+    tblEl.innerHTML = mfBuildTable(months, monthNames, [
+      { label:'【営業収入】',       key:'__header__' },
+      { label:'　売上入金(会費)',    key:'cfInFee',      isRev:true },
+      { label:'　売上入金(研修)',    key:'cfInTraining', isRev:true },
+      { label:'　売上入金(他)',      key:'cfInOther',    isRev:true },
+      { label:'【財務収入】',       key:'__header__' },
+      { label:'　新規借入',          key:'loanIn',       isRev:true },
+      { label:'　資本金払込',        key:'capitalIn',    isRev:true },
+      { label:'【営業支出】',       key:'__header__' },
+      { label:'　給与・社保',        key:'salaryPay',    isOut:true },
+      { label:'　業務委託',          key:'bizComPay',    isOut:true },
+      { label:'　専門家報酬',        key:'expertPay',    isOut:true },
+      { label:'　家賃',              key:'rentPay',      isOut:true },
+      { label:'　通信費',            key:'telPay',       isOut:true },
+      { label:'　ツール',            key:'toolsPay',     isOut:true },
+      { label:'　広告費',            key:'adSportsPay',  isOut:true },
+      { label:'　採用費',            key:'recruitPay',   isOut:true },
+      { label:'　イベント',          key:'eventCostPay', isOut:true },
+      { label:'　交際費',            key:'entertainPay', isOut:true },
+      { label:'　税金',              key:'taxPay',       isOut:true },
+      { label:'　消耗品',            key:'suppliesPay',  isOut:true },
+      { label:'　その他出金',        key:'salesOtherPay',isOut:true },
+      { label:'【財務支出】',       key:'__header__' },
+      { label:'　借入返済',          key:'loanOut',      isOut:true },
+      { label:'　事業投資',          key:'investPay',    isOut:true },
+    ], (key, i) => (monthly[key] && monthly[key][i]) || 0, visibleIdxSet);
+  }
+};
+
 window.mfToggleAllCommit = function(checked) {
   document.querySelectorAll('.mf-commit-cb').forEach(cb => { cb.checked = checked; });
+  if (typeof mfOnCommitMonthChange === 'function') mfOnCommitMonthChange();
 };
 
 // ── CFカテゴリの上書き保存（localStorage） ──
