@@ -388,8 +388,15 @@ td.actual.editable-cell {
       <div class="ch" style="height:190px"><canvas id="wk-rev-chart"></canvas></div>
     </div>
     <div class="card">
-      <div class="ct">費用カテゴリ別（最新月・千円）</div>
-      <div class="ch" style="height:190px"><canvas id="wk-cost-chart"></canvas></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+        <div class="ct" style="margin:0"><span id="wk-cost-title">費用カテゴリ別（最新月・千円）</span></div>
+        <div class="pa-toggle" style="margin:0">
+          <button class="pa-btn active" id="wk-cost-mode-latest" onclick="setCostChartMode('latest',this)" style="font-size:10px;padding:3px 8px">📅 最新月</button>
+          <button class="pa-btn" id="wk-cost-mode-avg" onclick="setCostChartMode('avg',this)" style="font-size:10px;padding:3px 8px">📊 月平均</button>
+        </div>
+      </div>
+      <div class="ch" style="height:190px;margin-top:6px"><canvas id="wk-cost-chart"></canvas></div>
+      <div id="wk-cost-note" style="font-size:10px;color:var(--text3);margin-top:4px"></div>
     </div>
   </div>
 
@@ -1476,6 +1483,14 @@ function riskClass(months) {
 }
 function fmt万(v) { return Math.round(v).toLocaleString(); } // 千円単位
 
+// 費用カテゴリ別グラフの表示モード切替（最新月 / 月平均）
+function setCostChartMode(mode, el) {
+  window._costChartMode = mode;
+  document.querySelectorAll('#wk-cost-mode-latest,#wk-cost-mode-avg').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  if (typeof updateWeeklyKPIs === 'function') updateWeeklyKPIs();
+}
+
 function initWeeklyCharts(d, lastIdx) {
   const months = d.months.map(m => MONTH_LABELS[m] || m);
   const revActual = d.pl.actual.rev.map(v => Number(v) || 0);
@@ -1494,25 +1509,56 @@ function initWeeklyCharts(d, lastIdx) {
     options: chartOpts(v => v.toLocaleString() + '千円')
   });
 
-  // 最新実績月のデータを取得（なければ直近N月の合計を使う）
-  const getActual = (arr, idx) => {
+  // 費用カテゴリ別グラフ用: 単月値 / 実績月平均 を計算
+  const mode = window._costChartMode || 'latest';
+  const getLatest = (arr, idx) => {
     if (!arr || !arr.length) return 0;
     if (idx >= 0 && arr[idx] !== undefined && arr[idx] !== null && arr[idx] !== '')
       return Number(arr[idx]) || 0;
-    // idx=-1 のとき：直近3ヶ月平均
+    // 単月データが無い場合は直近3ヶ月平均
     const vals = arr.filter(v => v !== '' && v !== null && v !== undefined).map(Number).filter(v => !isNaN(v) && v > 0);
     if (!vals.length) return 0;
     return Math.round(vals.slice(-3).reduce((a,b)=>a+b,0) / Math.min(3, vals.length));
   };
+  // 実績が入っている月のみで平均を取る（ゼロ月を含めない）
+  const getAvg = (arr) => {
+    if (!arr || !arr.length) return 0;
+    const vals = arr.map(v => Number(v)).filter(v => !isNaN(v) && v > 0);
+    if (!vals.length) return 0;
+    return Math.round(vals.reduce((a,b)=>a+b,0) / vals.length);
+  };
+  const pick = (arr) => mode === 'avg' ? getAvg(arr) : getLatest(arr, lastIdx);
 
-  const lastActualLabor  = getActual(d.pl.actual.labor, lastIdx);
-  const lastActualOut    = getActual(d.pl.actual.outsource, lastIdx);
-  const lastActualAdv    = getActual(d.pl.actual.adv, lastIdx);
-  const lastActualGaichu = getActual(d.pl.actual.gaichu, lastIdx);
-  const lastActualOth    = getActual(d.pl.actual.other, lastIdx);
-
-  const costData = [lastActualLabor, lastActualOut, lastActualGaichu, lastActualAdv, lastActualOth];
+  const costData = [
+    pick(d.pl.actual.labor),
+    pick(d.pl.actual.outsource),
+    pick(d.pl.actual.gaichu),
+    pick(d.pl.actual.adv),
+    pick(d.pl.actual.other),
+  ];
   const hasAnyCost = costData.some(v => v > 0);
+
+  // タイトルと注記を更新
+  const titleEl = document.getElementById('wk-cost-title');
+  const noteEl  = document.getElementById('wk-cost-note');
+  if (titleEl) {
+    titleEl.textContent = mode === 'avg'
+      ? '費用カテゴリ別（実績月平均・千円）'
+      : '費用カテゴリ別（最新月・千円）';
+  }
+  if (noteEl) {
+    if (mode === 'avg') {
+      const actualMonths = (d.pl.actual.rev || []).filter(v => Number(v) > 0).length;
+      noteEl.textContent = actualMonths > 0
+        ? `※ 実績が入っている ${actualMonths} ヶ月の平均（ゼロ月は除外）`
+        : '※ 実績データなし';
+    } else {
+      const lastMonthLabel = lastIdx >= 0 ? (MONTH_LABELS[d.months[lastIdx]] || d.months[lastIdx]) : null;
+      noteEl.textContent = lastMonthLabel
+        ? `※ ${lastMonthLabel}（最新実績月）の値`
+        : '※ 実績データなし（ダミー値を表示）';
+    }
+  }
 
   destroyChart('wk-cost-chart');
   charts['wk-cost-chart'] = new Chart(document.getElementById('wk-cost-chart'), {
