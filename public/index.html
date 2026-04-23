@@ -8238,7 +8238,12 @@ function mfRenderPreview() {
     aiEl.style.display = 'none';
     samplesEl.style.display = 'none';
     const monthly = p.bs.monthly || {};
-    tblEl.innerHTML = mfBuildTable(months, monthNames, [
+    const bsNote = `<div style="background:rgba(239,159,39,0.10);border:1px solid rgba(239,159,39,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:10px;color:var(--tc-amber);line-height:1.5">
+      ⚠ <strong>期首残高が仕訳から取得できないため「期首=0 起点の累計残高」として表示しています。</strong><br>
+      各月の値 = 期首からその月末までの純増減（資産系: 借方−貸方、負債・純資産系: 貸方−借方）。<br>
+      実残高は「期首残高 + 表示値」となります。現預金がマイナスのように見える場合は、期中に減少した純額を示しています。
+    </div>`;
+    tblEl.innerHTML = bsNote + mfBuildTable(months, monthNames, [
       { label:'【資産の部】',         key:'__header__' },
       { label:'　現預金',              key:'cash',       isRev:true },
       { label:'　売掛金',              key:'receivable', isRev:true },
@@ -8413,12 +8418,17 @@ function mfRenderPreview() {
     try { plOverrides = JSON.parse(localStorage.getItem('mfPlCategoryOverrides') || '{}'); } catch(e) {}
     try { bsOverrides = JSON.parse(localStorage.getItem('mfBsCategoryOverrides') || '{}'); } catch(e) {}
     const esc2 = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    bdTblEl.innerHTML = `<table class="dt" style="font-size:10px;min-width:720px">
+    bdTblEl.innerHTML = `<div style="background:var(--bg3);border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:10px;color:var(--text2);line-height:1.5">
+      <strong>📖 純額の符号について</strong> — 純額 = 借方合計 − 貸方合計（単純差し引き）。<span style="color:var(--text3)">符号は良否ではなく「どちら側に計上されたか」を示すだけです。</span><br>
+      <span class="r">＋ (正) 🔴</span>= 借方超過 / 資産・費用系の自然な増加（例: 普通預金＋、業務委託料＋）<br>
+      <span class="g">− (負) 🟢</span>= 貸方超過 / 負債・純資産・収益系の自然な増加（例: 売上高−、借入金−、資本金−）
+    </div>
+    <table class="dt" style="font-size:10px;min-width:720px">
       <thead><tr>
         <th class="l" style="min-width:150px">勘定科目名</th>
         <th style="text-align:right;min-width:90px">借方合計(千円)</th>
         <th style="text-align:right;min-width:90px">貸方合計(千円)</th>
-        <th style="text-align:right;min-width:90px">純額(千円)</th>
+        <th style="text-align:right;min-width:90px" title="純額 = 借方 − 貸方">純額(千円) <span style="color:var(--text3);font-weight:400">＋借超 / −貸超</span></th>
         <th class="l" style="min-width:180px">→ 分類先（変更可）</th>
         <th class="l" style="min-width:70px">状態</th>
       </tr></thead>
@@ -8558,7 +8568,12 @@ window.mfOnCommitMonthChange = function() {
     }, visibleIdxSet);
   } else if (p.type === 'trial_bs') {
     const monthly = p.bs.monthly || {};
-    tblEl.innerHTML = mfBuildTable(months, monthNames, [
+    const bsNote = `<div style="background:rgba(239,159,39,0.10);border:1px solid rgba(239,159,39,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:10px;color:var(--tc-amber);line-height:1.5">
+      ⚠ <strong>期首残高が仕訳から取得できないため「期首=0 起点の累計残高」として表示しています。</strong><br>
+      各月の値 = 期首からその月末までの純増減（資産系: 借方−貸方、負債・純資産系: 貸方−借方）。<br>
+      実残高は「期首残高 + 表示値」となります。現預金がマイナスのように見える場合は、期中に減少した純額を示しています。
+    </div>`;
+    tblEl.innerHTML = bsNote + mfBuildTable(months, monthNames, [
       { label:'【資産の部】',         key:'__header__' },
       { label:'　現預金',              key:'cash',       isRev:true },
       { label:'　売掛金',              key:'receivable', isRev:true },

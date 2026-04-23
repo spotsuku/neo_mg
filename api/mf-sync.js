@@ -397,14 +397,19 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
     }
   });
 
-  // BS: 借方-貸方の純額を残高として扱う（最終丸め）
+  // BS: 借方-貸方の純額を月次デルタとして算出し、累計して期中残高を作る
+  // 資産: 借方+貸方− / 負債・純資産: 貸方+借方−
+  // 期首残高は仕訳からは取得できないため期首=0 起点の累計残高として表示
   BS_KEYS.forEach(k => {
     const isLiabOrEq = ['payable', 'borrowing', 'other_cl', 'capital', 'retained'].includes(k);
+    let running = 0;
     for (let i = 0; i < n; i++) {
-      const raw = isLiabOrEq ? -bsDelta[k][i] : bsDelta[k][i];
-      bsMonthly[k][i] = Math.round(raw);
+      const monthlyDelta = isLiabOrEq ? -bsDelta[k][i] : bsDelta[k][i];
+      running += monthlyDelta;
+      bsMonthly[k][i] = Math.round(running); // 累計残高
     }
-    bsSummary[k] = bsMonthly[k].reduce((t, v) => t + v, 0);
+    // summary は最終月の残高
+    bsSummary[k] = bsMonthly[k][n - 1] || 0;
   });
 
   // 勘定科目別内訳（累積円→千円に最終丸め）
