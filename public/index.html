@@ -7855,9 +7855,9 @@ function mfRenderMonthPicker() {
   ).join('');
 }
 
-function mfToggleAllMonths(checked) {
+window.mfToggleAllMonths = function(checked) {
   document.querySelectorAll('.mf-month-cb').forEach(cb => { cb.checked = checked; });
-}
+};
 
 function mfGetSelectedMonths() {
   return [...document.querySelectorAll('.mf-month-cb:checked')].map(cb => cb.value);
@@ -8789,7 +8789,7 @@ window.mfCommit = async function() {
     return;
   }
 
-  const db = window.DB[String(p.fy)];
+  const db = (typeof DB !== 'undefined' ? DB : window.DB)?.[String(p.fy)];
   if (!db) { alert('DB が見つかりません'); return; }
 
   // 本番反映の最終確認モーダルを表示
@@ -8955,7 +8955,7 @@ window.mfCommitConfirmed = async function() {
   const pend = window._mfPendingCommit;
   if (!pend) return;
   const { p, commitMonths } = pend;
-  const db = window.DB[String(p.fy)];
+  const db = (typeof DB !== 'undefined' ? DB : window.DB)?.[String(p.fy)];
   if (!db) { alert('DB が見つかりません'); return; }
   const btn = document.getElementById('mf-commit-confirm-btn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ 反映中...'; }
