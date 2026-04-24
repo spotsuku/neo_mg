@@ -8418,24 +8418,49 @@ function mfRenderPreview() {
     try { plOverrides = JSON.parse(localStorage.getItem('mfPlCategoryOverrides') || '{}'); } catch(e) {}
     try { bsOverrides = JSON.parse(localStorage.getItem('mfBsCategoryOverrides') || '{}'); } catch(e) {}
     const esc2 = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    // 科目分類 → 区分ラベル（符号を意識せず直感的に読めるよう、区分文字列で表現）
+    const PL_REV   = new Set(['rev','rev_other']);
+    const PL_EXP   = new Set(['cogs','labor','outsource','adv','gaichu','other']);
+    const BS_ASSET = new Set(['cash','receivable','other_ca','fixed']);
+    const BS_LIAB  = new Set(['payable','borrowing','other_cl']);
+    const BS_EQ    = new Set(['capital','retained']);
+    const meaningOf = (cat, net) => {
+      const abs = Math.abs(net);
+      if (!cat) {
+        if (net > 0) return { amount: abs, label: '借方超過', cls:'r' };
+        if (net < 0) return { amount: abs, label: '貸方超過', cls:'g' };
+        return { amount: 0, label: '—', cls:'' };
+      }
+      if (PL_REV.has(cat))   return net <= 0 ? { amount:abs, label:'収益計上',  cls:'g' } : { amount:abs, label:'収益戻し',  cls:'r' };
+      if (PL_EXP.has(cat))   return net >= 0 ? { amount:abs, label:'費用計上',  cls:'r' } : { amount:abs, label:'費用戻し',  cls:'g' };
+      if (BS_ASSET.has(cat)) return net >= 0 ? { amount:abs, label:'資産増加',  cls:'g' } : { amount:abs, label:'資産減少',  cls:'r' };
+      if (BS_LIAB.has(cat))  return net <= 0 ? { amount:abs, label:'負債増加',  cls:'r' } : { amount:abs, label:'負債減少',  cls:'g' };
+      if (BS_EQ.has(cat))    return net <= 0 ? { amount:abs, label:'純資産増加',cls:'g' } : { amount:abs, label:'純資産減少',cls:'r' };
+      return { amount: abs, label: '', cls:'' };
+    };
+
     bdTblEl.innerHTML = `<div style="background:var(--bg3);border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:10px;color:var(--text2);line-height:1.5">
-      <strong>📖 純額の符号について</strong> — 純額 = 借方合計 − 貸方合計（単純差し引き）。<span style="color:var(--text3)">符号は良否ではなく「どちら側に計上されたか」を示すだけです。</span><br>
-      <span class="r">＋ (正) 🔴</span>= 借方超過 / 資産・費用系の自然な増加（例: 普通預金＋、業務委託料＋）<br>
-      <span class="g">− (負) 🟢</span>= 貸方超過 / 負債・純資産・収益系の自然な増加（例: 売上高−、借入金−、資本金−）
+      <strong>📖 この表の見方</strong> — 「金額」は絶対値、「区分」でお金が何に動いたかを示します。<span style="color:var(--text3)">符号を読まなくても直感的に判断できます。</span><br>
+      <span class="g">緑</span>＝ 自然な動き（収益計上・資産増加・純資産増加・負債減少）／
+      <span class="r">赤</span>＝ 支出や負債増加など（費用計上・負債増加・資産減少）<br>
+      <span style="color:var(--text3)">※ 借方・貸方は MF 推移表との突合用に参考表示しています。</span>
     </div>
-    <table class="dt" style="font-size:10px;min-width:720px">
+    <table class="dt" style="font-size:10px;min-width:760px">
       <thead><tr>
         <th class="l" style="min-width:150px">勘定科目名</th>
-        <th style="text-align:right;min-width:90px">借方合計(千円)</th>
-        <th style="text-align:right;min-width:90px">貸方合計(千円)</th>
-        <th style="text-align:right;min-width:90px" title="純額 = 借方 − 貸方">純額(千円) <span style="color:var(--text3);font-weight:400">＋借超 / −貸超</span></th>
+        <th style="text-align:right;min-width:90px">金額(千円)</th>
+        <th class="l" style="min-width:90px">区分</th>
+        <th style="text-align:right;min-width:80px;color:var(--text3)">借方(参考)</th>
+        <th style="text-align:right;min-width:80px;color:var(--text3)">貸方(参考)</th>
         <th class="l" style="min-width:180px">→ 分類先（変更可）</th>
         <th class="l" style="min-width:70px">状態</th>
       </tr></thead>
       <tbody>${breakdown.map(r => {
-        const netClr = r.net > 0 ? 'color:var(--tc-red)' : r.net < 0 ? 'color:var(--tc-green)' : '';
         const overridden = plOverrides[r.name] !== undefined || bsOverrides[r.name] !== undefined;
         const currentCat = overridden ? (plOverrides[r.name] || bsOverrides[r.name]) : (r.category || '');
+        const meaning = meaningOf(currentCat, r.net);
+        const colVar = meaning.cls === 'g' ? 'var(--tc-green)' : meaning.cls === 'r' ? 'var(--tc-red)' : 'var(--text)';
+        const labelColor = meaning.cls ? colVar : 'var(--text3)';
         const optsHtml = [
           `<option value="" ${currentCat===''?'selected':''}>（未分類）</option>`,
           '<optgroup label="PL">',
@@ -8447,9 +8472,10 @@ function mfRenderPreview() {
         ].join('');
         return `<tr>
           <td style="font-size:10px;font-weight:600">${esc2(r.name)}</td>
-          <td style="text-align:right;font-size:10px">${r.debit ? r.debit.toLocaleString() : '—'}</td>
-          <td style="text-align:right;font-size:10px">${r.credit ? r.credit.toLocaleString() : '—'}</td>
-          <td style="text-align:right;font-size:10px;font-weight:700;${netClr}">${r.net !== 0 ? r.net.toLocaleString() : '—'}</td>
+          <td style="text-align:right;font-size:11px;font-weight:700;color:${colVar}">${meaning.amount ? meaning.amount.toLocaleString() : '—'}</td>
+          <td style="font-size:10px;color:${labelColor}">${meaning.label}</td>
+          <td style="text-align:right;font-size:10px;color:var(--text3)">${r.debit ? r.debit.toLocaleString() : '—'}</td>
+          <td style="text-align:right;font-size:10px;color:var(--text3)">${r.credit ? r.credit.toLocaleString() : '—'}</td>
           <td>
             <select class="mf-bd-cat-select" data-acct="${esc2(r.name)}" onchange="mfSavePlBsOverride(this)" style="padding:2px 4px;font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:3px;min-width:170px">${optsHtml}</select>
           </td>
