@@ -2559,9 +2559,10 @@ function renderCFView(d) {
         ? `<span class="${lastClose>0?'g':'r'}">${fmt千(lastClose)}</span>` : '—';
     }
     if (el('cf-sum-net')) {
-      el('cf-sum-net').innerHTML = netCF >= 0
-        ? `<span class="g">+${fmt千(netCF)}</span>`
-        : `<span class="r">▲${fmt千(Math.abs(netCF))}</span>`;
+      const hasActualCF = aInTot > 0 || aOutTot > 0;
+      el('cf-sum-net').innerHTML = !hasActualCF ? '—'
+        : netCF >= 0 ? `<span class="g">+${fmt千(netCF)}</span>`
+                     : `<span class="r">▲${fmt千(Math.abs(netCF))}</span>`;
     }
     if (el('cf-sum-rate')) {
       el('cf-sum-rate').innerHTML = rateIn
@@ -2665,41 +2666,81 @@ function renderCFView(d) {
   const bOpCF  = Array.from({length:N}, (_,i) => getN(bIn,i) - bTotalOut[i]);
   const bFinCF = Array.from({length:N}, (_,i) => bFinInTot[i] + getN(bFunding,i));
   const bNetCF = Array.from({length:N}, (_,i) => bOpCF[i] + bFinCF[i]);
-  // 月末残高 = 各月の月初残高 + 純CF（単月計算）
-  const bCloseCalc = Array.from({length:N}, (_,i) => {
-    const open = getN(bOpen, i);
-    return open > 0 ? Math.round(open + bNetCF[i]) : null;
-  });
+  // 月末残高 = 各月の月初残高 + 純CF（単月計算）/ 月初が無ければ前月月末を引き継ぎ
+  const bCloseCalc = (() => {
+    const out = new Array(N).fill(null);
+    let running = null;
+    for (let i = 0; i < N; i++) {
+      const openI = getN(bOpen, i);
+      if (openI > 0) {
+        running = openI + bNetCF[i];
+      } else if (running !== null) {
+        running = running + bNetCF[i];
+      }
+      out[i] = running !== null ? Math.round(running) : null;
+    }
+    return out;
+  })();
+  // 予算の累計CF（期首=0起点）— 月次純CFを累積してグラフに描く用
+  const bCumCF = (() => {
+    const out = new Array(N).fill(0);
+    let acc = 0;
+    for (let i = 0; i < N; i++) {
+      acc += bNetCF[i];
+      out[i] = Math.round(acc);
+    }
+    return out;
+  })();
+  // 実績データがあるか（CF実績の有無でチャート表示の軽重を切替）
+  const hasAnyActual = aIn.some(v => Number(v) > 0) || aFunding.some(v => Number(v) > 0) ||
+    aLabor.some(v => Number(v) > 0) || aOut.some(v => Number(v) > 0);
 
   // ── グラフ ──
   destroyChart('cf-chart-main');
+  // 実績が無い年度（予算のみ入力済）でも可視化できるよう、予算ベースのデータセットを追加
+  const budgetDatasets = [
+    { type:'bar', label:'売上入金（予算）', data: bIn.map(v=>Number(v)||0),
+      backgroundColor:'rgba(55,138,221,0.22)', borderColor:'rgba(55,138,221,0.5)', borderWidth:1, borderRadius:3,
+      stack:'in_b', yAxisID:'y' },
+    { type:'bar', label:'融資・調達（予算）', data: bFunding.map(v=>Number(v)||0),
+      backgroundColor:'rgba(83,74,183,0.22)', borderColor:'rgba(83,74,183,0.5)', borderWidth:1, borderRadius:3,
+      stack:'in_b', yAxisID:'y' },
+    { type:'bar', label:'支出合計（予算）', data: bTotalOut.map(v => v ? -v : 0),
+      backgroundColor:'rgba(226,75,74,0.20)', borderColor:'rgba(226,75,74,0.5)', borderWidth:1, borderRadius:3,
+      stack:'out_b', yAxisID:'y' },
+  ];
+  const actualDatasets = [
+    // ── 入金（積み上げ正方向）──
+    { type:'bar', label:'売上入金',     data: aIn.map(v=>Number(v)||0),            backgroundColor:'rgba(55,138,221,0.7)', borderRadius:3, stack:'in',  yAxisID:'y' },
+    { type:'bar', label:'融資・調達',   data: aFunding.map(v=>Number(v)||0),       backgroundColor:'rgba(83,74,183,0.7)', borderRadius:3, stack:'in',  yAxisID:'y' },
+    // ── 出金（積み上げ負方向）──
+    { type:'bar', label:'人件費',       data: aLabor.map(v=>v?-v:0),              backgroundColor:'rgba(226,75,74,0.75)', stack:'out', yAxisID:'y' },
+    { type:'bar', label:'業務委託費',   data: aOut.map(v=>v?-v:0),               backgroundColor:'rgba(216,90,48,0.7)',  stack:'out', yAxisID:'y' },
+    { type:'bar', label:'広告宣伝費',    data: aAdv.map(v=>v?-v:0),   backgroundColor:'rgba(239,159,39,0.8)', stack:'out', yAxisID:'y' },
+    { type:'bar', label:'外注費(イベント)', data: aEvent.map(v=>v?-v:0), backgroundColor:'rgba(239,120,39,0.7)', stack:'out', yAxisID:'y' },
+    { type:'bar', label:'外注費',       data: aGaichu.map(v=>v?-v:0),            backgroundColor:'rgba(139,90,43,0.7)',  stack:'out', yAxisID:'y' },
+    { type:'bar', label:'賃料',         data: aRent.map(v=>v?-v:0),              backgroundColor:'rgba(136,135,128,0.7)',stack:'out', yAxisID:'y' },
+    { type:'bar', label:'その他支出',   data: aOther.map(v=>v?-v:0),             backgroundColor:'rgba(100,100,100,0.5)',stack:'out', yAxisID:'y' },
+  ];
+  const lineDatasets = [
+    // ── 残高ライン ──
+    { type:'line', label:'残高（実績）', data: aCloseCalc.map(v=>Number(v)||null),
+      borderColor:'#378ADD', backgroundColor:'rgba(55,138,221,0.06)', fill:false,
+      tension:0.3, pointRadius:4, pointBackgroundColor: aCloseCalc.map(v=>Number(v)<0?'#E24B4A':'#378ADD'),
+      borderWidth:2.5, yAxisID:'y2' },
+    { type:'line', label:'残高（予算）', data: bCloseCalc,
+      borderColor:'rgba(55,138,221,0.5)', borderDash:[4,3], tension:0.3, pointRadius:2, borderWidth:1.5, yAxisID:'y2' },
+    // ── 営業CF折れ線 ──
+    { type:'line', label:'営業CF（実績）', data: aOpCF.map(v=>v||null),
+      borderColor:'#27ae60', borderDash:[5,2], tension:0.2, pointRadius:3, borderWidth:1.5, yAxisID:'y' },
+    { type:'line', label:'累計CF（予算）', data: bCumCF,
+      borderColor:'rgba(39,174,96,0.55)', borderDash:[2,3], tension:0.2, pointRadius:2, borderWidth:1.2, yAxisID:'y2' },
+  ];
   charts['cf-chart-main'] = new Chart(document.getElementById('cf-chart-main'), {
     type: 'bar',
     data: {
       labels: months,
-      datasets: [
-        // ── 入金（積み上げ正方向）──
-        { type:'bar', label:'売上入金',     data: aIn.map(v=>Number(v)||0),            backgroundColor:'rgba(55,138,221,0.7)', borderRadius:3, stack:'in',  yAxisID:'y' },
-        { type:'bar', label:'融資・調達',   data: aFunding.map(v=>Number(v)||0),       backgroundColor:'rgba(83,74,183,0.7)', borderRadius:3, stack:'in',  yAxisID:'y' },
-        // ── 出金（積み上げ負方向）──
-        { type:'bar', label:'人件費',       data: aLabor.map(v=>v?-v:0),              backgroundColor:'rgba(226,75,74,0.75)', stack:'out', yAxisID:'y' },
-        { type:'bar', label:'業務委託費',   data: aOut.map(v=>v?-v:0),               backgroundColor:'rgba(216,90,48,0.7)',  stack:'out', yAxisID:'y' },
-        { type:'bar', label:'広告宣伝費',    data: aAdv.map(v=>v?-v:0),   backgroundColor:'rgba(239,159,39,0.8)', stack:'out', yAxisID:'y' },
-        { type:'bar', label:'外注費(イベント)', data: aEvent.map(v=>v?-v:0), backgroundColor:'rgba(239,120,39,0.7)', stack:'out', yAxisID:'y' },
-        { type:'bar', label:'外注費',       data: aGaichu.map(v=>v?-v:0),            backgroundColor:'rgba(139,90,43,0.7)',  stack:'out', yAxisID:'y' },
-        { type:'bar', label:'賃料',         data: aRent.map(v=>v?-v:0),              backgroundColor:'rgba(136,135,128,0.7)',stack:'out', yAxisID:'y' },
-        { type:'bar', label:'その他支出',   data: aOther.map(v=>v?-v:0),             backgroundColor:'rgba(100,100,100,0.5)',stack:'out', yAxisID:'y' },
-        // ── 残高ライン ──
-        { type:'line', label:'残高（実績）', data: aCloseCalc.map(v=>Number(v)||null),
-          borderColor:'#378ADD', backgroundColor:'rgba(55,138,221,0.06)', fill:false,
-          tension:0.3, pointRadius:4, pointBackgroundColor: aCloseCalc.map(v=>Number(v)<0?'#E24B4A':'#378ADD'),
-          borderWidth:2.5, yAxisID:'y2' },
-        { type:'line', label:'残高（予算）', data: bCloseCalc,
-          borderColor:'rgba(55,138,221,0.5)', borderDash:[4,3], tension:0.3, pointRadius:2, borderWidth:1.5, yAxisID:'y2' },
-        // ── 営業CF折れ線 ──
-        { type:'line', label:'営業CF（実績）', data: aOpCF.map(v=>v||null),
-          borderColor:'#27ae60', borderDash:[5,2], tension:0.2, pointRadius:3, borderWidth:1.5, yAxisID:'y' }
-      ]
+      datasets: [...budgetDatasets, ...actualDatasets, ...lineDatasets]
     },
     options: {
       responsive:true, maintainAspectRatio:false,
