@@ -2572,7 +2572,15 @@ function renderCFView(d) {
   })();
 
   // ── ヘルパー：CF配列を取得（千円単位） ──
-  const cfArr = (section, key) => (d.cf[section] && d.cf[section][key]) || Array(N).fill(0);
+  // 空配列やlength不足のケース（2026年度の初期状態等）にも対応するため、
+  // 必ず length === N の配列を返す（不足分は0埋め）
+  const cfArr = (section, key) => {
+    const v = d.cf && d.cf[section] && d.cf[section][key];
+    if (!Array.isArray(v) || v.length < N) {
+      return Array.from({length: N}, (_, i) => (Array.isArray(v) ? (Number(v[i]) || 0) : 0));
+    }
+    return v;
+  };
   const getN = (arr, i) => Number(arr[i]) || 0;
 
   // ── 実績計算 ──
