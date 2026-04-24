@@ -255,6 +255,16 @@ td.actual.editable-cell {
   box-shadow: inset 0 0 0 2px var(--tc-blue) !important;
   padding: 0 !important;
 }
+/* Excel風 選択モード（編集中ではない状態） */
+.editable-cell.cell-sel-focus {
+  outline: 2px solid var(--tc-blue);
+  outline-offset: -2px;
+  background: rgba(55,138,221,0.18) !important;
+}
+.editable-cell.cell-sel-range {
+  background: rgba(55,138,221,0.12) !important;
+}
+.editable-cell { outline: none; }
 .cell-input {
   width: 100%;
   height: 100%;
@@ -2280,6 +2290,216 @@ function parsePasteNum(s) {
   return isNaN(n) ? '' : n;
 }
 
+// ── Excel風セル選択・ナビゲーション ──
+// クリック = 編集モード / Escape = 選択モード / 矢印 = 移動 / Shift+矢印 = 範囲拡張
+// Cmd/Ctrl+C = TSVコピー / Cmd/Ctrl+V = TSV貼付け
+const CellNav = {
+  _anchor: null,  // {wrap, attrSel} 範囲選択の起点td
+  _focus: null,   // 現在のフォーカスtd
+  _wrap: null,    // 対象wrap要素
+
+  getInfo(td) {
+    if (!td || !td.classList || !td.classList.contains('editable-cell')) return null;
+    return {
+      isCf: !!td.dataset.cfkey,
+      key: td.dataset.cfkey || td.dataset.key,
+      kind: td.dataset.kind,
+      idx: Number(td.dataset.idx),
+    };
+  },
+  buildSelector(info, idx) {
+    return info.isCf
+      ? `td.editable-cell[data-cfkey="${info.key}"][data-idx="${idx}"]`
+      : `td.editable-cell[data-key="${info.key}"][data-kind="${info.kind}"][data-idx="${idx}"]`;
+  },
+  findAdjacent(td, dir, wrap) {
+    if (!td || !wrap) return null;
+    const info = this.getInfo(td);
+    if (!info) return null;
+    if (dir === 'left' || dir === 'right') {
+      const nextIdx = info.idx + (dir === 'right' ? 1 : -1);
+      return wrap.querySelector(this.buildSelector(info, nextIdx));
+    }
+    // up/down: 同じ列（data-idx）のDOM順リストから前後を取る
+    const sameCol = Array.from(wrap.querySelectorAll(`td.editable-cell[data-idx="${info.idx}"]`));
+    const pos = sameCol.indexOf(td);
+    return sameCol[pos + (dir === 'down' ? 1 : -1)] || null;
+  },
+  clearHighlight() {
+    if (!this._wrap) return;
+    this._wrap.querySelectorAll('.cell-sel-focus,.cell-sel-range').forEach(el =>
+      el.classList.remove('cell-sel-focus','cell-sel-range'));
+  },
+  applyHighlight() {
+    this.clearHighlight();
+    if (!this._focus || !this._wrap) return;
+    const a = this._anchor, f = this._focus;
+    if (a && a !== f) {
+      const ai = this.getInfo(a), fi = this.getInfo(f);
+      // 同じ行（key+kind一致）のみ範囲にする
+      if (ai && fi && ai.key === fi.key && ai.kind === fi.kind) {
+        const [lo, hi] = ai.idx <= fi.idx ? [ai.idx, fi.idx] : [fi.idx, ai.idx];
+        for (let i = lo; i <= hi; i++) {
+          const el = this._wrap.querySelector(this.buildSelector(ai, i));
+          if (el) el.classList.add('cell-sel-range');
+        }
+      }
+    }
+    f.classList.add('cell-sel-focus');
+    this._suppressFocusIn = true;
+    try { f.focus({ preventScroll: false }); } catch(e) {}
+    // 次tickでガード解除（focusinが非同期で届くケースに対応）
+    setTimeout(() => { this._suppressFocusIn = false; }, 0);
+  },
+  setFocus(td, extend) {
+    if (!td) return;
+    const wrap = td.closest('#pl-table-wrap,#cf-table-wrap');
+    if (!wrap) return;
+    this._wrap = wrap;
+    if (!extend || !this._anchor) this._anchor = td;
+    this._focus = td;
+    this.applyHighlight();
+  },
+  clearSelection() {
+    this.clearHighlight();
+    this._anchor = this._focus = this._wrap = null;
+  },
+  // 選択範囲の値をTSVで返す
+  getSelectionTSV() {
+    if (!this._focus) return '';
+    const cellText = (el) => el ? el.textContent.replace(/[,¥￥\s]/g,'').replace(/[▲△]/g,'-').replace(/─/g,'') : '';
+    if (!this._anchor || this._anchor === this._focus) return cellText(this._focus);
+    const ai = this.getInfo(this._anchor), fi = this.getInfo(this._focus);
+    if (!ai || !fi || ai.key !== fi.key || ai.kind !== fi.kind) return cellText(this._focus);
+    const [lo, hi] = ai.idx <= fi.idx ? [ai.idx, fi.idx] : [fi.idx, ai.idx];
+    const parts = [];
+    for (let i = lo; i <= hi; i++) {
+      const el = this._wrap.querySelector(this.buildSelector(ai, i));
+      parts.push(cellText(el));
+    }
+    return parts.join('\t');
+  },
+  // フォーカス位置からTSVを書き込む（横方向のみ対応）
+  pasteTSV(text) {
+    if (!this._focus) return;
+    const td = this._focus;
+    const info = this.getInfo(td);
+    if (!info) return;
+    const d = DB[currentYear];
+    const N = d.months.length;
+    const firstRow = String(text).replace(/\r/g,'').split('\n').filter(r=>r!=='')[0].split('\t');
+    if (info.isCf) {
+      const [section, field] = info.key.split('.');
+      if (!d.cf[section]) d.cf[section] = {};
+      const existing = d.cf[section][field];
+      if (!Array.isArray(existing) || existing.length < N) {
+        d.cf[section][field] = Array.from({length:N}, (_, i) =>
+          Array.isArray(existing) && existing[i] !== undefined ? existing[i] : '');
+      }
+      for (let i = 0; i < firstRow.length && info.idx + i < N; i++) {
+        d.cf[section][field][info.idx + i] = parsePasteNum(firstRow[i]);
+      }
+      DB[currentYear] = d;
+      showPlCfSaveBar(); scheduleAutoSave && scheduleAutoSave('CF貼付け');
+      renderCFView(d);
+    } else {
+      const target = info.kind === 'budget' ? d.pl.budget : d.pl.actual;
+      const existing = target[info.key];
+      if (!Array.isArray(existing) || existing.length < N) {
+        target[info.key] = Array.from({length:N}, (_, i) =>
+          Array.isArray(existing) && existing[i] !== undefined ? existing[i] : '');
+      }
+      for (let i = 0; i < firstRow.length && info.idx + i < N; i++) {
+        target[info.key][info.idx + i] = parsePasteNum(firstRow[i]);
+      }
+      DB[currentYear] = d;
+      showPlCfSaveBar(); scheduleAutoSave('PL貼付け');
+      renderPLView(d);
+    }
+    // 再描画後にフォーカス復帰
+    setTimeout(() => {
+      const el = document.querySelector(this.buildSelector(info, info.idx));
+      if (el) this.setFocus(el, false);
+    }, 0);
+  },
+  // keydown処理（tableに委譲）
+  onKey(e) {
+    if (!this._focus) return;
+    // 編集モードに入る
+    if (e.key === 'Enter' || e.key === 'F2') {
+      e.preventDefault();
+      this._focus.click();
+      return;
+    }
+    if (e.key.length === 1 && /[0-9\-\.]/.test(e.key)) {
+      // 数字・マイナス・ドットを押したら編集モード（入力でclear+type）
+      e.preventDefault();
+      const td = this._focus;
+      td.click();
+      setTimeout(() => {
+        const inp = td.querySelector('input');
+        if (inp) { inp.value = e.key; inp.setSelectionRange(1, 1); }
+      }, 0);
+      return;
+    }
+    const metaOrCtrl = e.metaKey || e.ctrlKey;
+    if (metaOrCtrl && (e.key === 'c' || e.key === 'C')) {
+      e.preventDefault();
+      const tsv = this.getSelectionTSV();
+      if (tsv) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(tsv).catch(() => fallbackCopy(tsv));
+        } else fallbackCopy(tsv);
+      }
+      return;
+    }
+    if (metaOrCtrl && (e.key === 'v' || e.key === 'V')) {
+      e.preventDefault();
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText().then(t => this.pasteTSV(t)).catch(() => {});
+      }
+      return;
+    }
+    const keyMap = { ArrowLeft:'left', ArrowRight:'right', ArrowUp:'up', ArrowDown:'down' };
+    if (keyMap[e.key]) {
+      e.preventDefault();
+      const next = this.findAdjacent(this._focus, keyMap[e.key], this._wrap);
+      if (next) this.setFocus(next, e.shiftKey);
+      return;
+    }
+    if (e.key === 'Escape') {
+      this.clearSelection();
+    }
+  },
+  // wrap要素にkeydownを一度だけバインド
+  attach(wrap) {
+    if (!wrap || wrap._cellNavBound) return;
+    wrap._cellNavBound = true;
+    wrap.addEventListener('keydown', (e) => this.onKey(e));
+    // フォーカス移動時にハイライトを更新
+    wrap.addEventListener('focusin', (e) => {
+      if (this._suppressFocusIn) return;
+      const td = e.target.closest('.editable-cell');
+      if (td && !td.classList.contains('cell-editing')) {
+        this._wrap = wrap;
+        this._anchor = this._focus = td;
+        this.applyHighlight();
+      }
+    });
+  },
+};
+
+// Clipboard APIが使えないブラウザ向けのフォールバック
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+}
+
 // PL セルクリック（d はその時点の DB[currentYear] への参照）
 function plCellClick(td, d) {
   if (td.classList.contains('cell-editing')) return;
@@ -2351,7 +2571,17 @@ function plCellClick(td, d) {
       commit();
       moveTo(idx + step);
     }
-    if (e.key === 'Escape') { committed = true; td.classList.remove('cell-editing'); renderPLView(d); }
+    if (e.key === 'Escape') {
+      committed = true;
+      td.classList.remove('cell-editing');
+      renderPLView(d);
+      // 再描画後に元のセルをフォーカス → 選択モードへ遷移
+      setTimeout(() => {
+        const sel = `#pl-table-wrap td.editable-cell[data-key="${key}"][data-kind="${kind}"][data-idx="${idx}"]`;
+        const el = document.querySelector(sel);
+        if (el) CellNav.setFocus(el, false);
+      }, 0);
+    }
   });
 }
 
@@ -2427,7 +2657,16 @@ function cfCellClick(td, d) {
       commit();
       moveTo(idx + step);
     }
-    if (e.key === 'Escape') { committed = true; td.classList.remove('cell-editing'); renderCFView(d); }
+    if (e.key === 'Escape') {
+      committed = true;
+      td.classList.remove('cell-editing');
+      renderCFView(d);
+      setTimeout(() => {
+        const sel = `#cf-table-wrap td.editable-cell[data-cfkey="${cfKey}"][data-idx="${idx}"]`;
+        const el = document.querySelector(sel);
+        if (el) CellNav.setFocus(el, false);
+      }, 0);
+    }
   });
 }
 
@@ -2624,12 +2863,12 @@ function renderPLView(d) {
       (Array.isArray(arr) && arr[i] !== undefined) ? arr[i] : '');
     const _bArr = _toDense(row.b);
     const _aArr = _toDense(row.a);
-    _bArr.forEach((v, i) => { html += `<td class="budget editable-cell" data-key="${row.key}" data-kind="budget" data-idx="${i}" onclick="plCellClick(this,window._plCFd)">${v !== '' && v !== undefined ? Number(v).toLocaleString() : '─'}</td>`; });
+    _bArr.forEach((v, i) => { html += `<td class="budget editable-cell" tabindex="0" data-key="${row.key}" data-kind="budget" data-idx="${i}" onclick="plCellClick(this,window._plCFd)">${v !== '' && v !== undefined ? Number(v).toLocaleString() : '─'}</td>`; });
     html += `<td class="budget">${bSum.toLocaleString()}</td></tr>`;
     // actual row
     const aSum = _aArr.reduce((s, v) => s + (Number(v) || 0), 0);
      html += `<tr><td class="l" style="${_ind}"></td><td class="l" style="font-size:9px;font-weight:700;color:var(--text);${_sb2}">実績</td>`;
-    _aArr.forEach((v, i) => { html += `<td class="actual editable-cell" data-key="${row.key}" data-kind="actual" data-idx="${i}" onclick="plCellClick(this,window._plCFd)">${v !== '' && v !== undefined && v !== null ? Number(v).toLocaleString() : '─'}</td>`; });
+    _aArr.forEach((v, i) => { html += `<td class="actual editable-cell" tabindex="0" data-key="${row.key}" data-kind="actual" data-idx="${i}" onclick="plCellClick(this,window._plCFd)">${v !== '' && v !== undefined && v !== null ? Number(v).toLocaleString() : '─'}</td>`; });
     html += `<td class="actual">${aSum ? aSum.toLocaleString() : '─'}</td></tr>`;
     // diff row
      html += `<tr><td class="l" style="${_ind}"></td><td class="l" style="font-size:9px;color:var(--text3);${_sb2}">差異</td>`;
@@ -2699,7 +2938,9 @@ function renderPLView(d) {
   html += `<td class="actual ${aOpSum >= 0 ? 'diff-pos' : 'diff-neg'}" style="background:rgba(39,174,96,0.10);border-left:2px solid rgba(39,174,96,0.25);font-weight:700">${aOpSum >= 0 ? '' : '▲'}${Math.abs(Math.round(aOpSum)).toLocaleString()}</td></tr>`;
   html += '</tbody></table>';
   window._plCFd = d;
-  document.getElementById('pl-table-wrap').innerHTML = html;
+  const plWrap = document.getElementById('pl-table-wrap');
+  plWrap.innerHTML = html;
+  CellNav.attach(plWrap);
 }
 
 function renderCFView(d) {
@@ -3201,7 +3442,7 @@ function renderCFView(d) {
       const dispVal = val !== null ? val.toLocaleString() : '─';
       const colorCls = ''; // 予算・実績は白（差異のみ色付き）
       if (row.edBKey && !isTot) {
-        html += `<td class="budget editable-cell" style="${colorCls}" data-cfkey="${row.edBKey}" data-kind="budget" data-idx="${i}" onclick="cfCellClick(this,window._plCFd)">${dispVal}</td>`;
+        html += `<td class="budget editable-cell" tabindex="0" style="${colorCls}" data-cfkey="${row.edBKey}" data-kind="budget" data-idx="${i}" onclick="cfCellClick(this,window._plCFd)">${dispVal}</td>`;
       } else {
         html += `<td class="budget" style="${colorCls}">${dispVal}</td>`;
       }
@@ -3218,7 +3459,7 @@ function renderCFView(d) {
       const dispVal = val !== null ? val.toLocaleString() : '─';
       const colorCls = ''; // 予算・実績は白（差異のみ色付き）
       if (row.edAKey && !isTot) {
-        html += `<td class="actual editable-cell" style="${colorCls}" data-cfkey="${row.edAKey}" data-kind="actual" data-idx="${i}" onclick="cfCellClick(this,window._plCFd)">${dispVal}</td>`;
+        html += `<td class="actual editable-cell" tabindex="0" style="${colorCls}" data-cfkey="${row.edAKey}" data-kind="actual" data-idx="${i}" onclick="cfCellClick(this,window._plCFd)">${dispVal}</td>`;
       } else {
         html += `<td class="actual" style="${colorCls}">${dispVal}</td>`;
       }
@@ -3243,7 +3484,9 @@ function renderCFView(d) {
 
   html += '</tbody></table>';
   window._plCFd = d;
-  document.getElementById('cf-table-wrap').innerHTML = html;
+  const cfWrap = document.getElementById('cf-table-wrap');
+  cfWrap.innerHTML = html;
+  CellNav.attach(cfWrap);
 }
 
 
