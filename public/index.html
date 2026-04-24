@@ -3208,12 +3208,15 @@ function renderCFView(d) {
 
   // ── 実績計算 ──
   const aOpen    = cfArr('actual','open');
-  // 入金：内訳合計 > 0 なら内訳、なければ cfIn直接
-  const aInMemb  = cfArr('actual','cfInMembership');
-  const aInTrain = cfArr('actual','cfInTraining');
-  const aInOther = cfArr('actual','cfInOther');
+  // 入金内訳（新キー: cfInFee / cfInTraining / cfInEvent / cfInOther）。
+  // 旧 cfInMembership も後方互換で合算する。
+  const aCfInFee      = cfArr('actual','cfInFee');
+  const aCfInTraining = cfArr('actual','cfInTraining');
+  const aCfInEvent    = cfArr('actual','cfInEvent');
+  const aCfInOther    = cfArr('actual','cfInOther');
+  const aCfInMemb     = cfArr('actual','cfInMembership'); // 後方互換
   const aIn = Array.from({length:N},(_,i) => {
-    const det = (aInMemb[i]||0)+(aInTrain[i]||0)+(aInOther[i]||0);
+    const det = aCfInFee[i] + aCfInTraining[i] + aCfInEvent[i] + aCfInOther[i] + aCfInMemb[i];
     return det > 0 ? det : (Number(cfArr('actual','cfIn')[i])||0);
   });
   const aClose   = cfArr('actual','cfClose');
@@ -3251,12 +3254,18 @@ function renderCFView(d) {
 
   // ── 予算計算（詳細科目ベース）──
   const bOpen    = cfArr('budget','open');
-  const bInMemb  = cfArr('budget','cfInMembership');
-  const bInTrain = cfArr('budget','cfInTraining');
-  const bInOther = cfArr('budget','cfInOther');
-  const bInFromDetail = Array.from({length:N},(_,i) => bInMemb[i]+bInTrain[i]+bInOther[i]);
+  // 入金内訳（新キー: cfInFee / cfInTraining / cfInEvent / cfInOther）
+  // 旧 cfInMembership も後方互換で合算する。
+  const bCfInFeeArr      = cfArr('budget','cfInFee');
+  const bCfInTrainingArr = cfArr('budget','cfInTraining');
+  const bCfInEventArr    = cfArr('budget','cfInEvent');
+  const bCfInOtherArr    = cfArr('budget','cfInOther');
+  const bCfInMembArr     = cfArr('budget','cfInMembership'); // 後方互換
   const bInRaw   = cfArr('budget','cfIn');
-  const bIn      = Array.from({length:N},(_,i) => bInFromDetail[i] > 0 ? bInFromDetail[i] : bInRaw[i]);
+  const bIn      = Array.from({length:N},(_,i) => {
+    const det = bCfInFeeArr[i] + bCfInTrainingArr[i] + bCfInEventArr[i] + bCfInOtherArr[i] + bCfInMembArr[i];
+    return det > 0 ? det : bInRaw[i];
+  });
   const bFunding = cfArr('budget','funding');
   // 出金合計は詳細科目から計算（sumKeysはrows定義の前なので先に計算）
   const bAllOutKeys = [
@@ -3555,29 +3564,29 @@ function renderCFView(d) {
 
     // ── 販管費合計 ──
     { label:'── 販管費合計', section:true, colId:'cf-sec-opex' },
-    // 販管費合計・固定費合計・変動費合計は常時表示
-    { label:'販管費合計',  bArr:bOpexTot, aArr:aOpexTot, isTot:true, isOut:true, noDiff:false },
+    // 親セクション（cf-sec-opex）を閉じるとこれらの行はすべて隠れる
+    { label:'販管費合計',  bArr:bOpexTot, aArr:aOpexTot, isTot:true, isOut:true, noDiff:false, colGroup:'cf-sec-opex' },
     // 固定費合計 + 明細折りたたみ（cf-sec-fixed）
-    { label:'　固定費合計（明細▶）', bArr:bFixed, aArr:aFixed, isTot:true, isOut:true, noDiff:false, subColId:'cf-sec-fixed' },
-    R('　　人件費・税金',         'salaryPay',    'salaryPay',    {isSub:true, isOut:true, colGroup:'cf-sec-fixed'}),
-    R('　　開発外注',             'devOutPay',    'devOutPay',    {isSub:true, isOut:true, colGroup:'cf-sec-fixed'}),
-    R('　　業務委託＋経費',       'bizComPay',    'bizComPay',    {isSub:true, isOut:true, colGroup:'cf-sec-fixed'}),
-    R('　　インセンティブ',       'incentivePay', 'incentivePay', {isSub:true, isOut:true, colGroup:'cf-sec-fixed'}),
-    R('　　専門家外注',           'expertPay',    'expertPay',    {isSub:true, isOut:true, colGroup:'cf-sec-fixed'}),
-    R('　　家賃',                 'rentPay',      'rentPay',      {isSub:true, isOut:true, colGroup:'cf-sec-fixed'}),
+    { label:'　固定費合計（明細▶）', bArr:bFixed, aArr:aFixed, isTot:true, isOut:true, noDiff:false, subColId:'cf-sec-fixed', colGroup:'cf-sec-opex' },
+    R('　　人件費・税金',         'salaryPay',    'salaryPay',    {isSub:true, isOut:true, colGroup:'cf-sec-fixed', colGroupParent:'cf-sec-opex'}),
+    R('　　開発外注',             'devOutPay',    'devOutPay',    {isSub:true, isOut:true, colGroup:'cf-sec-fixed', colGroupParent:'cf-sec-opex'}),
+    R('　　業務委託＋経費',       'bizComPay',    'bizComPay',    {isSub:true, isOut:true, colGroup:'cf-sec-fixed', colGroupParent:'cf-sec-opex'}),
+    R('　　インセンティブ',       'incentivePay', 'incentivePay', {isSub:true, isOut:true, colGroup:'cf-sec-fixed', colGroupParent:'cf-sec-opex'}),
+    R('　　専門家外注',           'expertPay',    'expertPay',    {isSub:true, isOut:true, colGroup:'cf-sec-fixed', colGroupParent:'cf-sec-opex'}),
+    R('　　家賃',                 'rentPay',      'rentPay',      {isSub:true, isOut:true, colGroup:'cf-sec-fixed', colGroupParent:'cf-sec-opex'}),
     // 変動費合計 + 明細折りたたみ（cf-sec-var）
-    { label:'　変動費合計（明細▶）', bArr:bVar, aArr:aVar, isTot:true, isOut:true, noDiff:false, subColId:'cf-sec-var' },
-    R('　　経費精算（旅費・ツール）','expensePay',   'expensePay',   {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
-    R('　　通信費',               'telPay',        'telPay',        {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
-    R('　　交際/会議費',          'entertainPay',  'entertainPay',  {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
-    R('　　租税公課',             'taxPay',        'taxPay',        {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
-    R('　　ツール費用',           'toolsPay',      'toolsPay',      {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
-    R('　　消耗品',               'suppliesPay',   'suppliesPay',   {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
-    R('　　広告費・スポーツ協賛', 'adSportsPay',   'adSportsPay',   {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
-    R('　　外注費 イベント運営費','eventCostPay',  'eventCostPay',  {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
-    R('　　採用研修',             'recruitPay',    'recruitPay',    {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
-    R('　　年会費',               'annualFeePay',  'annualFeePay',  {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
-    R('　　その他',               'salesOtherPay', 'salesOtherPay', {isSub:true, isOut:true, colGroup:'cf-sec-var'}),
+    { label:'　変動費合計（明細▶）', bArr:bVar, aArr:aVar, isTot:true, isOut:true, noDiff:false, subColId:'cf-sec-var', colGroup:'cf-sec-opex' },
+    R('　　経費精算（旅費・ツール）','expensePay',   'expensePay',   {isSub:true, isOut:true, colGroup:'cf-sec-var', colGroupParent:'cf-sec-opex'}),
+    R('　　通信費',               'telPay',        'telPay',        {isSub:true, isOut:true, colGroup:'cf-sec-var', colGroupParent:'cf-sec-opex'}),
+    R('　　交際/会議費',          'entertainPay',  'entertainPay',  {isSub:true, isOut:true, colGroup:'cf-sec-var', colGroupParent:'cf-sec-opex'}),
+    R('　　租税公課',             'taxPay',        'taxPay',        {isSub:true, isOut:true, colGroup:'cf-sec-var', colGroupParent:'cf-sec-opex'}),
+    R('　　ツール費用',           'toolsPay',      'toolsPay',      {isSub:true, isOut:true, colGroup:'cf-sec-var', colGroupParent:'cf-sec-opex'}),
+    R('　　消耗品',               'suppliesPay',   'suppliesPay',   {isSub:true, isOut:true, colGroup:'cf-sec-var', colGroupParent:'cf-sec-opex'}),
+    R('　　広告費・スポーツ協賛', 'adSportsPay',   'adSportsPay',   {isSub:true, isOut:true, colGroup:'cf-sec-var', colGroupParent:'cf-sec-opex'}),
+    R('　　外注費 イベント運営費','eventCostPay',  'eventCostPay',  {isSub:true, isOut:true, colGroup:'cf-sec-var', colGroupParent:'cf-sec-opex'}),
+    R('　　採用研修',             'recruitPay',    'recruitPay',    {isSub:true, isOut:true, colGroup:'cf-sec-var', colGroupParent:'cf-sec-opex'}),
+    R('　　年会費',               'annualFeePay',  'annualFeePay',  {isSub:true, isOut:true, colGroup:'cf-sec-var', colGroupParent:'cf-sec-opex'}),
+    R('　　その他',               'salesOtherPay', 'salesOtherPay', {isSub:true, isOut:true, colGroup:'cf-sec-var', colGroupParent:'cf-sec-opex'}),
 
     // ── 事業投資（合計は常時、明細は折りたたみ）──
     { label:'── 事業投資', section:true, colId:'cf-sec-invest' },
@@ -3626,6 +3635,7 @@ function renderCFView(d) {
     }
     // 折りたたみグループに属する行は開閉状態に従って表示/非表示
     if (row.colGroup && _cfSectionOpen[row.colGroup] === false) return;
+    if (row.colGroupParent && _cfSectionOpen[row.colGroupParent] === false) return;
     const isOut = row.isOut;
     const isTot = row.isTot;
     const isSub = row.isSub;
