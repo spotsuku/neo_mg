@@ -353,6 +353,7 @@ td.actual.editable-cell {
   </div>
   <div class="nav-right">
     <div class="year-toggle">
+      <button class="yt" onclick="setYear('2024',this)">2024年度</button>
       <button class="yt active" onclick="setYear('2025',this)">2025年度</button>
       <button class="yt" onclick="setYear('2026',this)">2026年度</button>
     </div>
@@ -712,6 +713,7 @@ td.actual.editable-cell {
           <div id="csv-month-year" style="display:none">
             <div style="display:flex;align-items:center;gap:12px">
               <select id="csv-year-select" style="padding:6px 10px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-family:inherit">
+                <option value="2024">2024年度（2404〜2503）</option>
                 <option value="2025">2025年度（2504〜2603）</option>
                 <option value="2026">2026年度（2604〜2703）</option>
               </select>
@@ -834,6 +836,7 @@ td.actual.editable-cell {
       <div class="fl" style="display:flex;align-items:center;gap:6px">
         <label style="font-size:11px;color:var(--text3);white-space:nowrap">対象年度</label>
         <select id="sim-year-sel" onchange="onSimYearChange()" style="padding:5px 8px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-family:inherit">
+          <option value="2024">2024年度（2404〜2503）</option>
           <option value="2025" selected>2025年度（2504〜2603）</option>
           <option value="2026">2026年度（2604〜2703）</option>
         </select>
@@ -1287,14 +1290,35 @@ const DEFAULT_2025 = {
 };
 
 // 2026年度 空データ（月次ごとに予算・実績を入力）
+const MONTHS_2024_INIT = ['2404','2405','2406','2407','2408','2409','2410','2411','2412','2501','2502','2503'];
 const MONTHS_2026 = ['2604','2605','2606','2607','2608','2609','2610','2611','2612','2701','2702','2703'];
 const MONTH_LABELS = {
+  '2404':'4月','2405':'5月','2406':'6月','2407':'7月','2408':'8月','2409':'9月','2410':'10月','2411':'11月','2412':'12月','2501':'1月','2502':'2月','2503':'3月',
   '2504':'4月','2505':'5月','2506':'6月','2507':'7月','2508':'8月','2509':'9月','2510':'10月','2511':'11月','2512':'12月','2601':'1月','2602':'2月','2603':'3月',
   '2604':'4月','2605':'5月','2606':'6月','2607':'7月','2608':'8月','2609':'9月','2610':'10月','2611':'11月','2612':'12月','2701':'1月','2702':'2月','2703':'3月'
 };
 
 // DB (will be loaded from storage)
-let DB = { '2025': JSON.parse(JSON.stringify(DEFAULT_2025)), '2026': { months: MONTHS_2026, pl:{ budget:{rev:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]}, actual:{rev:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[]} }, cf:{ budget:{open:[],cfIn:[],cfInMembership:[],cfInTraining:[],cfInOther:[],salaryPay:[],devOutPay:[],bizComPay:[],incentivePay:[],expertPay:[],rentPay:[],expensePay:[],telPay:[],entertainPay:[],taxPay:[],toolsPay:[],suppliesPay:[],adSportsPay:[],eventCostPay:[],recruitPay:[],annualFeePay:[],salesOtherPay:[],investPay:[],loanIn:[],loanOut:[],capitalIn:[],warrantPay:[],finOtherPay:[],funding:[]}, actual:{open:[],cfIn:[],cfClose:[],cfInMembership:[],cfInTraining:[],cfInOther:[],salaryPay:[],devOutPay:[],bizComPay:[],incentivePay:[],expertPay:[],rentPay:[],expensePay:[],telPay:[],entertainPay:[],taxPay:[],toolsPay:[],suppliesPay:[],adSportsPay:[],eventCostPay:[],recruitPay:[],annualFeePay:[],salesOtherPay:[],investPay:[],loanIn:[],loanOut:[],capitalIn:[],warrantPay:[],finOtherPay:[],funding:[]} }, reportData:{} } };
+// 空のPL/CF構造を生成（年度追加時に再利用）
+function makeEmptyYearStruct(months) {
+  return {
+    months,
+    pl: {
+      budget: { rev:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[] },
+      actual: { rev:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[] }
+    },
+    cf: {
+      budget: { open:[],cfIn:[],cfInMembership:[],cfInTraining:[],cfInOther:[],salaryPay:[],devOutPay:[],bizComPay:[],incentivePay:[],expertPay:[],rentPay:[],expensePay:[],telPay:[],entertainPay:[],taxPay:[],toolsPay:[],suppliesPay:[],adSportsPay:[],eventCostPay:[],recruitPay:[],annualFeePay:[],salesOtherPay:[],investPay:[],loanIn:[],loanOut:[],capitalIn:[],warrantPay:[],finOtherPay:[],funding:[] },
+      actual: { open:[],cfIn:[],cfClose:[],cfInMembership:[],cfInTraining:[],cfInOther:[],salaryPay:[],devOutPay:[],bizComPay:[],incentivePay:[],expertPay:[],rentPay:[],expensePay:[],telPay:[],entertainPay:[],taxPay:[],toolsPay:[],suppliesPay:[],adSportsPay:[],eventCostPay:[],recruitPay:[],annualFeePay:[],salesOtherPay:[],investPay:[],loanIn:[],loanOut:[],capitalIn:[],warrantPay:[],finOtherPay:[],funding:[] }
+    },
+    reportData: {}
+  };
+}
+let DB = {
+  '2024': makeEmptyYearStruct(MONTHS_2024_INIT),
+  '2025': JSON.parse(JSON.stringify(DEFAULT_2025)),
+  '2026': makeEmptyYearStruct(MONTHS_2026)
+};
 
 // ───────────────────────────────────────────
 //  NAV / TABS
@@ -1320,7 +1344,12 @@ function setYear(y, el) {
   currentYear = y;
   document.querySelectorAll('.yt').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
-  document.getElementById('nav-sub').textContent = y === '2025' ? '2025年度 ｜ 最終更新：2026年2月末' : '2026年度（2604〜2703）';
+  const navLabels = {
+    '2024': '2024年度（2404〜2503）',
+    '2025': '2025年度 ｜ 最終更新：2026年2月末',
+    '2026': '2026年度（2604〜2703）'
+  };
+  document.getElementById('nav-sub').textContent = navLabels[y] || (y + '年度');
 
   // シミュレーション年度を自動同期
   currentSimYear = y;
@@ -1430,7 +1459,7 @@ function updateWeeklyKPIs() {
       lastCash = Number(openVal);
     } else {
       // 前年度の cfClose 最終値を取得
-      const prevYr = currentYear === '2026' ? '2025' : null;
+      const prevYr = currentYear === '2026' ? '2025' : currentYear === '2025' ? '2024' : null;
       if (prevYr && DB[prevYr]?.cf?.actual?.cfClose) {
         const prevClose = DB[prevYr].cf.actual.cfClose;
         for (let i = prevClose.length - 1; i >= 0; i--) {
@@ -1898,7 +1927,7 @@ function renderCashFlowForecast() {
 
   // 全年度の月データを時系列に結合
   const allMonths = [];
-  ['2025','2026'].forEach(yr => {
+  ['2024','2025','2026'].forEach(yr => {
     const d = DB[yr];
     if (!d || !d.months) return;
     const cfA = d.cf?.actual || {};
@@ -2152,7 +2181,7 @@ function buildAnnualTable(rows, unit) {
 
     html += `<tr style="${rowBg}">
       <td class="l" style="${labelStyle}">${row.label}</td>
-      <td class="budget" style="${isTot?'background:rgba(55,138,221,0.12);border-left:2px solid rgba(55,138,221,0.3);font-weight:700':''}">${fmt(row.b)}</td>
+      <td class="budget" style="${isTot?'background:rgba(55,138,221,0.12);border-left:2px solid rgba(55,138,221,0.3);font-weight:700':''}">${sign(row.b, isOut, row.isPL, row.isCF, row.noSign)}</td>
       <td class="actual" style="${isTot?'background:rgba(39,174,96,0.10);border-left:2px solid rgba(39,174,96,0.25);font-weight:700':''}">${sign(row.a, isOut, row.isPL, row.isCF, row.noSign)}</td>
       <td style="background:rgba(55,138,221,0.08);border-left:2px solid rgba(55,138,221,0.2);font-size:11px;text-align:right;padding:4px 6px${isTot?';font-weight:700':''}">${diffStr}</td>
       <td style="text-align:center;padding:4px 6px">${rateBadge}</td>
@@ -2487,6 +2516,30 @@ const CellNav = {
       }
     });
   },
+  // 編集モードからの遷移用：コミット後に指定idxへ選択モードで移動
+  focusByKey(wrapId, info, newIdx) {
+    setTimeout(() => {
+      const sel = info.isCf
+        ? `#${wrapId} td.editable-cell[data-cfkey="${info.key}"][data-idx="${newIdx}"]`
+        : `#${wrapId} td.editable-cell[data-key="${info.key}"][data-kind="${info.kind}"][data-idx="${newIdx}"]`;
+      const el = document.querySelector(sel);
+      if (el) this.setFocus(el, false);
+    }, 0);
+  },
+  // 縦移動用：現在idxの列で前後行の editable cell を探す
+  focusVertical(wrapId, info, step) {
+    setTimeout(() => {
+      const wrap = document.getElementById(wrapId);
+      if (!wrap) return;
+      const curSel = info.isCf
+        ? `td.editable-cell[data-cfkey="${info.key}"][data-idx="${info.idx}"]`
+        : `td.editable-cell[data-key="${info.key}"][data-kind="${info.kind}"][data-idx="${info.idx}"]`;
+      const cur = wrap.querySelector(curSel);
+      if (!cur) return;
+      const next = this.findAdjacent(cur, step > 0 ? 'down' : 'up', wrap);
+      if (next) this.setFocus(next, false);
+    }, 0);
+  },
 };
 
 // Clipboard APIが使えないブラウザ向けのフォールバック
@@ -2570,6 +2623,20 @@ function plCellClick(td, d) {
       const step = e.shiftKey ? -1 : 1;
       commit();
       moveTo(idx + step);
+    }
+    // 矢印キー: コミットして選択モードで移動（編集チェーンを終了）
+    const info = { isCf:false, key, kind, idx };
+    if (e.key === 'ArrowLeft' && inp.selectionStart === 0 && inp.selectionEnd === 0) {
+      e.preventDefault(); commit(); CellNav.focusByKey('pl-table-wrap', info, idx - 1);
+    }
+    if (e.key === 'ArrowRight' && inp.selectionStart === inp.value.length) {
+      e.preventDefault(); commit(); CellNav.focusByKey('pl-table-wrap', info, idx + 1);
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault(); commit(); CellNav.focusVertical('pl-table-wrap', info, -1);
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault(); commit(); CellNav.focusVertical('pl-table-wrap', info, 1);
     }
     if (e.key === 'Escape') {
       committed = true;
@@ -2656,6 +2723,20 @@ function cfCellClick(td, d) {
       const step = e.shiftKey ? -1 : 1;
       commit();
       moveTo(idx + step);
+    }
+    // 矢印キー: コミットして選択モードで移動
+    const info = { isCf:true, key:cfKey, kind:null, idx };
+    if (e.key === 'ArrowLeft' && inp.selectionStart === 0 && inp.selectionEnd === 0) {
+      e.preventDefault(); commit(); CellNav.focusByKey('cf-table-wrap', info, idx - 1);
+    }
+    if (e.key === 'ArrowRight' && inp.selectionStart === inp.value.length) {
+      e.preventDefault(); commit(); CellNav.focusByKey('cf-table-wrap', info, idx + 1);
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault(); commit(); CellNav.focusVertical('cf-table-wrap', info, -1);
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault(); commit(); CellNav.focusVertical('cf-table-wrap', info, 1);
     }
     if (e.key === 'Escape') {
       committed = true;
@@ -3286,17 +3367,56 @@ function renderCFView(d) {
   const bTotalOutDetail = Array.from({length:N},(_,i) => bOpexTot[i] + getN(cb('investPay'),i) + bFinOut[i]);
   const aTotalOutDetail = Array.from({length:N},(_,i) => aOpexTot[i] + getN(ca('investPay'),i) + aFinOut[i]);
 
-  // 営業CF = 売上入金 - 販管費合計（詳細科目ベース）
-  const aOpCFd  = Array.from({length:N},(_,i) => hasActualData(i) ? getN(aIn,i) - aOpexTot[i] : null);
-  const bOpCFd  = Array.from({length:N},(_,i) => getN(bIn,i) - bTotalOut[i]);  // bTotalOut = 詳細or旧科目合計
-  // 財務CF = 新規借入 + 資本金 - 返済 等
+  // 原価合計（CF側の原価支出）
+  const cogsCfKeys = ['cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'];
+  const bCogsTot = sumKeys('budget', cogsCfKeys);
+  const aCogsTot = sumKeys('actual', cogsCfKeys);
+
+  // 営業CF = 売上入金 - 原価 - 販管費（事業投資・財務は含めない）
+  const bOpCFd  = Array.from({length:N},(_,i) => getN(bIn,i) - bCogsTot[i] - bOpexTot[i]);
+  const aOpCFd  = Array.from({length:N},(_,i) => hasActualData(i) ? getN(aIn,i) - aCogsTot[i] - aOpexTot[i] : null);
+  // 投資CF = -事業投資支出
+  const bInvestCFd = Array.from({length:N},(_,i) => -getN(cb('investPay'),i));
+  const aInvestCFd = Array.from({length:N},(_,i) => -getN(ca('investPay'),i));
+  // 財務CF = 財務入金（借入・資本金）- 財務出金（返済等）+ 融資・調達
+  const bFinCFd = Array.from({length:N},(_,i) => bFinInTot[i] - bFinOut[i] + getN(bFunding,i));
   const aFinCFd = Array.from({length:N},(_,i) => aFinIn[i] - aFinOut[i]);
-  const bFinCFd = Array.from({length:N},(_,i) => bFinInTot[i] - Array.from({length:1},()=>
-    ['loanOut','warrantPay','finOtherPay'].reduce((t,k)=> t+(Number((cfArr('budget',k)||[])[i])||0), 0)
-  )[0] + getN(bFunding,i));
-  // 月次純CF
-  const aNetCFd = Array.from({length:N},(_,i) => aOpCFd[i]===null ? null : aOpCFd[i] + aFinCFd[i]);
-  const bNetCFd = bNetCF;  // bCloseCalcと整合させるためbNetCFを使用
+  // 月次純CF = 営業 + 投資 + 財務
+  const bNetCFd = Array.from({length:N},(_,i) => bOpCFd[i] + bInvestCFd[i] + bFinCFd[i]);
+  const aNetCFd = Array.from({length:N},(_,i) => aOpCFd[i]===null ? null : aOpCFd[i] + aInvestCFd[i] + aFinCFd[i]);
+
+  // ── 月初残高・月末残高（予算の自動ロール計算）──
+  // 月初予算: 1月目は入力値 / 2月目以降は前月の月末（ユーザーが明示入力していれば優先）
+  // 月末予算: 月初 + 月次純CF
+  const bOpenDisplay = new Array(N).fill(0);
+  const bCloseDisplay = new Array(N).fill(0);
+  for (let i = 0; i < N; i++) {
+    const stored = getN(bOpen, i);
+    bOpenDisplay[i] = (stored > 0) ? stored : (i === 0 ? 0 : bCloseDisplay[i-1]);
+    bCloseDisplay[i] = Math.round(bOpenDisplay[i] + bNetCFd[i]);
+  }
+
+  // 月初実績: 1月目は実績入力 or 予算 / 2月目以降は前月の月末実績
+  // 月末実績: 入力があればそれ / 無ければ 月初 + 実績純CF（実績CFが無ければ null）
+  const aOpenDisplay = new Array(N).fill(null);
+  const aCloseDisplay = new Array(N).fill(null);
+  for (let i = 0; i < N; i++) {
+    const storedOpen = getN(aOpen, i);
+    if (storedOpen > 0) {
+      aOpenDisplay[i] = storedOpen;
+    } else if (i === 0) {
+      aOpenDisplay[i] = getN(bOpen, 0) || null;  // 期首は予算の月初を利用
+    } else {
+      aOpenDisplay[i] = aCloseDisplay[i-1];  // 前月末を引き継ぎ
+    }
+    if (hasActualClose(i)) {
+      aCloseDisplay[i] = getN(aClose, i);
+    } else if (aNetCFd[i] !== null && aOpenDisplay[i] !== null) {
+      aCloseDisplay[i] = Math.round(aOpenDisplay[i] + aNetCFd[i]);
+    } else {
+      aCloseDisplay[i] = null;
+    }
+  }
 
   const R = (label, bk, ak, opts={}) => ({
     label, bArr: typeof bk==='string'?cb(bk):bk, aArr: typeof ak==='string'?ca(ak):ak,
@@ -3318,12 +3438,13 @@ function renderCFView(d) {
 
   const rows = [
     // ── CF区分（月初残高の直下）──
-    { label:'月初残高（千円）', bArr:bOpen, aArr:aOpen, noSum:true, edBKey:'budget.open', edAKey:'actual.open' },
+    { label:'月初残高（千円）', bArr:bOpenDisplay, aArr:aOpenDisplay, noSum:true, edBKey:'budget.open', edAKey:'actual.open' },
     { label:'── CF区分',   section:true },
-    { label:'営業CF',           bArr:bOpCFd,  aArr:aOpCFd,  isTot:true, noDiff:true },
-    { label:'財務CF（融資等）', bArr:bFinCFd, aArr:aFinCFd, isTot:true, noDiff:true },
-    { label:'月次純CF',         bArr:bNetCFd, aArr:aNetCFd, isTot:true, noDiff:true },
-    { label:'月末残高',         bArr:bCloseCalc, aArr:aCloseCalc, noSum:true, edAKey:'actual.cfClose', isTot:true },
+    { label:'営業CF',           bArr:bOpCFd,   aArr:aOpCFd,   isTot:true, noDiff:true },
+    { label:'投資CF（事業投資）', bArr:bInvestCFd, aArr:aInvestCFd, isTot:true, noDiff:true },
+    { label:'財務CF（融資等）', bArr:bFinCFd,  aArr:aFinCFd,  isTot:true, noDiff:true },
+    { label:'月次純CF',         bArr:bNetCFd,  aArr:aNetCFd,  isTot:true, noDiff:true },
+    { label:'月末残高',         bArr:bCloseDisplay, aArr:aCloseDisplay, noSum:true, edAKey:'actual.cfClose', isTot:true },
 
     // ── NEOプログラム原価（折りたたみ）──
     { label:'── 原価', section:true, colId:'cf-sec-cogs' },
@@ -3968,9 +4089,10 @@ function parseAndPreviewCSV(text) {
 // ───────────────────────────────────────────
 let _csvMonthMode = 'single'; // 'single' | 'multi' | 'year'
 
+const MONTHS_2024 = ['2404','2405','2406','2407','2408','2409','2410','2411','2412','2501','2502','2503'];
 const MONTHS_2025 = ['2504','2505','2506','2507','2508','2509','2510','2511','2512','2601','2602','2603'];
 const MONTHS_2026_LIST = ['2604','2605','2606','2607','2608','2609','2610','2611','2612','2701','2702','2703'];
-const ALL_MONTHS = { '2025': MONTHS_2025, '2026': MONTHS_2026_LIST };
+const ALL_MONTHS = { '2024': MONTHS_2024, '2025': MONTHS_2025, '2026': MONTHS_2026_LIST };
 
 function setCsvMonthMode(mode, el) {
   _csvMonthMode = mode;
@@ -4005,11 +4127,13 @@ function buildMonthCheckboxes() {
     </div>`);
 }
 
-// 年度キーを返すヘルパー
+// 年度キーを返すヘルパー（月コード yyMM → 年度 'yyyy'）
+// 日本の年度は4月始まり：yyMM が 4〜12月なら yy年度、1〜3月なら (yy-1)年度
 function getYearKey(month) {
   const yy = parseInt(month.slice(0,2));
   const mm = parseInt(month.slice(2,4));
-  return (yy === 25 && mm >= 4) || (yy === 26 && mm <= 3) ? '2025' : '2026';
+  const fyYY = mm >= 4 ? yy : yy - 1;  // 1〜3月は前年度
+  return '20' + String(fyYY).padStart(2, '0');
 }
 
 // 選択された月リストを取得（共通関数）
@@ -5863,6 +5987,7 @@ let currentSimYear = '2025'; // シミュレーションの年度（独立管理
 
 // シミュレーション用データ構造（年度ごと、永続保存）
 const SIM_MONTHS = {
+  '2024': ['2404','2405','2406','2407','2408','2409','2410','2411','2412','2501','2502','2503'],
   '2025': ['2504','2505','2506','2507','2508','2509','2510','2511','2512','2601','2602','2603'],
   '2026': ['2604','2605','2606','2607','2608','2609','2610','2611','2612','2701','2702','2703']
 };
@@ -6021,6 +6146,7 @@ const CF_ROWS = [
 
 // インメモリ シムデータ
 let SIM_DATA = {
+  '2024': { pl: {}, cf: { cfOpenFirst: 0 } },
   '2025': {
     pl: {
       fee:            [900,900,900,1000,1000,1000,1100,1100,1100,1200,1200,1200],
@@ -7270,10 +7396,11 @@ async function renderBudgetHistory() {
 // ── 保存・ロード ──
 async function saveSimData() {
   try {
+    localStorage.setItem('neo_sim_2024', JSON.stringify(SIM_DATA['2024']));
     localStorage.setItem('neo_sim_2025', JSON.stringify(SIM_DATA['2025']));
     localStorage.setItem('neo_sim_2026', JSON.stringify(SIM_DATA['2026']));
     if (!IS_LOCAL) {
-      for (const yr of ['2025', '2026']) {
+      for (const yr of ['2024', '2025', '2026']) {
         await fetch('/api/db?action=save_sim', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fiscal_year: yr, data: SIM_DATA[yr] })
@@ -7291,11 +7418,13 @@ async function loadSimData() {
       const res = await fetch('/api/db?action=load_sim');
       const r = await res.json();
       if (r.ok && r.data) {
-        for (const yr of ['2025', '2026']) { if (r.data[yr]) SIM_DATA[yr] = r.data[yr]; }
+        for (const yr of ['2024', '2025', '2026']) { if (r.data[yr]) SIM_DATA[yr] = r.data[yr]; }
         migrateSIMDataCogs();
         return;
       }
     }
+    const r24 = localStorage.getItem('neo_sim_2024');
+    if (r24) SIM_DATA['2024'] = JSON.parse(r24);
     const r25 = localStorage.getItem('neo_sim_2025');
     if (r25) SIM_DATA['2025'] = JSON.parse(r25);
     const r26 = localStorage.getItem('neo_sim_2026');
@@ -7308,7 +7437,7 @@ async function loadSimData() {
 function migrateSIMDataCogs() {
   const cogsPlKeys = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
   const cogsCFKeys = ['cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'];
-  for (const yr of ['2025','2026']) {
+  for (const yr of ['2024','2025','2026']) {
     if (!SIM_DATA[yr]) continue;
     cogsPlKeys.forEach(k => {
       if (!SIM_DATA[yr].pl[k]) SIM_DATA[yr].pl[k] = Array(12).fill(0);
@@ -7321,7 +7450,8 @@ function migrateSIMDataCogs() {
 
 function resetSimData() {
   if (!confirm('このシミュレーションデータをリセットしますか？')) return;
-  SIM_DATA[currentSimYear] = { pl: {}, cf: { cfOpenFirst: currentSimYear === '2025' ? 15863 : 7620 } };
+  const defaultOpen = { '2024': 0, '2025': 15863, '2026': 7620 }[currentSimYear] || 0;
+  SIM_DATA[currentSimYear] = { pl: {}, cf: { cfOpenFirst: defaultOpen } };
   buildSimPLTable();
   buildSimCFTable();
 }
@@ -7611,9 +7741,7 @@ function updateSimCF() { buildSimCFTable(); }
 function renderReportTabs() {
   const d = DB[currentYear];
   const tabEl = document.getElementById('report-month-tabs');
-  const months = currentYear === '2025'
-    ? ['2601', '2602', '2603']
-    : MONTHS_2026;
+  const months = ALL_MONTHS[currentYear] || MONTHS_2025;
 
   tabEl.innerHTML = months.map((m, i) => {
     const hasData = d.reportData && d.reportData[m];
@@ -7845,7 +7973,7 @@ async function saveDB() {
   if (IS_LOCAL) return; // ローカルはlocalStorageのみ
 
   // Supabaseに直列保存（確実性優先）
-  for (const yr of ['2025', '2026']) {
+  for (const yr of ['2024', '2025', '2026']) {
     const d = DB[yr];
     if (!d) continue;
     const res = await fetch('/api/db?action=save_fiscal', {
@@ -7879,7 +8007,7 @@ async function loadDB() {
   // DBオブジェクトの整合性を補完（空配列を12要素に拡張など）
   function sanitizeYear(data, yr) {
     if (!data) return;
-    const months12 = (yr === '2025') ? MONTHS_2025 : MONTHS_2026;
+    const months12 = ALL_MONTHS[yr] || MONTHS_2025;
     if (!data.months || data.months.length === 0) data.months = months12;
     const N = data.months.length;
     if (!data.pl) data.pl = { budget: {}, actual: {} };
@@ -7902,7 +8030,7 @@ async function loadDB() {
       const r = await res.json();
       console.log('[loadDB] Supabase response:', r.ok, Object.keys(r.data || {}));
       if (r.ok && r.data) {
-        for (const yr of ['2025', '2026']) {
+        for (const yr of ['2024', '2025', '2026']) {
           if (r.data[yr]) {
             DB[yr] = {
               months: r.data[yr].months,
@@ -7924,7 +8052,7 @@ async function loadDB() {
       }
     }
     // localStorage フォールバック
-    for (const yr of ['2025', '2026']) {
+    for (const yr of ['2024', '2025', '2026']) {
       const raw = localStorage.getItem(`neo_db_${yr}`);
       if (raw) {
         try {
@@ -8259,7 +8387,7 @@ window.addEventListener('load', async () => {
   // PLデータ単位チェック（旧万円データ→千円マイグレーション + 10倍超過データ→÷10修正）
   const PL_KEYS = ['rev','labor','outsource','adv','gaichu','other',
                    'cogs','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
-  for (const yr of ['2025','2026']) {
+  for (const yr of ['2024','2025','2026']) {
     const plb = DB[yr]?.pl?.budget?.rev || [];
     const maxBudget = Math.max(...plb.filter(v=>v>0), 0);
 
@@ -8357,6 +8485,7 @@ function mfInit() {
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <span style="font-size:11px;font-weight:700;color:var(--text)">① 対象期間を選択</span>
         <select id="mf-fiscal-year" onchange="mfRenderMonthPicker()" style="padding:4px 8px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:11px">
+          <option value="2024">2024年度（4月〜3月）</option>
           <option value="2025">2025年度（4月〜3月）</option>
           <option value="2026">2026年度（4月〜3月）</option>
         </select>
