@@ -2447,12 +2447,31 @@ function renderPLView(d) {
     };
 
     const el = (id) => document.getElementById(id);
-    if (el('pl-sum-rev-a'))   el('pl-sum-rev-a').textContent   = revA  ? fmt(revA)  : '─';
+    // 実績が未入力のときは予算合計をフォールバック表示
+    if (el('pl-sum-rev-a')) {
+      if (revA) el('pl-sum-rev-a').textContent = fmt(revA);
+      else if (revB) el('pl-sum-rev-a').innerHTML = `<span style="color:var(--text2)">${fmt(revB)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`;
+      else el('pl-sum-rev-a').textContent = '─';
+    }
     if (el('pl-sum-rev-b'))   el('pl-sum-rev-b').textContent   = revB  ? fmt(revB)  : '─';
     if (el('pl-sum-rev-s'))   el('pl-sum-rev-s').innerHTML     = rateBadge(rateRev);
-    if (el('pl-sum-opex-a'))  el('pl-sum-opex-a').innerHTML    = opexA ? `<span class="r">${fmt(opexA)}</span>` : '─';
+    if (el('pl-sum-opex-a')) {
+      if (opexA) el('pl-sum-opex-a').innerHTML = `<span class="r">${fmt(opexA)}</span>`;
+      else if (opexB) el('pl-sum-opex-a').innerHTML = `<span style="color:var(--text2)">${fmt(opexB)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`;
+      else el('pl-sum-opex-a').textContent = '─';
+    }
     if (el('pl-sum-opex-s'))  el('pl-sum-opex-s').innerHTML    = rateBadge(rateOpex, true); // 費用は100%以下が良い
-    if (el('pl-sum-op'))      el('pl-sum-op').innerHTML        = fmtP(opA);
+    if (el('pl-sum-op')) {
+      if (revA || opexA) {
+        el('pl-sum-op').innerHTML = fmtP(opA);
+      } else if (revB || opexB) {
+        el('pl-sum-op').innerHTML = opB >= 0
+          ? `<span style="color:var(--text2)">+${fmt(opB)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`
+          : `<span style="color:var(--text2)">▲${fmt(Math.abs(opB))}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`;
+      } else {
+        el('pl-sum-op').textContent = '─';
+      }
+    }
     if (el('pl-sum-rate')) {
       const rateOp = opB !== 0 ? Math.round(opA / Math.abs(opB) * 100) : null;
       el('pl-sum-rate').innerHTML = rateRev
@@ -2690,22 +2709,63 @@ function renderCFView(d) {
     const fmt万 = (v) => Math.round(v/10).toLocaleString() + '千円';
     const el = (id) => document.getElementById(id);
 
-    if (el('cf-sum-in-a'))   el('cf-sum-in-a').textContent = aInTot ? fmt千(aInTot) : '—';
+    // 実績が入っていないが予算がある年度向けに、予算合計へフォールバック表示
+    const hasActual = aInTot > 0 || aOutTot > 0 || lastClose > 0;
+
+    // 累積入金：実績 or 予算
+    if (el('cf-sum-in-a')) {
+      if (aInTot) el('cf-sum-in-a').textContent = fmt千(aInTot);
+      else if (bInTot) el('cf-sum-in-a').innerHTML = `<span style="color:var(--text2)">${fmt千(bInTot)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`;
+      else el('cf-sum-in-a').textContent = '—';
+    }
     if (el('cf-sum-in-s'))   el('cf-sum-in-s').innerHTML  = rateIn
       ? `<span class="badge ${rateIn>=100?'bg':'br'}">${rateIn}% 予算比</span>` : '';
-    if (el('cf-sum-out-a'))  el('cf-sum-out-a').innerHTML = aOutTot
-      ? `<span class="r">${fmt千(aOutTot)}</span>` : '—';
+
+    // 累積出金：実績 or 予算
+    if (el('cf-sum-out-a')) {
+      if (aOutTot) el('cf-sum-out-a').innerHTML = `<span class="r">${fmt千(aOutTot)}</span>`;
+      else if (bOutTot) el('cf-sum-out-a').innerHTML = `<span style="color:var(--text2)">${fmt千(bOutTot)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`;
+      else el('cf-sum-out-a').textContent = '—';
+    }
     if (el('cf-sum-out-s'))  el('cf-sum-out-s').innerHTML = rateOut
       ? `<span class="badge ${rateOut<=100?'bg':'br'}">${rateOut}% 予算比</span>` : '';
+
+    // 月末現金残高：実績 or 予算末残
     if (el('cf-sum-close')) {
-      el('cf-sum-close').innerHTML = lastClose
-        ? `<span class="${lastClose>0?'g':'r'}">${fmt千(lastClose)}</span>` : '—';
+      if (lastClose) {
+        el('cf-sum-close').innerHTML = `<span class="${lastClose>0?'g':'r'}">${fmt千(lastClose)}</span>`;
+      } else {
+        // 予算の期末残（最終月）を取得
+        const bCloseArr = cfGet('budget','cfClose');
+        let bLast = 0;
+        for (let i = (bCloseArr||[]).length-1; i >= 0; i--) {
+          if (Number(bCloseArr[i])) { bLast = Number(bCloseArr[i]); break; }
+        }
+        // fallback: budget open - bOutTot + bInTot（簡易予測）
+        if (!bLast && (bInTot || bOutTot)) {
+          const bOpenArr = cfGet('budget','open');
+          const bOpen0 = Number((bOpenArr||[])[0]) || 0;
+          bLast = bOpen0 + bInTot - bOutTot;
+        }
+        if (bLast) el('cf-sum-close').innerHTML = `<span style="color:var(--text2)">${fmt千(bLast)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算末)</span>`;
+        else el('cf-sum-close').textContent = '—';
+      }
     }
+
+    // 累積純CF：実績 or 予算
     if (el('cf-sum-net')) {
-      const hasActualCF = aInTot > 0 || aOutTot > 0;
-      el('cf-sum-net').innerHTML = !hasActualCF ? '—'
-        : netCF >= 0 ? `<span class="g">+${fmt千(netCF)}</span>`
-                     : `<span class="r">▲${fmt千(Math.abs(netCF))}</span>`;
+      if (hasActual) {
+        el('cf-sum-net').innerHTML = netCF >= 0
+          ? `<span class="g">+${fmt千(netCF)}</span>`
+          : `<span class="r">▲${fmt千(Math.abs(netCF))}</span>`;
+      } else if (bInTot || bOutTot) {
+        const bNetCF = bInTot - bOutTot;
+        el('cf-sum-net').innerHTML = bNetCF >= 0
+          ? `<span style="color:var(--text2)">+${fmt千(bNetCF)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`
+          : `<span style="color:var(--text2)">▲${fmt千(Math.abs(bNetCF))}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`;
+      } else {
+        el('cf-sum-net').textContent = '—';
+      }
     }
     if (el('cf-sum-rate')) {
       el('cf-sum-rate').innerHTML = rateIn
