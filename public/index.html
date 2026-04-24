@@ -2032,13 +2032,55 @@ function editBSCell(td, section, key, kind) {
   td.innerHTML = `<input class="cell-input" type="number" value="${cur}" placeholder="0">`;
   const inp = td.querySelector('input');
   inp.focus(); inp.select();
+
+  // 現在セルのDOM位置を記録（再描画後の復帰用）
+  const cells = Array.from(document.querySelectorAll('#annual-bs-table td.editable-cell'));
+  const curPos = cells.indexOf(td);
+
+  let committed = false;
   function commit() {
+    if (committed) return;
+    committed = true;
     const val = inp.value === '' ? 0 : Number(inp.value) || 0;
     BS_DATA[section][key][kind] = val;
     renderAnnualBS();
   }
+  function moveTo(step) {
+    setTimeout(() => {
+      const list = document.querySelectorAll('#annual-bs-table td.editable-cell');
+      const target = list[curPos + step];
+      if (target) target.click();
+    }, 0);
+  }
+
+  inp.addEventListener('paste', (e) => {
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    if (!text || !/[\t\n]/.test(text)) return;
+    e.preventDefault();
+    committed = true;
+    // 縦方向（行）を優先。各行の最初の列をDOM順に連続セルへ入れる
+    const lines = text.replace(/\r/g,'').split('\n').filter(r=>r!=='');
+    lines.forEach((line, i) => {
+      const val = parsePasteNum(line.split('\t')[0]);
+      const target = cells[curPos + i];
+      if (!target) return;
+      const m = target.getAttribute('onclick')?.match(/editBSCell\(this,'([^']+)','([^']+)','([^']+)'\)/);
+      if (m) BS_DATA[m[1]][m[2]][m[3]] = val === '' ? 0 : val;
+    });
+    renderAnnualBS();
+  });
+
   inp.addEventListener('blur', commit);
-  inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { td.classList.remove('cell-editing'); renderAnnualBS(); } });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') inp.blur();
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const step = e.shiftKey ? -1 : 1;
+      commit();
+      moveTo(step);
+    }
+    if (e.key === 'Escape') { committed = true; td.classList.remove('cell-editing'); renderAnnualBS(); }
+  });
 }
 
 function buildAnnualTable(rows, unit) {
@@ -2201,6 +2243,14 @@ async function savePlCfChanges() {
   updateWeeklyKPIs();
 }
 
+// 貼付け時の数値パース（カンマ・¥・▲・△・空白などを除去）
+function parsePasteNum(s) {
+  const c = String(s).replace(/[,¥￥\s]/g, '').replace(/[▲△]/g, '-');
+  if (c === '' || c === '-') return '';
+  const n = Number(c);
+  return isNaN(n) ? '' : n;
+}
+
 // PL セルクリック（d はその時点の DB[currentYear] への参照）
 function plCellClick(td, d) {
   if (td.classList.contains('cell-editing')) return;
@@ -2214,21 +2264,65 @@ function plCellClick(td, d) {
   const inp = td.querySelector('input');
   inp.focus(); inp.select();
 
-  function commit() {
-    const val = inp.value === '' ? '' : (Number(inp.value) || 0);
+  // sparse対策：長さNの密な配列に再構築（既存値は保持）
+  function ensureDense() {
     const target = kind === 'budget' ? d.pl.budget : d.pl.actual;
-    if (!target[key] || target[key].length === 0) target[key] = Array(d.months.length).fill('');
-    target[key][idx] = val;
+    const N = d.months.length;
+    const existing = target[key];
+    if (!Array.isArray(existing) || existing.length < N) {
+      target[key] = Array.from({length:N}, (_, i) =>
+        Array.isArray(existing) && existing[i] !== undefined ? existing[i] : '');
+    }
+    return target[key];
+  }
+
+  let committed = false;
+  function commit() {
+    if (committed) return;
+    committed = true;
+    const val = inp.value === '' ? '' : (Number(inp.value) || 0);
+    ensureDense()[idx] = val;
     DB[currentYear] = d;
     showPlCfSaveBar();
     scheduleAutoSave('PL実績入力');
     renderPLView(d);
   }
+  function moveTo(nextIdx) {
+    setTimeout(() => {
+      const sel = `#pl-table-wrap td.editable-cell[data-key="${key}"][data-kind="${kind}"][data-idx="${nextIdx}"]`;
+      const next = document.querySelector(sel);
+      if (next) next.click();
+    }, 0);
+  }
+
+  inp.addEventListener('paste', (e) => {
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    if (!text || !/[\t\n]/.test(text)) return; // 単一値は通常paste
+    e.preventDefault();
+    committed = true; // blurのcommitを抑止
+    const firstRow = text.replace(/\r/g,'').split('\n').filter(r=>r!=='')[0].split('\t');
+    const arr = ensureDense();
+    const N = d.months.length;
+    for (let i = 0; i < firstRow.length && idx + i < N; i++) {
+      arr[idx + i] = parsePasteNum(firstRow[i]);
+    }
+    td.classList.remove('cell-editing');
+    DB[currentYear] = d;
+    showPlCfSaveBar();
+    scheduleAutoSave('PL貼付け');
+    renderPLView(d);
+  });
+
   inp.addEventListener('blur', commit);
   inp.addEventListener('keydown', e => {
     if (e.key === 'Enter') inp.blur();
-    if (e.key === 'Tab') { e.preventDefault(); inp.blur(); }
-    if (e.key === 'Escape') { td.classList.remove('cell-editing'); renderPLView(d); }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const step = e.shiftKey ? -1 : 1;
+      commit();
+      moveTo(idx + step);
+    }
+    if (e.key === 'Escape') { committed = true; td.classList.remove('cell-editing'); renderPLView(d); }
   });
 }
 
@@ -2246,20 +2340,65 @@ function cfCellClick(td, d) {
   const inp = td.querySelector('input');
   inp.focus(); inp.select();
 
-  function commit() {
-    const val = inp.value === '' ? '' : (Number(inp.value) || 0);
+  // sparse対策：長さNの密な配列を保証（既存値は保持）
+  function ensureDense() {
     if (!d.cf[section]) d.cf[section] = {};
-    if (!d.cf[section][field]) d.cf[section][field] = Array(d.months.length).fill('');
-    d.cf[section][field][idx] = val;
+    const N = d.months.length;
+    const existing = d.cf[section][field];
+    if (!Array.isArray(existing) || existing.length < N) {
+      d.cf[section][field] = Array.from({length:N}, (_, i) =>
+        Array.isArray(existing) && existing[i] !== undefined ? existing[i] : '');
+    }
+    return d.cf[section][field];
+  }
+
+  let committed = false;
+  function commit() {
+    if (committed) return;
+    committed = true;
+    const val = inp.value === '' ? '' : (Number(inp.value) || 0);
+    ensureDense()[idx] = val;
     DB[currentYear] = d;
     showPlCfSaveBar();
+    scheduleAutoSave && scheduleAutoSave('CFセル編集');
     renderCFView(d);
   }
+  function moveTo(nextIdx) {
+    setTimeout(() => {
+      const sel = `#cf-table-wrap td.editable-cell[data-cfkey="${cfKey}"][data-idx="${nextIdx}"]`;
+      const next = document.querySelector(sel);
+      if (next) next.click();
+    }, 0);
+  }
+
+  inp.addEventListener('paste', (e) => {
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    if (!text || !/[\t\n]/.test(text)) return;
+    e.preventDefault();
+    committed = true;
+    const firstRow = text.replace(/\r/g,'').split('\n').filter(r=>r!=='')[0].split('\t');
+    const arr = ensureDense();
+    const N = d.months.length;
+    for (let i = 0; i < firstRow.length && idx + i < N; i++) {
+      arr[idx + i] = parsePasteNum(firstRow[i]);
+    }
+    td.classList.remove('cell-editing');
+    DB[currentYear] = d;
+    showPlCfSaveBar();
+    scheduleAutoSave && scheduleAutoSave('CF貼付け');
+    renderCFView(d);
+  });
+
   inp.addEventListener('blur', commit);
   inp.addEventListener('keydown', e => {
     if (e.key === 'Enter') inp.blur();
-    if (e.key === 'Tab') { e.preventDefault(); inp.blur(); }
-    if (e.key === 'Escape') { td.classList.remove('cell-editing'); renderCFView(d); }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const step = e.shiftKey ? -1 : 1;
+      commit();
+      moveTo(idx + step);
+    }
+    if (e.key === 'Escape') { committed = true; td.classList.remove('cell-editing'); renderCFView(d); }
   });
 }
 
@@ -2431,8 +2570,12 @@ function renderPLView(d) {
     // budget row
     const bSum = (row.b || []).reduce((s, v) => s + (Number(v) || 0), 0);
      html += `<tr><td class="l" style="${_ind}">${row.label}</td><td class="l" style="font-size:9px;color:var(--text3);${_sb2}">予算</td>`;
-    const _bArr = (row.b && row.b.length > 0) ? row.b : Array(d.months.length).fill('');
-    const _aArr = (row.a && row.a.length > 0) ? row.a : Array(d.months.length).fill('');
+    // sparse array対策：forEachは空スロットを飛ばすので密配列に再構築
+    const _N = d.months.length;
+    const _toDense = (arr) => Array.from({length:_N}, (_, i) =>
+      (Array.isArray(arr) && arr[i] !== undefined) ? arr[i] : '');
+    const _bArr = _toDense(row.b);
+    const _aArr = _toDense(row.a);
     _bArr.forEach((v, i) => { html += `<td class="budget editable-cell" data-key="${row.key}" data-kind="budget" data-idx="${i}" onclick="plCellClick(this,window._plCFd)">${v !== '' && v !== undefined ? Number(v).toLocaleString() : '─'}</td>`; });
     html += `<td class="budget">${bSum.toLocaleString()}</td></tr>`;
     // actual row
@@ -2573,14 +2716,12 @@ function renderCFView(d) {
   })();
 
   // ── ヘルパー：CF配列を取得（千円単位） ──
-  // 空配列やlength不足のケース（2026年度の初期状態等）にも対応するため、
-  // 必ず length === N の配列を返す（不足分は0埋め）
+  // 空配列やlength不足、sparse array（穴あき）に全て対応。
+  // 常に length === N の密な数値配列を返す（forEachが空スロットを飛ばす問題を防ぐ）
   const cfArr = (section, key) => {
     const v = d.cf && d.cf[section] && d.cf[section][key];
-    if (!Array.isArray(v) || v.length < N) {
-      return Array.from({length: N}, (_, i) => (Array.isArray(v) ? (Number(v[i]) || 0) : 0));
-    }
-    return v;
+    return Array.from({length: N}, (_, i) =>
+      (Array.isArray(v) && v[i] !== undefined) ? (Number(v[i]) || 0) : 0);
   };
   const getN = (arr, i) => Number(arr[i]) || 0;
 
@@ -5661,8 +5802,44 @@ function getSimVal(type, key, idx) {
   return Number(arr[idx]) || 0;
 }
 function setSimVal(type, key, idx, val) {
-  if (!SIM_DATA[currentSimYear][type][key]) SIM_DATA[currentSimYear][type][key] = Array(12).fill('');
+  const cur = SIM_DATA[currentSimYear][type][key];
+  if (!Array.isArray(cur) || cur.length < 12) {
+    // sparse / 短い / 未初期化 → 長さ12の密配列に再構築
+    SIM_DATA[currentSimYear][type][key] = Array.from({length:12}, (_, i) =>
+      Array.isArray(cur) && cur[i] !== undefined ? cur[i] : '');
+  }
   SIM_DATA[currentSimYear][type][key][idx] = val === '' ? '' : Number(val) || 0;
+}
+
+// Excel貼付け対応：sim PL/CF入力テーブルに貼り付けハンドラを付与
+// 選択セル以降へTSV（タブ＋改行区切り）の値を横方向に展開
+function attachSimPasteHandler(tableId, type, onDone) {
+  const tbl = document.getElementById(tableId);
+  if (!tbl || tbl._pasteBound) return;
+  tbl._pasteBound = true;
+  tbl.addEventListener('paste', (e) => {
+    const inp = e.target;
+    if (!inp || inp.tagName !== 'INPUT' || !inp.dataset.key) return;
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    if (!text || !/[\t\n]/.test(text)) return;
+    e.preventDefault();
+    const key = inp.dataset.key;
+    const startIdx = Number(inp.dataset.idx);
+    const firstRow = text.replace(/\r/g,'').split('\n').filter(r=>r!=='')[0].split('\t');
+    for (let i = 0; i < firstRow.length && startIdx + i < 12; i++) {
+      setSimVal(type, key, startIdx + i, parsePasteNum(firstRow[i]));
+    }
+    // DOMの入力値も即時更新（再描画せず）
+    firstRow.forEach((raw, i) => {
+      const cell = tbl.querySelector(`input[data-key="${key}"][data-idx="${startIdx + i}"]`);
+      if (cell) {
+        const n = parsePasteNum(raw);
+        cell.value = n === '' ? '' : n;
+      }
+    });
+    onDone && onDone();
+    scheduleAutoSave && scheduleAutoSave('シミュレーション貼付け');
+  });
 }
 
 // ── 年度切り替え ──
@@ -5793,6 +5970,7 @@ function buildSimPLTable() {
       </div>`;
   }
 
+  attachSimPasteHandler('sim-pl-input-table', 'pl', () => { recalcSimPL(); });
   recalcSimPL();
 }
 
@@ -5843,6 +6021,7 @@ function buildSimCFTable() {
   </tr>`;
   html += '</tbody>';
   tbl.innerHTML = html;
+  attachSimPasteHandler('sim-cf-input-table', 'cf', () => { recalcSimCF(); });
   recalcSimCF();
 }
 
