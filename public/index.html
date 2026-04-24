@@ -2556,7 +2556,7 @@ function renderCFView(d) {
       ? `<span class="badge ${rateOut<=100?'bg':'br'}">${rateOut}% 予算比</span>` : '';
     if (el('cf-sum-close')) {
       el('cf-sum-close').innerHTML = lastClose
-        ? `<span class="${lastClose>0?'g':'r'}">${fmt万CF(lastClose)}</span>` : '—';
+        ? `<span class="${lastClose>0?'g':'r'}">${fmt千(lastClose)}</span>` : '—';
     }
     if (el('cf-sum-net')) {
       el('cf-sum-net').innerHTML = netCF >= 0
