@@ -2355,6 +2355,26 @@ const CellNav = {
     const pos = sameCol.indexOf(td);
     return sameCol[pos + (dir === 'down' ? 1 : -1)] || null;
   },
+  // Excel風：端まで一気にジャンプ（Cmd/Ctrl+矢印）
+  findEnd(td, dir, wrap) {
+    if (!td || !wrap) return null;
+    const info = this.getInfo(td);
+    if (!info) return null;
+    if (dir === 'left' || dir === 'right') {
+      // 同じ行（key+kind）の中から idx 最小/最大のセル
+      const sel = info.isCf
+        ? `td.editable-cell[data-cfkey="${info.key}"]`
+        : `td.editable-cell[data-key="${info.key}"][data-kind="${info.kind}"]`;
+      const cells = Array.from(wrap.querySelectorAll(sel));
+      if (!cells.length) return null;
+      cells.sort((a, b) => Number(a.dataset.idx) - Number(b.dataset.idx));
+      return dir === 'left' ? cells[0] : cells[cells.length - 1];
+    }
+    // up/down: 同じ列（data-idx）の中から DOM 先頭/末尾のセル
+    const cells = Array.from(wrap.querySelectorAll(`td.editable-cell[data-idx="${info.idx}"]`));
+    if (!cells.length) return null;
+    return dir === 'up' ? cells[0] : cells[cells.length - 1];
+  },
   clearHighlight() {
     if (!this._wrap) return;
     this._wrap.querySelectorAll('.cell-sel-focus,.cell-sel-range').forEach(el =>
@@ -2366,19 +2386,30 @@ const CellNav = {
     const a = this._anchor, f = this._focus;
     if (a && a !== f) {
       const ai = this.getInfo(a), fi = this.getInfo(f);
-      // 同じ行（key+kind一致）のみ範囲にする
-      if (ai && fi && ai.key === fi.key && ai.kind === fi.kind) {
-        const [lo, hi] = ai.idx <= fi.idx ? [ai.idx, fi.idx] : [fi.idx, ai.idx];
-        for (let i = lo; i <= hi; i++) {
-          const el = this._wrap.querySelector(this.buildSelector(ai, i));
-          if (el) el.classList.add('cell-sel-range');
+      if (ai && fi) {
+        if (ai.key === fi.key && ai.kind === fi.kind) {
+          // 横範囲: 同じ行内で idx 範囲
+          const [lo, hi] = ai.idx <= fi.idx ? [ai.idx, fi.idx] : [fi.idx, ai.idx];
+          for (let i = lo; i <= hi; i++) {
+            const el = this._wrap.querySelector(this.buildSelector(ai, i));
+            if (el) el.classList.add('cell-sel-range');
+          }
+        } else if (ai.idx === fi.idx) {
+          // 縦範囲: 同じ列で DOM 順の範囲
+          const cells = Array.from(this._wrap.querySelectorAll(`td.editable-cell[data-idx="${ai.idx}"]`));
+          const aPos = cells.indexOf(a);
+          const fPos = cells.indexOf(f);
+          if (aPos >= 0 && fPos >= 0) {
+            const [lo, hi] = aPos <= fPos ? [aPos, fPos] : [fPos, aPos];
+            for (let i = lo; i <= hi; i++) cells[i].classList.add('cell-sel-range');
+          }
         }
+        // 2D範囲（異なる行×列）は未サポート：focusのみハイライト
       }
     }
     f.classList.add('cell-sel-focus');
     this._suppressFocusIn = true;
     try { f.focus({ preventScroll: false }); } catch(e) {}
-    // 次tickでガード解除（focusinが非同期で届くケースに対応）
     setTimeout(() => { this._suppressFocusIn = false; }, 0);
   },
   setFocus(td, extend) {
@@ -2394,20 +2425,34 @@ const CellNav = {
     this.clearHighlight();
     this._anchor = this._focus = this._wrap = null;
   },
-  // 選択範囲の値をTSVで返す
+  // 選択範囲の値をTSVで返す（横＝\t / 縦＝\n 区切り）
   getSelectionTSV() {
     if (!this._focus) return '';
     const cellText = (el) => el ? el.textContent.replace(/[,¥￥\s]/g,'').replace(/[▲△]/g,'-').replace(/─/g,'') : '';
     if (!this._anchor || this._anchor === this._focus) return cellText(this._focus);
     const ai = this.getInfo(this._anchor), fi = this.getInfo(this._focus);
-    if (!ai || !fi || ai.key !== fi.key || ai.kind !== fi.kind) return cellText(this._focus);
-    const [lo, hi] = ai.idx <= fi.idx ? [ai.idx, fi.idx] : [fi.idx, ai.idx];
-    const parts = [];
-    for (let i = lo; i <= hi; i++) {
-      const el = this._wrap.querySelector(this.buildSelector(ai, i));
-      parts.push(cellText(el));
+    if (!ai || !fi) return cellText(this._focus);
+    if (ai.key === fi.key && ai.kind === fi.kind) {
+      // 横範囲
+      const [lo, hi] = ai.idx <= fi.idx ? [ai.idx, fi.idx] : [fi.idx, ai.idx];
+      const parts = [];
+      for (let i = lo; i <= hi; i++) {
+        parts.push(cellText(this._wrap.querySelector(this.buildSelector(ai, i))));
+      }
+      return parts.join('\t');
     }
-    return parts.join('\t');
+    if (ai.idx === fi.idx) {
+      // 縦範囲
+      const cells = Array.from(this._wrap.querySelectorAll(`td.editable-cell[data-idx="${ai.idx}"]`));
+      const aPos = cells.indexOf(this._anchor);
+      const fPos = cells.indexOf(this._focus);
+      if (aPos < 0 || fPos < 0) return cellText(this._focus);
+      const [lo, hi] = aPos <= fPos ? [aPos, fPos] : [fPos, aPos];
+      const parts = [];
+      for (let i = lo; i <= hi; i++) parts.push(cellText(cells[i]));
+      return parts.join('\n');
+    }
+    return cellText(this._focus);
   },
   // フォーカス位置からTSVを書き込む（横方向のみ対応）
   pasteTSV(text) {
@@ -2455,6 +2500,10 @@ const CellNav = {
   // keydown処理（tableに委譲）
   onKey(e) {
     if (!this._focus) return;
+    // 編集モード中（input が focus）は全てスキップ。
+    // 複数桁入力・paste・矢印キー等は input の既存ハンドラに任せる。
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (this._focus.classList && this._focus.classList.contains('cell-editing')) return;
     // 編集モードに入る
     if (e.key === 'Enter' || e.key === 'F2') {
       e.preventDefault();
@@ -2493,8 +2542,12 @@ const CellNav = {
     const keyMap = { ArrowLeft:'left', ArrowRight:'right', ArrowUp:'up', ArrowDown:'down' };
     if (keyMap[e.key]) {
       e.preventDefault();
-      const next = this.findAdjacent(this._focus, keyMap[e.key], this._wrap);
-      if (next) this.setFocus(next, e.shiftKey);
+      const dir = keyMap[e.key];
+      // Cmd/Ctrl + 矢印 = 端までジャンプ（Shift併用で範囲拡張）
+      const target = metaOrCtrl
+        ? this.findEnd(this._focus, dir, this._wrap)
+        : this.findAdjacent(this._focus, dir, this._wrap);
+      if (target) this.setFocus(target, e.shiftKey);
       return;
     }
     if (e.key === 'Escape') {
