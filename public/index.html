@@ -1504,6 +1504,7 @@ function setCostChartMode(mode, el) {
 }
 
 function initWeeklyCharts(d, lastIdx) {
+  const mode = window._costChartMode || 'latest';  // 先月 vs 先々月（既定）/ avg（月平均）
   const months = d.months.map(m => MONTH_LABELS[m] || m);
   const revActual = d.pl.actual.rev.map(v => Number(v) || 0);
   const revBudget = d.pl.budget.rev.map(v => Number(v) || 0);
@@ -1518,7 +1519,7 @@ function initWeeklyCharts(d, lastIdx) {
         { label: '実績', data: revActual, backgroundColor: '#378ADD', borderRadius: 3 }
       ]
     },
-    options: chartOpts(v => v.toLocaleString() + '千円')
+    options: chartOpts(v => fmtAxisJPY(v))
   });
 
   // 会計上の「先月」インデックスを取得（カレンダー前月）
@@ -1663,8 +1664,8 @@ function chartOpts(tickFmt) {
     responsive: true, maintainAspectRatio: false,
     plugins: { legend: { labels: { font: { size: 10 }, color: tc, boxWidth: 10, padding: 8 } } },
     scales: {
-      x: { ticks: { color: tc, font: { size: 10 }, ...(tickFmt ? { callback: tickFmt } : {}) }, grid: { color: gc } },
-      y: { ticks: { color: tc, font: { size: 10 } }, grid: { color: gc } }
+      x: { ticks: { color: tc, font: { size: 10 } }, grid: { color: gc } },
+      y: { ticks: { color: tc, font: { size: 10 }, ...(tickFmt ? { callback: tickFmt } : {}) }, grid: { color: gc } }
     }
   };
 }
