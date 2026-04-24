@@ -255,14 +255,18 @@ td.actual.editable-cell {
   box-shadow: inset 0 0 0 2px var(--tc-blue) !important;
   padding: 0 !important;
 }
-/* Excel風 選択モード（編集中ではない状態） */
-.editable-cell.cell-sel-focus {
+/* Excel風 選択モード（PL/CF詳細の編集セル、シミュレーションtd） */
+.editable-cell.cell-sel-focus,
+#sim-pl-input-table td.cell-sel-focus,
+#sim-cf-input-table td.cell-sel-focus {
   outline: 2px solid var(--tc-blue);
   outline-offset: -2px;
-  background: rgba(55,138,221,0.18) !important;
+  background: rgba(55,138,221,0.22) !important;
 }
-.editable-cell.cell-sel-range {
-  background: rgba(55,138,221,0.12) !important;
+.editable-cell.cell-sel-range,
+#sim-pl-input-table td.cell-sel-range,
+#sim-cf-input-table td.cell-sel-range {
+  background: rgba(55,138,221,0.15) !important;
 }
 .editable-cell { outline: none; }
 .cell-input {
@@ -2387,36 +2391,45 @@ const CellNav = {
     this._wrap.querySelectorAll('.cell-sel-focus,.cell-sel-range').forEach(el =>
       el.classList.remove('cell-sel-focus','cell-sel-range'));
   },
+  // 選択範囲（矩形）を返す：{ cells: 2次元配列, rowLo, rowHi, colLo, colHi }
+  getRange() {
+    if (!this._focus || !this._wrap) return null;
+    const a = this._anchor || this._focus;
+    const f = this._focus;
+    // 各cellのDOM位置 (tr index) と col (data-idx) を取得
+    const allRows = Array.from(this._wrap.querySelectorAll('tr'));
+    const trA = a.closest('tr'), trF = f.closest('tr');
+    const aRow = allRows.indexOf(trA);
+    const fRow = allRows.indexOf(trF);
+    if (aRow < 0 || fRow < 0) return null;
+    const aCol = Number(a.dataset.idx);
+    const fCol = Number(f.dataset.idx);
+    const [rowLo, rowHi] = aRow <= fRow ? [aRow, fRow] : [fRow, aRow];
+    const [colLo, colHi] = aCol <= fCol ? [aCol, fCol] : [fCol, aCol];
+    const cells = [];
+    for (let r = rowLo; r <= rowHi; r++) {
+      const row = allRows[r];
+      if (!row) { cells.push([]); continue; }
+      const rowCells = [];
+      for (let c = colLo; c <= colHi; c++) {
+        rowCells.push(row.querySelector(`td.editable-cell[data-idx="${c}"]`));
+      }
+      cells.push(rowCells);
+    }
+    return { cells, rowLo, rowHi, colLo, colHi };
+  },
   applyHighlight() {
     this.clearHighlight();
     if (!this._focus || !this._wrap) return;
-    const a = this._anchor, f = this._focus;
-    if (a && a !== f) {
-      const ai = this.getInfo(a), fi = this.getInfo(f);
-      if (ai && fi) {
-        if (ai.key === fi.key && ai.kind === fi.kind) {
-          // 横範囲: 同じ行内で idx 範囲
-          const [lo, hi] = ai.idx <= fi.idx ? [ai.idx, fi.idx] : [fi.idx, ai.idx];
-          for (let i = lo; i <= hi; i++) {
-            const el = this._wrap.querySelector(this.buildSelector(ai, i));
-            if (el) el.classList.add('cell-sel-range');
-          }
-        } else if (ai.idx === fi.idx) {
-          // 縦範囲: 同じ列で DOM 順の範囲
-          const cells = Array.from(this._wrap.querySelectorAll(`td.editable-cell[data-idx="${ai.idx}"]`));
-          const aPos = cells.indexOf(a);
-          const fPos = cells.indexOf(f);
-          if (aPos >= 0 && fPos >= 0) {
-            const [lo, hi] = aPos <= fPos ? [aPos, fPos] : [fPos, aPos];
-            for (let i = lo; i <= hi; i++) cells[i].classList.add('cell-sel-range');
-          }
-        }
-        // 2D範囲（異なる行×列）は未サポート：focusのみハイライト
-      }
+    const range = this.getRange();
+    if (range && this._anchor && this._anchor !== this._focus) {
+      range.cells.forEach(row => row.forEach(c => {
+        if (c && c.classList.contains('editable-cell')) c.classList.add('cell-sel-range');
+      }));
     }
-    f.classList.add('cell-sel-focus');
+    this._focus.classList.add('cell-sel-focus');
     this._suppressFocusIn = true;
-    try { f.focus({ preventScroll: false }); } catch(e) {}
+    try { this._focus.focus({ preventScroll: false }); } catch(e) {}
     setTimeout(() => { this._suppressFocusIn = false; }, 0);
   },
   setFocus(td, extend) {
@@ -2432,73 +2445,81 @@ const CellNav = {
     this.clearHighlight();
     this._anchor = this._focus = this._wrap = null;
   },
-  // 選択範囲の値をTSVで返す（横＝\t / 縦＝\n 区切り）
+  // 選択範囲の値を2次元TSVで返す（行=\n, 列=\t）
   getSelectionTSV() {
     if (!this._focus) return '';
     const cellText = (el) => el ? el.textContent.replace(/[,¥￥\s]/g,'').replace(/[▲△]/g,'-').replace(/─/g,'') : '';
     if (!this._anchor || this._anchor === this._focus) return cellText(this._focus);
-    const ai = this.getInfo(this._anchor), fi = this.getInfo(this._focus);
-    if (!ai || !fi) return cellText(this._focus);
-    if (ai.key === fi.key && ai.kind === fi.kind) {
-      // 横範囲
-      const [lo, hi] = ai.idx <= fi.idx ? [ai.idx, fi.idx] : [fi.idx, ai.idx];
-      const parts = [];
-      for (let i = lo; i <= hi; i++) {
-        parts.push(cellText(this._wrap.querySelector(this.buildSelector(ai, i))));
-      }
-      return parts.join('\t');
-    }
-    if (ai.idx === fi.idx) {
-      // 縦範囲
-      const cells = Array.from(this._wrap.querySelectorAll(`td.editable-cell[data-idx="${ai.idx}"]`));
-      const aPos = cells.indexOf(this._anchor);
-      const fPos = cells.indexOf(this._focus);
-      if (aPos < 0 || fPos < 0) return cellText(this._focus);
-      const [lo, hi] = aPos <= fPos ? [aPos, fPos] : [fPos, aPos];
-      const parts = [];
-      for (let i = lo; i <= hi; i++) parts.push(cellText(cells[i]));
-      return parts.join('\n');
-    }
-    return cellText(this._focus);
+    const range = this.getRange();
+    if (!range) return cellText(this._focus);
+    return range.cells.map(row => row.map(cellText).join('\t')).join('\n');
   },
-  // フォーカス位置からTSVを書き込む（横方向のみ対応）
-  pasteTSV(text) {
-    if (!this._focus) return;
-    const td = this._focus;
-    const info = this.getInfo(td);
-    if (!info) return;
-    const d = DB[currentYear];
+  // DOMセルからDB配列に値を書き込む（PL/CF両対応）
+  _writeCell(cell, val, d) {
     const N = d.months.length;
-    const firstRow = String(text).replace(/\r/g,'').split('\n').filter(r=>r!=='')[0].split('\t');
-    if (info.isCf) {
-      const [section, field] = info.key.split('.');
+    const idx = Number(cell.dataset.idx);
+    if (cell.dataset.cfkey) {
+      const [section, field] = cell.dataset.cfkey.split('.');
       if (!d.cf[section]) d.cf[section] = {};
       const existing = d.cf[section][field];
       if (!Array.isArray(existing) || existing.length < N) {
         d.cf[section][field] = Array.from({length:N}, (_, i) =>
           Array.isArray(existing) && existing[i] !== undefined ? existing[i] : '');
       }
-      for (let i = 0; i < firstRow.length && info.idx + i < N; i++) {
-        d.cf[section][field][info.idx + i] = parsePasteNum(firstRow[i]);
-      }
-      DB[currentYear] = d;
-      showPlCfSaveBar(); scheduleAutoSave && scheduleAutoSave('CF貼付け');
-      renderCFView(d);
-    } else {
-      const target = info.kind === 'budget' ? d.pl.budget : d.pl.actual;
-      const existing = target[info.key];
+      d.cf[section][field][idx] = val;
+    } else if (cell.dataset.key) {
+      const key = cell.dataset.key;
+      const kind = cell.dataset.kind;
+      const target = kind === 'budget' ? d.pl.budget : d.pl.actual;
+      const existing = target[key];
       if (!Array.isArray(existing) || existing.length < N) {
-        target[info.key] = Array.from({length:N}, (_, i) =>
+        target[key] = Array.from({length:N}, (_, i) =>
           Array.isArray(existing) && existing[i] !== undefined ? existing[i] : '');
       }
-      for (let i = 0; i < firstRow.length && info.idx + i < N; i++) {
-        target[info.key][info.idx + i] = parsePasteNum(firstRow[i]);
-      }
-      DB[currentYear] = d;
-      showPlCfSaveBar(); scheduleAutoSave('PL貼付け');
-      renderPLView(d);
+      target[key][idx] = val;
     }
-    // 再描画後にフォーカス復帰
+  },
+  // フォーカス位置から2次元TSVを貼り付け（PL/CF両対応）
+  pasteTSV(text) {
+    if (!this._focus || !this._wrap) return;
+    const td = this._focus;
+    const d = DB[currentYear];
+    const N = d.months.length;
+    const rows = String(text).replace(/\r/g,'').split('\n').filter(r => r !== '');
+    if (!rows.length) return;
+    const matrix = rows.map(r => r.split('\t'));
+    // 起点の DOM 行 index と col
+    const allRows = Array.from(this._wrap.querySelectorAll('tr'));
+    const startRow = allRows.indexOf(td.closest('tr'));
+    const startCol = Number(td.dataset.idx);
+    const isCf = !!td.dataset.cfkey;
+    // 各貼付けセルは起点から下 / 右へ展開。ただし同じ tr 内に editable-cell が
+    // 存在しない行（section行など）はスキップして次のデータ行を探す
+    let rowOffset = 0;
+    for (const rowVals of matrix) {
+      // 次に editable-cell を持つ tr を探す
+      let targetTr = null;
+      while (startRow + rowOffset < allRows.length) {
+        const tr = allRows[startRow + rowOffset];
+        if (tr && tr.querySelector('td.editable-cell')) { targetTr = tr; break; }
+        rowOffset++;
+      }
+      if (!targetTr) break;
+      rowVals.forEach((raw, cOff) => {
+        const targetIdx = startCol + cOff;
+        if (targetIdx >= N) return;
+        const cell = targetTr.querySelector(`td.editable-cell[data-idx="${targetIdx}"]`);
+        if (!cell) return;
+        this._writeCell(cell, parsePasteNum(raw), d);
+      });
+      rowOffset++;
+    }
+    DB[currentYear] = d;
+    showPlCfSaveBar();
+    scheduleAutoSave && scheduleAutoSave(isCf ? 'CF貼付け' : 'PL貼付け');
+    if (isCf) renderCFView(d); else renderPLView(d);
+    // 再描画後にフォーカス復帰（起点セル）
+    const info = { isCf, key: td.dataset.cfkey || td.dataset.key, kind: td.dataset.kind, idx: startCol };
     setTimeout(() => {
       const el = document.querySelector(this.buildSelector(info, info.idx));
       if (el) this.setFocus(el, false);
@@ -6391,35 +6412,170 @@ function attachSimPasteHandler(tableId, type, onDone) {
   });
 }
 
-// シミュレーション用 キーボードナビ（Excel風）
-// 常時input表示のテーブルなので「選択モード」は持たず、input focus 間の移動のみサポート
-function attachSimNavHandler(tableId) {
+// シミュレーション用 Excel風ナビ＋範囲選択
+// 常時input表示のテーブル：Shift+矢印で input の親 td に cell-sel-range を付けて範囲ハイライト
+const SimSel = {
+  _anchor: null, // input要素（range起点）
+  _focus: null,  // input要素（現在位置）
+  _tbl: null,
+  clearHighlight() {
+    if (!this._tbl) return;
+    this._tbl.querySelectorAll('.cell-sel-focus,.cell-sel-range').forEach(el =>
+      el.classList.remove('cell-sel-focus','cell-sel-range'));
+  },
+  // 範囲（矩形）を返す
+  getRange() {
+    if (!this._focus || !this._tbl) return null;
+    const a = this._anchor || this._focus;
+    const f = this._focus;
+    const allRows = Array.from(this._tbl.querySelectorAll('tr'));
+    const aRow = allRows.indexOf(a.closest('tr'));
+    const fRow = allRows.indexOf(f.closest('tr'));
+    if (aRow < 0 || fRow < 0) return null;
+    const aCol = Number(a.dataset.idx);
+    const fCol = Number(f.dataset.idx);
+    const [rowLo, rowHi] = aRow <= fRow ? [aRow, fRow] : [fRow, aRow];
+    const [colLo, colHi] = aCol <= fCol ? [aCol, fCol] : [fCol, aCol];
+    const cells = [];
+    for (let r = rowLo; r <= rowHi; r++) {
+      const row = allRows[r];
+      const rowInputs = [];
+      for (let c = colLo; c <= colHi; c++) {
+        rowInputs.push(row ? row.querySelector(`input[data-idx="${c}"]`) : null);
+      }
+      cells.push(rowInputs);
+    }
+    return { cells, rowLo, rowHi, colLo, colHi };
+  },
+  applyHighlight() {
+    this.clearHighlight();
+    if (!this._focus || !this._tbl) return;
+    const r = this.getRange();
+    if (r && this._anchor && this._anchor !== this._focus) {
+      r.cells.forEach(row => row.forEach(inp => {
+        if (inp && inp.parentElement) inp.parentElement.classList.add('cell-sel-range');
+      }));
+    }
+    if (this._focus.parentElement) this._focus.parentElement.classList.add('cell-sel-focus');
+  },
+  setFocus(inp, extend) {
+    if (!inp) return;
+    const tbl = inp.closest('#sim-pl-input-table, #sim-cf-input-table');
+    if (!tbl) return;
+    this._tbl = tbl;
+    if (!extend || !this._anchor) this._anchor = inp;
+    this._focus = inp;
+    this.applyHighlight();
+    try { inp.focus({ preventScroll: false }); inp.select(); } catch(e) {}
+  },
+  getSelectionTSV() {
+    if (!this._focus) return '';
+    const inpText = (inp) => inp ? String(inp.value || '').replace(/[,¥￥\s]/g,'') : '';
+    const r = this.getRange();
+    if (!r) return inpText(this._focus);
+    return r.cells.map(row => row.map(inpText).join('\t')).join('\n');
+  },
+  pasteTSV(text, simType) {
+    if (!this._focus || !this._tbl) return;
+    const start = this._focus;
+    const rows = String(text).replace(/\r/g,'').split('\n').filter(r => r !== '');
+    if (!rows.length) return;
+    const matrix = rows.map(r => r.split('\t'));
+    const allRows = Array.from(this._tbl.querySelectorAll('tr'));
+    const startRow = allRows.indexOf(start.closest('tr'));
+    const startCol = Number(start.dataset.idx);
+    let rowOffset = 0;
+    for (const rowVals of matrix) {
+      let targetTr = null;
+      while (startRow + rowOffset < allRows.length) {
+        const tr = allRows[startRow + rowOffset];
+        if (tr && tr.querySelector('input[data-key]')) { targetTr = tr; break; }
+        rowOffset++;
+      }
+      if (!targetTr) break;
+      rowVals.forEach((raw, cOff) => {
+        const targetIdx = startCol + cOff;
+        if (targetIdx >= 12) return;
+        const inp = targetTr.querySelector(`input[data-idx="${targetIdx}"]`);
+        if (!inp || !inp.dataset.key) return;
+        const n = parsePasteNum(raw);
+        setSimVal(simType, inp.dataset.key, targetIdx, n);
+        inp.value = n === '' ? '' : n;
+      });
+      rowOffset++;
+    }
+    scheduleAutoSave && scheduleAutoSave('シミュレーション貼付け');
+    if (simType === 'pl') recalcSimPL(); else recalcSimCF();
+  },
+};
+
+function attachSimNavHandler(tableId, simType) {
   const tbl = document.getElementById(tableId);
   if (!tbl || tbl._navBound) return;
   tbl._navBound = true;
+
+  // フォーカス更新でSimSelも追随
+  tbl.addEventListener('focusin', (e) => {
+    const inp = e.target;
+    if (inp && inp.tagName === 'INPUT' && inp.dataset.key) {
+      // 通常clickの場合はanchor=focus（範囲リセット）、Shift+click は extend
+      SimSel._tbl = tbl;
+      if (!SimSel._anchorPreserve) {
+        SimSel._anchor = inp;
+      }
+      SimSel._focus = inp;
+      SimSel.applyHighlight();
+    }
+  });
+
   tbl.addEventListener('keydown', (e) => {
     const inp = e.target;
     if (!inp || inp.tagName !== 'INPUT' || !inp.dataset.key) return;
-    const key = inp.dataset.key;
     const idx = Number(inp.dataset.idx);
     const metaOrCtrl = e.metaKey || e.ctrlKey;
     const fullSel = inp.selectionStart === 0 && inp.selectionEnd === inp.value.length;
 
-    const focusCell = (targetKey, targetIdx) => {
-      const t = tbl.querySelector(`input[data-key="${targetKey}"][data-idx="${targetIdx}"]`);
-      if (t) { e.preventDefault(); t.focus(); t.select(); }
+    // Cmd/Ctrl + C : 範囲コピー
+    if (metaOrCtrl && (e.key === 'c' || e.key === 'C') && SimSel._anchor !== SimSel._focus) {
+      const tsv = SimSel.getSelectionTSV();
+      if (tsv && tsv.includes('\t') || tsv.includes('\n')) {
+        e.preventDefault();
+        if (navigator.clipboard?.writeText) navigator.clipboard.writeText(tsv).catch(() => fallbackCopy(tsv));
+        else fallbackCopy(tsv);
+      }
+      return;
+    }
+    // Cmd/Ctrl + V : 範囲貼付け（既存 paste handler と競合しないよう手動実行）
+    if (metaOrCtrl && (e.key === 'v' || e.key === 'V')) {
+      if (navigator.clipboard?.readText) {
+        // ブラウザの paste イベントに任せる（attachSimPasteHandler が処理）
+        return;
+      }
+    }
+
+    // 範囲拡張用ヘルパー
+    const moveTo = (targetInp, extend) => {
+      if (!targetInp) return;
+      e.preventDefault();
+      SimSel.setFocus(targetInp, extend);
     };
 
-    // ← → : カーソルが端にある時のみセル移動（Cmd併用で行の端まで）
-    if (e.key === 'ArrowLeft' && (fullSel || (inp.selectionStart === 0 && inp.selectionEnd === 0))) {
-      focusCell(key, metaOrCtrl ? 0 : Math.max(0, idx - 1));
+    // ← → : カーソルが端にある時にセル移動 / Cmd で端、Shift で範囲拡張
+    if (e.key === 'ArrowLeft') {
+      if (!(fullSel || (inp.selectionStart === 0 && inp.selectionEnd === 0))) return;
+      const nextIdx = metaOrCtrl ? 0 : Math.max(0, idx - 1);
+      const t = tbl.querySelector(`input[data-key="${inp.dataset.key}"][data-idx="${nextIdx}"]`);
+      moveTo(t, e.shiftKey);
       return;
     }
-    if (e.key === 'ArrowRight' && (fullSel || inp.selectionStart === inp.value.length)) {
-      focusCell(key, metaOrCtrl ? 11 : Math.min(11, idx + 1));
+    if (e.key === 'ArrowRight') {
+      if (!(fullSel || inp.selectionStart === inp.value.length)) return;
+      const nextIdx = metaOrCtrl ? 11 : Math.min(11, idx + 1);
+      const t = tbl.querySelector(`input[data-key="${inp.dataset.key}"][data-idx="${nextIdx}"]`);
+      moveTo(t, e.shiftKey);
       return;
     }
-    // ↑ ↓ : 同じ列の上下 input（Cmd併用で列の端まで）
+    // ↑ ↓ : 同じ列の上下（Cmd で列端、Shift で範囲拡張）
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       const cellsInCol = Array.from(tbl.querySelectorAll(`input[data-idx="${idx}"]`));
       const pos = cellsInCol.indexOf(inp);
@@ -6427,16 +6583,20 @@ function attachSimNavHandler(tableId) {
       let target;
       if (metaOrCtrl) target = e.key === 'ArrowUp' ? cellsInCol[0] : cellsInCol[cellsInCol.length - 1];
       else target = e.key === 'ArrowUp' ? cellsInCol[pos - 1] : cellsInCol[pos + 1];
-      if (target) { e.preventDefault(); target.focus(); target.select(); }
+      moveTo(target, e.shiftKey);
       return;
     }
-    // Enter / Shift+Enter: 下 / 上
+    // Enter / Shift+Enter: 下 / 上（範囲リセット）
     if (e.key === 'Enter') {
       const cellsInCol = Array.from(tbl.querySelectorAll(`input[data-idx="${idx}"]`));
       const pos = cellsInCol.indexOf(inp);
       const target = e.shiftKey ? cellsInCol[pos - 1] : cellsInCol[pos + 1];
-      if (target) { e.preventDefault(); target.focus(); target.select(); }
+      if (target) { e.preventDefault(); SimSel.setFocus(target, false); }
       return;
+    }
+    if (e.key === 'Escape') {
+      SimSel.clearHighlight();
+      SimSel._anchor = SimSel._focus = null;
     }
   });
 }
@@ -6570,7 +6730,7 @@ function buildSimPLTable() {
   }
 
   attachSimPasteHandler('sim-pl-input-table', 'pl', () => { recalcSimPL(); });
-  attachSimNavHandler('sim-pl-input-table');
+  attachSimNavHandler('sim-pl-input-table', 'pl');
   recalcSimPL();
 }
 
@@ -6622,7 +6782,7 @@ function buildSimCFTable() {
   html += '</tbody>';
   tbl.innerHTML = html;
   attachSimPasteHandler('sim-cf-input-table', 'cf', () => { recalcSimCF(); });
-  attachSimNavHandler('sim-cf-input-table');
+  attachSimNavHandler('sim-cf-input-table', 'cf');
   recalcSimCF();
 }
 
