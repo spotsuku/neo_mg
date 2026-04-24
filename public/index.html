@@ -3385,18 +3385,37 @@ function renderCFView(d) {
   const bNetCFd = Array.from({length:N},(_,i) => bOpCFd[i] + bInvestCFd[i] + bFinCFd[i]);
   const aNetCFd = Array.from({length:N},(_,i) => aOpCFd[i]===null ? null : aOpCFd[i] + aInvestCFd[i] + aFinCFd[i]);
 
+  // ── 期首月初残高のフォールバック：前年度末の期末残高実績を引用 ──
+  const prevYrKey = currentYear === '2026' ? '2025'
+                  : currentYear === '2025' ? '2024'
+                  : null;
+  let prevYrClose = 0;
+  if (prevYrKey && DB[prevYrKey]?.cf?.actual?.cfClose) {
+    const arr = DB[prevYrKey].cf.actual.cfClose;
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if (Number(arr[i]) > 0) { prevYrClose = Number(arr[i]); break; }
+    }
+  }
+
   // ── 月初残高・月末残高（予算の自動ロール計算）──
-  // 月初予算: 1月目は入力値 / 2月目以降は前月の月末（ユーザーが明示入力していれば優先）
+  // 月初予算: 1月目は 入力値 > 前年度末残高実績 > 0 / 2月目以降は前月の月末
   // 月末予算: 月初 + 月次純CF
   const bOpenDisplay = new Array(N).fill(0);
   const bCloseDisplay = new Array(N).fill(0);
   for (let i = 0; i < N; i++) {
     const stored = getN(bOpen, i);
-    bOpenDisplay[i] = (stored > 0) ? stored : (i === 0 ? 0 : bCloseDisplay[i-1]);
+    if (stored > 0) {
+      bOpenDisplay[i] = stored;
+    } else if (i === 0) {
+      bOpenDisplay[i] = prevYrClose;  // 期首は前年度の期末残高実績を引用
+    } else {
+      bOpenDisplay[i] = bCloseDisplay[i-1];
+    }
     bCloseDisplay[i] = Math.round(bOpenDisplay[i] + bNetCFd[i]);
   }
 
-  // 月初実績: 1月目は実績入力 or 予算 / 2月目以降は前月の月末実績
+  // 月初実績: 1月目は 実績入力 > 予算月初（前年度末実績にフォールバック済み）
+  //          2月目以降は前月の月末実績
   // 月末実績: 入力があればそれ / 無ければ 月初 + 実績純CF（実績CFが無ければ null）
   const aOpenDisplay = new Array(N).fill(null);
   const aCloseDisplay = new Array(N).fill(null);
@@ -3405,7 +3424,8 @@ function renderCFView(d) {
     if (storedOpen > 0) {
       aOpenDisplay[i] = storedOpen;
     } else if (i === 0) {
-      aOpenDisplay[i] = getN(bOpen, 0) || null;  // 期首は予算の月初を利用
+      // 期首: 実績 > 予算月初 > 前年度末残高実績
+      aOpenDisplay[i] = bOpenDisplay[0] || prevYrClose || null;
     } else {
       aOpenDisplay[i] = aCloseDisplay[i-1];  // 前月末を引き継ぎ
     }
