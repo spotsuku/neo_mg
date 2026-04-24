@@ -1772,28 +1772,44 @@ function renderAnnualSummary() {
   if (!el) return;
   el.textContent = currentYear + '年度';
   const d = DB[currentYear];
-  renderAnnualPL(d);
-  renderAnnualCF(d);
-  renderAnnualBS();
-  renderCashFlowForecast();
+  if (!d) { console.warn('renderAnnualSummary: DB[' + currentYear + '] missing'); return; }
+  // 1関数の失敗で他が止まらないようにtry/catchで独立実行
+  try { renderAnnualPL(d); } catch(e) {
+    console.error('renderAnnualPL error:', e);
+    const pl = document.getElementById('annual-pl-table');
+    if (pl) pl.innerHTML = '<span style="color:var(--tc-red);font-size:11px">PL描画エラー: ' + (e.message || e) + '</span>';
+  }
+  try { renderAnnualCF(d); } catch(e) {
+    console.error('renderAnnualCF error:', e);
+    const cf = document.getElementById('annual-cf-table');
+    if (cf) cf.innerHTML = '<span style="color:var(--tc-red);font-size:11px">CF描画エラー: ' + (e.message || e) + '</span>';
+  }
+  try { renderAnnualBS(); } catch(e) {
+    console.error('renderAnnualBS error:', e);
+    const bs = document.getElementById('annual-bs-table');
+    if (bs) bs.innerHTML = '<span style="color:var(--tc-red);font-size:11px">BS描画エラー: ' + (e.message || e) + '</span>';
+  }
+  try { renderCashFlowForecast(); } catch(e) { console.error('renderCashFlowForecast error:', e); }
 }
 
 function renderAnnualPL(d) {
-  const { start, end } = getQuarterRange(_annualPeriod, d.months);
+  const { start, end } = getQuarterRange(_annualPeriod, d.months || []);
   const sR = (arr) => sumRange(arr, start, end);
+  const pA = d.pl?.actual || {};
+  const pB = d.pl?.budget || {};
 
-  const revA  = sR(d.pl.actual.rev);  const revB  = sR(d.pl.budget.rev);
-  const laborA = sR(d.pl.actual.labor);    const laborB = sR(d.pl.budget.labor);
-  const outA   = sR(d.pl.actual.outsource); const outB  = sR(d.pl.budget.outsource);
-  const advA   = sR(d.pl.actual.adv);       const advB   = sR(d.pl.budget.adv);
-  const gaichuA= sR(d.pl.actual.gaichu||[]); const gaichuB=sR(d.pl.budget.gaichu||[]);
-  const otherA = sR(d.pl.actual.other);     const otherB = sR(d.pl.budget.other);
+  const revA  = sR(pA.rev);  const revB  = sR(pB.rev);
+  const laborA = sR(pA.labor);    const laborB = sR(pB.labor);
+  const outA   = sR(pA.outsource); const outB  = sR(pB.outsource);
+  const advA   = sR(pA.adv);       const advB   = sR(pB.adv);
+  const gaichuA= sR(pA.gaichu);    const gaichuB= sR(pB.gaichu);
+  const otherA = sR(pA.other);     const otherB = sR(pB.other);
   const opexA  = laborA+outA+advA+gaichuA+otherA;
   const opexB  = laborB+outB+advB+gaichuB+otherB;
 
   const cogsAnn = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
-  const cogsAA = cogsAnn.reduce((t,k)=>t+sR(d.pl.actual[k]||[]),0);
-  const cogsAB = cogsAnn.reduce((t,k)=>t+sR(d.pl.budget[k]||[]),0);
+  const cogsAA = cogsAnn.reduce((t,k)=>t+sR(pA[k]),0);
+  const cogsAB = cogsAnn.reduce((t,k)=>t+sR(pB[k]),0);
   const gpAA = revA - cogsAA;  const gpAB = revB - cogsAB;
   const opA = gpAA - opexA;    const opB  = gpAB - opexB;
 
@@ -1813,8 +1829,8 @@ function renderAnnualPL(d) {
 }
 
 function renderAnnualCF(d) {
-  const { start, end } = getQuarterRange(_annualPeriod, d.months);
-  const cfGet = (sec, key) => (d.cf[sec]&&d.cf[sec][key]) || [];
+  const { start, end } = getQuarterRange(_annualPeriod, d.months || []);
+  const cfGet = (sec, key) => (d.cf && d.cf[sec] && d.cf[sec][key]) || [];
   const sR = (arr) => sumRange(arr, start, end);
   const sA = (key) => sR(cfGet('actual', key));
   const sB = (key) => sR(cfGet('budget', key));
