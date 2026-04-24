@@ -1934,12 +1934,19 @@ function renderCashFlowForecast() {
     const cfA = d.cf?.actual || {};
     const cfB = d.cf?.budget || {};
     d.months.forEach((m, i) => {
-      const hasActual = (Number(cfA.cfClose?.[i]) > 0) || (Number(cfA.cfIn?.[i]) > 0);
       const getA = (k) => Number(cfA[k]?.[i]) || 0;
       const getB = (k) => Number(cfB[k]?.[i]) || 0;
-
-      const cashIn_A = getA('cfIn');
-      const cashIn_B = getB('cfIn');
+      // 売上入金：内訳（cfInFee+cfInTraining+cfInEvent+cfInOther+旧cfInMembership）が
+      // あればその合計、無ければ直接入力の cfIn
+      const sumInDetail = (sec, obj) => {
+        const s = (obj[`cfInFee`]?.[i]||0) + (obj[`cfInTraining`]?.[i]||0)
+                + (obj[`cfInEvent`]?.[i]||0) + (obj[`cfInOther`]?.[i]||0)
+                + (obj[`cfInMembership`]?.[i]||0);
+        return s > 0 ? Number(s) : Number(obj.cfIn?.[i] || 0);
+      };
+      const cashIn_A = sumInDetail('actual', cfA);
+      const cashIn_B = sumInDetail('budget', cfB);
+      const hasActual = (Number(cfA.cfClose?.[i]) > 0) || cashIn_A > 0;
       const opex_A = opexKeys.reduce((t,k) => t + getA(k), 0);
       const opex_B = opexKeys.reduce((t,k) => t + getB(k), 0);
       const finOut_A = finOutKeys.reduce((t,k) => t + getA(k), 0);
