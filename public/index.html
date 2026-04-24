@@ -2992,38 +2992,11 @@ function renderCFView(d) {
     return det > 0 ? det : getN(cfArr('budget','cfIn'),i);
   });
 
-  // ── PL連動の営業CF（簡易間接法: 営業利益をそのまま営業CFとみなす）──
-  // 営業利益 = 売上 − 原価（詳細科目合計 or 旧cogs）− 販管費合計
-  const plArr = (section, key) => {
-    const v = d.pl?.[section]?.[key];
-    if (!Array.isArray(v) || v.length < N) {
-      return Array.from({length: N}, (_, i) => (Array.isArray(v) ? (Number(v[i]) || 0) : 0));
-    }
-    return v;
-  };
-  const COGS_KEYS = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
-  const OPEX_KEYS = ['labor','outsource','adv','gaichu','other'];
-  const plOpIncome = (section) => Array.from({length:N}, (_, i) => {
-    const rev = Number(plArr(section,'rev')[i]) || 0;
-    const cogsDetail = COGS_KEYS.reduce((t,k) => t + (Number(plArr(section,k)[i]) || 0), 0);
-    const cogs = cogsDetail > 0 ? cogsDetail : (Number(plArr(section,'cogs')[i]) || 0);
-    const opex = OPEX_KEYS.reduce((t,k) => t + (Number(plArr(section,k)[i]) || 0), 0);
-    return rev - cogs - opex;
-  });
-  const bOpCfFromPL = plOpIncome('budget');
-  const aOpCfFromPL = plOpIncome('actual');
-  // 実績が入っていない月は null（グラフ・表で — にする）
-  const aOpCfFromPLView = aOpCfFromPL.map((v, i) => {
-    const revA = Number(plArr('actual','rev')[i]) || 0;
-    return revA > 0 ? v : null;
-  });
-
   const rows = [
     // ── CF区分（月初残高の直下）──
     { label:'月初残高（千円）', bArr:bOpen, aArr:aOpen, noSum:true, edBKey:'budget.open', edAKey:'actual.open' },
     { label:'── CF区分',   section:true },
     { label:'営業CF',           bArr:bOpCFd,  aArr:aOpCFd,  isTot:true, noDiff:true },
-    { label:'　└ 営業CF（PL連動）', bArr:bOpCfFromPL, aArr:aOpCfFromPLView, isTot:false, isSub:true, noDiff:true, noSum:false },
     { label:'財務CF（融資等）', bArr:bFinCFd, aArr:aFinCFd, isTot:true, noDiff:true },
     { label:'月次純CF',         bArr:bNetCFd, aArr:aNetCFd, isTot:true, noDiff:true },
     { label:'月末残高',         bArr:bCloseCalc, aArr:aCloseCalc, noSum:true, edAKey:'actual.cfClose', isTot:true },
