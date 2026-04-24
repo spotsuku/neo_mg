@@ -6357,20 +6357,87 @@ function attachSimPasteHandler(tableId, type, onDone) {
     e.preventDefault();
     const key = inp.dataset.key;
     const startIdx = Number(inp.dataset.idx);
-    const firstRow = text.replace(/\r/g,'').split('\n').filter(r=>r!=='')[0].split('\t');
-    for (let i = 0; i < firstRow.length && startIdx + i < 12; i++) {
-      setSimVal(type, key, startIdx + i, parsePasteNum(firstRow[i]));
-    }
-    // DOMの入力値も即時更新（再描画せず）
-    firstRow.forEach((raw, i) => {
-      const cell = tbl.querySelector(`input[data-key="${key}"][data-idx="${startIdx + i}"]`);
-      if (cell) {
+    // タブ=横方向、改行=縦方向 の2次元貼付け対応
+    const rows = text.replace(/\r/g,'').split('\n').filter(r=>r!=='');
+    // 縦方向の場合、同じ列で連続する input を順に辿る
+    const allInCol = Array.from(tbl.querySelectorAll(`input[data-idx="${startIdx}"]`));
+    const startRow = allInCol.indexOf(inp);
+    rows.forEach((line, rowOff) => {
+      const cols = line.split('\t');
+      const targetRowInput = allInCol[startRow + rowOff];
+      // まず同じ行のまま横方向に widen
+      cols.forEach((raw, colOff) => {
         const n = parsePasteNum(raw);
-        cell.value = n === '' ? '' : n;
-      }
+        if (rows.length === 1) {
+          // 1行のみ → 元の input を起点に横方向へ
+          if (startIdx + colOff < 12) {
+            setSimVal(type, key, startIdx + colOff, n);
+            const cell = tbl.querySelector(`input[data-key="${key}"][data-idx="${startIdx + colOff}"]`);
+            if (cell) cell.value = n === '' ? '' : n;
+          }
+        } else if (targetRowInput) {
+          // 複数行 → 同じ列で違う input key を順に
+          const rowKey = targetRowInput.dataset.key;
+          if (startIdx + colOff < 12) {
+            setSimVal(type, rowKey, startIdx + colOff, n);
+            const cell = tbl.querySelector(`input[data-key="${rowKey}"][data-idx="${startIdx + colOff}"]`);
+            if (cell) cell.value = n === '' ? '' : n;
+          }
+        }
+      });
     });
     onDone && onDone();
     scheduleAutoSave && scheduleAutoSave('シミュレーション貼付け');
+  });
+}
+
+// シミュレーション用 キーボードナビ（Excel風）
+// 常時input表示のテーブルなので「選択モード」は持たず、input focus 間の移動のみサポート
+function attachSimNavHandler(tableId) {
+  const tbl = document.getElementById(tableId);
+  if (!tbl || tbl._navBound) return;
+  tbl._navBound = true;
+  tbl.addEventListener('keydown', (e) => {
+    const inp = e.target;
+    if (!inp || inp.tagName !== 'INPUT' || !inp.dataset.key) return;
+    const key = inp.dataset.key;
+    const idx = Number(inp.dataset.idx);
+    const metaOrCtrl = e.metaKey || e.ctrlKey;
+    const fullSel = inp.selectionStart === 0 && inp.selectionEnd === inp.value.length;
+
+    const focusCell = (targetKey, targetIdx) => {
+      const t = tbl.querySelector(`input[data-key="${targetKey}"][data-idx="${targetIdx}"]`);
+      if (t) { e.preventDefault(); t.focus(); t.select(); }
+    };
+
+    // ← → : カーソルが端にある時のみセル移動（Cmd併用で行の端まで）
+    if (e.key === 'ArrowLeft' && (fullSel || (inp.selectionStart === 0 && inp.selectionEnd === 0))) {
+      focusCell(key, metaOrCtrl ? 0 : Math.max(0, idx - 1));
+      return;
+    }
+    if (e.key === 'ArrowRight' && (fullSel || inp.selectionStart === inp.value.length)) {
+      focusCell(key, metaOrCtrl ? 11 : Math.min(11, idx + 1));
+      return;
+    }
+    // ↑ ↓ : 同じ列の上下 input（Cmd併用で列の端まで）
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      const cellsInCol = Array.from(tbl.querySelectorAll(`input[data-idx="${idx}"]`));
+      const pos = cellsInCol.indexOf(inp);
+      if (pos < 0) return;
+      let target;
+      if (metaOrCtrl) target = e.key === 'ArrowUp' ? cellsInCol[0] : cellsInCol[cellsInCol.length - 1];
+      else target = e.key === 'ArrowUp' ? cellsInCol[pos - 1] : cellsInCol[pos + 1];
+      if (target) { e.preventDefault(); target.focus(); target.select(); }
+      return;
+    }
+    // Enter / Shift+Enter: 下 / 上
+    if (e.key === 'Enter') {
+      const cellsInCol = Array.from(tbl.querySelectorAll(`input[data-idx="${idx}"]`));
+      const pos = cellsInCol.indexOf(inp);
+      const target = e.shiftKey ? cellsInCol[pos - 1] : cellsInCol[pos + 1];
+      if (target) { e.preventDefault(); target.focus(); target.select(); }
+      return;
+    }
   });
 }
 
@@ -6503,6 +6570,7 @@ function buildSimPLTable() {
   }
 
   attachSimPasteHandler('sim-pl-input-table', 'pl', () => { recalcSimPL(); });
+  attachSimNavHandler('sim-pl-input-table');
   recalcSimPL();
 }
 
@@ -6554,6 +6622,7 @@ function buildSimCFTable() {
   html += '</tbody>';
   tbl.innerHTML = html;
   attachSimPasteHandler('sim-cf-input-table', 'cf', () => { recalcSimCF(); });
+  attachSimNavHandler('sim-cf-input-table');
   recalcSimCF();
 }
 
