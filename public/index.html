@@ -536,7 +536,7 @@ td.actual.editable-cell {
     </div>
     <div class="card">
       <div class="ct">PL詳細テーブル（千円）</div>
-      <div class="scroll-x" id="pl-table-wrap"></div>
+      <div class="scroll-x" id="pl-table-wrap" style="max-height:70vh;overflow:auto"></div>
     </div>
   </div>
 
@@ -556,7 +556,7 @@ td.actual.editable-cell {
     </div>
     <div class="card">
       <div class="ct">CF詳細テーブル（千円）</div>
-      <div class="scroll-x" id="cf-table-wrap"></div>
+      <div class="scroll-x" id="cf-table-wrap" style="max-height:70vh;overflow:auto"></div>
     </div>
   </div>
 
@@ -1986,12 +1986,12 @@ function renderAnnualBS() {
   ];
   const inputStyle = 'width:100%;padding:3px 5px;border:none;background:transparent;color:var(--tc-blue);font-size:11px;font-weight:600;text-align:right;font-family:inherit;outline:none';
 
-  let html = `<table class="dt" style="width:100%;font-size:11px">
+  let html = `<table class="dt" style="width:100%;font-size:11px;border-collapse:separate;border-spacing:0">
     <thead><tr>
-      <th class="l" style="min-width:110px;font-size:10px">科目</th>
-      <th style="min-width:70px;font-size:10px">予算（千円）</th>
-      <th style="min-width:70px;font-size:10px">実績（千円）</th>
-      <th style="min-width:60px;font-size:10px;background:rgba(55,138,221,0.15);border-left:2px solid rgba(55,138,221,0.3)">差異</th>
+      <th class="l" style="min-width:110px;font-size:10px;position:sticky;top:0;z-index:2;background:var(--bg2)">科目</th>
+      <th style="min-width:70px;font-size:10px;position:sticky;top:0;z-index:2;background:var(--bg2)">予算（千円）</th>
+      <th style="min-width:70px;font-size:10px;position:sticky;top:0;z-index:2;background:var(--bg2)">実績（千円）</th>
+      <th style="min-width:60px;font-size:10px;background:rgba(55,138,221,0.15);border-left:2px solid rgba(55,138,221,0.3);position:sticky;top:0;z-index:2">差異</th>
     </tr></thead><tbody>`;
 
   sections.forEach(sec => {
@@ -2049,13 +2049,13 @@ function buildAnnualTable(rows, unit) {
     return fmt(v);
   };
 
-  let html = `<table class="dt" style="width:100%;font-size:11px">
+  let html = `<table class="dt" style="width:100%;font-size:11px;border-collapse:separate;border-spacing:0">
     <thead><tr>
-      <th class="l" style="min-width:110px;font-size:10px">科目</th>
-      <th style="min-width:70px;font-size:10px">予算（${unit}）</th>
-      <th style="min-width:70px;font-size:10px">実績（${unit}）</th>
-      <th style="min-width:60px;font-size:10px;background:rgba(55,138,221,0.15);border-left:2px solid rgba(55,138,221,0.3)">差異</th>
-      <th style="min-width:48px;font-size:10px">達成率</th>
+      <th class="l" style="min-width:110px;font-size:10px;position:sticky;top:0;z-index:2;background:var(--bg2)">科目</th>
+      <th style="min-width:70px;font-size:10px;position:sticky;top:0;z-index:2;background:var(--bg2)">予算（${unit}）</th>
+      <th style="min-width:70px;font-size:10px;position:sticky;top:0;z-index:2;background:var(--bg2)">実績（${unit}）</th>
+      <th style="min-width:60px;font-size:10px;background:rgba(55,138,221,0.15);border-left:2px solid rgba(55,138,221,0.3);position:sticky;top:0;z-index:2">差異</th>
+      <th style="min-width:48px;font-size:10px;position:sticky;top:0;z-index:2;background:var(--bg2)">達成率</th>
     </tr></thead><tbody>`;
 
   rows.forEach(row => {
@@ -2417,10 +2417,10 @@ function renderPLView(d) {
   ];
 
   let html = `<table class="dt" style="min-width:${80 + d.months.length * 80}px;border-collapse:separate;border-spacing:0"><thead><tr>
-    <th class="l" style="min-width:130px;position:sticky;left:0;z-index:3;background:var(--bg2)">科目</th>
-    <th class="l" style="width:40px;position:sticky;left:130px;z-index:3;background:var(--bg2)">区分</th>`;
-  d.months.forEach(m => { html += `<th>${MONTH_LABELS[m]}</th>`; });
-  html += '<th>合計</th></tr></thead><tbody>';
+    <th class="l" style="min-width:130px;position:sticky;left:0;top:0;z-index:5;background:var(--bg2)">科目</th>
+    <th class="l" style="width:40px;position:sticky;left:130px;top:0;z-index:5;background:var(--bg2)">区分</th>`;
+  d.months.forEach(m => { html += `<th style="position:sticky;top:0;z-index:3;background:var(--bg2)">${MONTH_LABELS[m]}</th>`; });
+  html += '<th style="position:sticky;top:0;z-index:3;background:var(--bg2)">合計</th></tr></thead><tbody>';
 
   rows.forEach(row => {
     const isRev = row.key === 'rev';
@@ -2948,12 +2948,12 @@ function renderCFView(d) {
   ];
 
   const minW = 100 + d.months.length * 82;
-  let html = `<table class="dt" style="min-width:${minW}px;width:100%">
+  let html = `<table class="dt" style="min-width:${minW}px;width:100%;border-collapse:separate;border-spacing:0">
     <thead><tr>
-      <th class="l" style="min-width:130px">科目</th>
-      <th class="l" style="min-width:36px">区分</th>
-      ${months.map(m=>`<th style="min-width:72px">${m}</th>`).join('')}
-      <th style="background:rgba(55,138,221,0.15);border-left:2px solid rgba(55,138,221,0.3)">合計</th>
+      <th class="l" style="min-width:130px;position:sticky;top:0;z-index:3;background:var(--bg2)">科目</th>
+      <th class="l" style="min-width:36px;position:sticky;top:0;z-index:3;background:var(--bg2)">区分</th>
+      ${months.map(m=>`<th style="min-width:72px;position:sticky;top:0;z-index:3;background:var(--bg2)">${m}</th>`).join('')}
+      <th style="background:rgba(55,138,221,0.15);border-left:2px solid rgba(55,138,221,0.3);position:sticky;top:0;z-index:3">合計</th>
     </tr></thead><tbody>`;
 
   rows.forEach(row => {
