@@ -2285,7 +2285,7 @@ let _autoSaveTimer = null; // debounceタイマー
 let _lastSaveTime = null;  // 最終保存時刻
 let _pendingSave = false;  // 保存中に変更があった場合のフラグ
 
-const SAVE_DEBOUNCE_MS = 2000; // 2秒後に自動保存
+const SAVE_DEBOUNCE_MS = 600; // 入力停止 600ms 後に自動保存（リロード時のロスを最小化）
 
 function setSaveState(state, detail) {
   _saveState = state;
@@ -2368,10 +2368,43 @@ async function forceSave() {
 
 // ページ離脱前に未保存があれば警告
 window.addEventListener('beforeunload', (e) => {
+  // 保留中の保存がある場合はlocalStorageに即時 flush（Supabase fetchは間に合わないため）
   if (_saveState === 'pending' || _autoSaveTimer) {
+    try {
+      // localStorageへの即時保存
+      ['2024','2025','2026'].forEach(yr => {
+        if (DB[yr]) localStorage.setItem('neo_db_' + yr, JSON.stringify(DB[yr]));
+        if (SIM_DATA[yr]) localStorage.setItem('neo_sim_' + yr, JSON.stringify(SIM_DATA[yr]));
+      });
+      // Supabase 保存は sendBeacon でベストエフォート
+      if (navigator.sendBeacon) {
+        for (const yr of ['2024','2025','2026']) {
+          if (DB[yr]) {
+            const body = JSON.stringify({ fiscal_year: yr, months: DB[yr].months, pl: DB[yr].pl, cf: DB[yr].cf, reportData: DB[yr].reportData || {} });
+            navigator.sendBeacon('/api/db?action=save_fiscal', new Blob([body], {type:'application/json'}));
+          }
+          if (SIM_DATA[yr]) {
+            const body = JSON.stringify({ fiscal_year: yr, data: SIM_DATA[yr] });
+            navigator.sendBeacon('/api/db?action=save_sim', new Blob([body], {type:'application/json'}));
+          }
+        }
+      }
+    } catch(err) { console.warn('beforeunload save failed:', err); }
     e.preventDefault();
     e.returnValue = '未保存の変更があります。ページを離れますか？';
     return e.returnValue;
+  }
+});
+
+// ページ非表示時にも保存（モバイルブラウザのバックグラウンド遷移対応）
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && (_saveState === 'pending' || _autoSaveTimer)) {
+    try {
+      ['2024','2025','2026'].forEach(yr => {
+        if (DB[yr]) localStorage.setItem('neo_db_' + yr, JSON.stringify(DB[yr]));
+        if (SIM_DATA[yr]) localStorage.setItem('neo_sim_' + yr, JSON.stringify(SIM_DATA[yr]));
+      });
+    } catch(err){}
   }
 });
 
@@ -6354,6 +6387,8 @@ function addSimRow(isRev, parentKey) {
     parentKey: parentKey || null
   });
   buildSimPLTable();
+  // 即時保存（リロード/デプロイで消えないように）
+  saveSimData().catch(e => console.warn('saveSimData failed:', e));
 }
 
 // カスタム行を削除
@@ -6361,6 +6396,7 @@ function removeSimRow(key) {
   if (!SIM_DATA[currentSimYear].customRows) return;
   SIM_DATA[currentSimYear].customRows = SIM_DATA[currentSimYear].customRows.filter(r => r.key !== key);
   buildSimPLTable();
+  saveSimData().catch(e => console.warn('saveSimData failed:', e));
 }
 
 // CF カスタム行を追加（type: 'rev' | 'cogs' | 'opex'、parentKey は親行のキー）
@@ -6377,11 +6413,13 @@ function addSimCfRow(type, parentKey) {
     key, label: label.trim(), type, parentKey: parentKey || null
   });
   buildSimCFTable();
+  saveSimData().catch(e => console.warn('saveSimData failed:', e));
 }
 function removeSimCfRow(key) {
   if (!SIM_DATA[currentSimYear].cfCustomRows) return;
   SIM_DATA[currentSimYear].cfCustomRows = SIM_DATA[currentSimYear].cfCustomRows.filter(r => r.key !== key);
   buildSimCFTable();
+  saveSimData().catch(e => console.warn('saveSimData failed:', e));
 }
 function getCfCustomRows(year) {
   return (SIM_DATA[year] && SIM_DATA[year].cfCustomRows) || [];
