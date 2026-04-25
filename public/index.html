@@ -2305,6 +2305,86 @@ let _sbReady = (async () => {
 })();
 
 // ────────────────────────────────────────────
+//  cells テーブル 読み込みヘルパー（Phase 3b）
+//  既存の loadDB / loadSimData が JSON カラムから読んだ後、
+//  cells に値があればそれで上書き（cells 側がキャノニカル）。
+// ────────────────────────────────────────────
+async function _loadCellsByYear(year) {
+  if (!sbClient) return null;
+  const { data, error } = await sbClient
+    .from('cells')
+    .select('sheet,row_key,month_idx,value')
+    .eq('fiscal_year', String(year));
+  if (error) { console.warn('[loadCells]', year, error.message); return null; }
+  if (!data || data.length === 0) return null;
+  const sheets = {};
+  for (const c of data) {
+    if (!sheets[c.sheet]) sheets[c.sheet] = {};
+    if (c.month_idx === -1) {
+      // スカラー（cfOpenFirst 等）
+      sheets[c.sheet][c.row_key] = c.value == null ? 0 : Number(c.value);
+      continue;
+    }
+    if (!Array.isArray(sheets[c.sheet][c.row_key])) {
+      sheets[c.sheet][c.row_key] = Array(12).fill('');
+    }
+    sheets[c.sheet][c.row_key][c.month_idx] = c.value == null ? '' : Number(c.value);
+  }
+  return sheets;
+}
+
+async function _loadCustomRowsByYear(year) {
+  if (!sbClient) return null;
+  const { data, error } = await sbClient
+    .from('custom_rows')
+    .select('sheet,row_key,label,attrs,position')
+    .eq('fiscal_year', String(year))
+    .order('position', { ascending: true });
+  if (error) { console.warn('[loadCustomRows]', year, error.message); return null; }
+  return data || [];
+}
+
+async function applyCellsOverlayToSim() {
+  await _sbReady;
+  if (!sbClient) return;
+  for (const yr of ['2024','2025','2026']) {
+    const sheets = await _loadCellsByYear(yr);
+    if (!sheets) continue;
+    if (!SIM_DATA[yr]) SIM_DATA[yr] = { pl: {}, cf: { cfOpenFirst: 0 } };
+    if (sheets.sim_pl) Object.assign(SIM_DATA[yr].pl, sheets.sim_pl);
+    if (sheets.sim_cf) Object.assign(SIM_DATA[yr].cf, sheets.sim_cf);
+
+    const customs = await _loadCustomRowsByYear(yr);
+    if (customs && customs.length) {
+      const pl = customs.filter(c => c.sheet === 'sim_pl')
+        .map(c => ({ key: c.row_key, label: c.label, ...(c.attrs || {}) }));
+      const cf = customs.filter(c => c.sheet === 'sim_cf')
+        .map(c => ({ key: c.row_key, label: c.label, ...(c.attrs || {}) }));
+      if (pl.length) SIM_DATA[yr].customRows   = pl;
+      if (cf.length) SIM_DATA[yr].cfCustomRows = cf;
+    }
+    console.log(`[overlay sim] ${yr}: sim_pl=${Object.keys(sheets.sim_pl||{}).length}keys, sim_cf=${Object.keys(sheets.sim_cf||{}).length}keys`);
+  }
+}
+
+async function applyCellsOverlayToDB() {
+  await _sbReady;
+  if (!sbClient) return;
+  for (const yr of ['2024','2025','2026']) {
+    const sheets = await _loadCellsByYear(yr);
+    if (!sheets) continue;
+    if (!DB[yr]) DB[yr] = { months: [], pl: { budget:{}, actual:{} }, cf: { budget:{}, actual:{} }, reportData: {} };
+    if (!DB[yr].pl) DB[yr].pl = { budget:{}, actual:{} };
+    if (!DB[yr].cf) DB[yr].cf = { budget:{}, actual:{} };
+    if (sheets.fiscal_pl_budget) Object.assign(DB[yr].pl.budget, sheets.fiscal_pl_budget);
+    if (sheets.fiscal_pl_actual) Object.assign(DB[yr].pl.actual, sheets.fiscal_pl_actual);
+    if (sheets.fiscal_cf_budget) Object.assign(DB[yr].cf.budget, sheets.fiscal_cf_budget);
+    if (sheets.fiscal_cf_actual) Object.assign(DB[yr].cf.actual, sheets.fiscal_cf_actual);
+    console.log(`[overlay db] ${yr}: pl.budget=${Object.keys(sheets.fiscal_pl_budget||{}).length}keys`);
+  }
+}
+
+// ────────────────────────────────────────────
 //  保存状態管理システム
 //  状態: idle(同期済み) | pending(未保存) | saving(保存中) | error(失敗)
 // ────────────────────────────────────────────
@@ -9232,6 +9312,7 @@ function copyText(id) {
 // ───────────────────────────────────────────
 window.addEventListener('load', async () => {
   try { await loadDB(); } catch(e) { console.warn('loadDB:', e); }
+  try { await applyCellsOverlayToDB(); } catch(e) { console.warn('cells overlay (DB):', e); }
   // バージョン履歴をクラウドからlocalStorageに同期
   try {
     const cloudVers = await loadVersionsFromCloud();
@@ -9269,6 +9350,7 @@ window.addEventListener('load', async () => {
     }
   }
   try { await loadSimData(); } catch(e) { console.warn('loadSimData:', e); }
+  try { await applyCellsOverlayToSim(); } catch(e) { console.warn('cells overlay (sim):', e); }
   // 初期化完了後に保存状態を「同期済み」に設定
   _lastSaveTime = new Date();
   setSaveState('idle');
