@@ -2515,13 +2515,15 @@ async function _loadCustomRowsByYear(year) {
 
 async function applyCellsOverlayToSim() {
   await _sbReady;
-  if (!sbClient) return;
+  if (!sbClient) return false;
+  let loaded = false;
   for (const yr of ['2024','2025','2026']) {
     const sheets = await _loadCellsByYear(yr);
     if (!sheets) continue;
     if (!SIM_DATA[yr]) SIM_DATA[yr] = { pl: {}, cf: { cfOpenFirst: 0 } };
     if (sheets.sim_pl) Object.assign(SIM_DATA[yr].pl, sheets.sim_pl);
     if (sheets.sim_cf) Object.assign(SIM_DATA[yr].cf, sheets.sim_cf);
+    loaded = true;
 
     const customs = await _loadCustomRowsByYear(yr);
     if (customs && customs.length) {
@@ -2534,6 +2536,7 @@ async function applyCellsOverlayToSim() {
     }
     console.log(`[overlay sim] ${yr}: sim_pl=${Object.keys(sheets.sim_pl||{}).length}keys, sim_cf=${Object.keys(sheets.sim_cf||{}).length}keys`);
   }
+  return loaded;
 }
 
 async function applyCellsOverlayToDB() {
@@ -9668,9 +9671,20 @@ window.addEventListener('load', async () => {
     }
   }
   try { await loadSimData(); } catch(e) { console.warn('loadSimData:', e); }
-  try { await applyCellsOverlayToSim(); } catch(e) { console.warn('cells overlay (sim):', e); }
-  // ロード+オーバーレイ完了後に JSONB を最新状態へ同期（cells の方が新しい場合に備えて）
-  scheduleJsonbBackup();
+  let _simOverlayOK = false;
+  try { _simOverlayOK = await applyCellsOverlayToSim(); } catch(e) { console.warn('cells overlay (sim):', e); }
+  // overlay 失敗時は JSONB バックアップを抑止（ハードコード初期値で sim_data を上書きしない）
+  // 失敗時は 3 秒後にもう一度 overlay を試み、成功したらテーブルを再描画
+  if (_simOverlayOK) {
+    scheduleJsonbBackup();
+  } else {
+    setTimeout(async () => {
+      try {
+        const ok = await applyCellsOverlayToSim();
+        if (ok) { buildSimPLTable(); buildSimCFTable(); scheduleJsonbBackup(); }
+      } catch(e) { console.warn('cells overlay (sim) retry:', e); }
+    }, 3000);
+  }
   // 初期化完了後に保存状態を「同期済み」に設定
   _lastSaveTime = new Date();
   setSaveState('idle');
