@@ -1215,6 +1215,7 @@ input.cells-edit-input {
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
 <script>
 // ── Storage polyfill (works in Claude artifacts AND local HTML) ──
 if (typeof window.storage === 'undefined') {
@@ -2275,6 +2276,33 @@ function buildAnnualTable(rows, unit) {
 //  インライン編集ヘルパー（月次PL/CF）
 // ───────────────────────────────────────────
 let _plCfDirty = false;
+
+// ────────────────────────────────────────────
+//  Supabase クライアント（ブラウザ直書き込み用 / Phase 3）
+//  /api/config から URL + anon key を取得して初期化。
+//  失敗時は sbClient = null のまま → 旧 /api/db 経路にフォールバック。
+// ────────────────────────────────────────────
+let sbClient = null;
+let _sbReady = (async () => {
+  try {
+    if (!window.supabase || !window.supabase.createClient) {
+      console.warn('[supabase] CDN script not loaded');
+      return null;
+    }
+    const r = await fetch('/api/config');
+    if (!r.ok) throw new Error('config fetch failed: ' + r.status);
+    const cfg = await r.json();
+    if (!cfg.supabaseUrl || !cfg.anonKey) throw new Error('missing config');
+    sbClient = window.supabase.createClient(cfg.supabaseUrl, cfg.anonKey, {
+      auth: { persistSession: false }, // Phase 5 で persistSession:true に変更
+    });
+    console.log('[supabase] client ready');
+    return sbClient;
+  } catch (e) {
+    console.warn('[supabase] init failed, will fallback to /api/db:', e.message);
+    return null;
+  }
+})();
 
 // ────────────────────────────────────────────
 //  保存状態管理システム
