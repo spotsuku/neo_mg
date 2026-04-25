@@ -3515,14 +3515,15 @@ function renderCFView(d) {
     const sumArr = (arr) => (arr||[]).reduce((a,v) => a+(Number(v)||0), 0);
     const N_ = d.months.length;
 
-    // 入金: 月ごとに max(子の合計, 親) を計算してから合算
-    // → マネフォ取込で親 cfIn にだけ値が入っている月はその値を、
-    //    手動で内訳に分解した月は内訳合計を採用（親と内訳の二重計上を防ぐ）
+    // 入金合計 = 明細合計 + 内訳未分類（数式）
+    // 明細 = 会費入金/研修収入/イベント収入/その他収入/旧 Membership
+    // 内訳未分類 = max(0, レガシー親 cfIn − 明細合計)。MF取込の旧データ救済用。
     const inSubKeys = ['cfInFee','cfInTraining','cfInEvent','cfInOther','cfInMembership'];
     const monthIn = (section, i) => {
       const det = inSubKeys.reduce((s,k) => s + (Number((cfGet(section,k)||[])[i])||0), 0);
       const par = Number((cfGet(section,'cfIn')||[])[i])||0;
-      return Math.max(det, par);
+      const uncat = Math.max(0, par - det);
+      return det + uncat; // = 売上入金合計（テーブルの値と完全一致）
     };
     let aInTot = 0, bInTot = 0;
     for (let i = 0; i < N_; i++) { aInTot += monthIn('actual', i); bInTot += monthIn('budget', i); }
@@ -3643,11 +3644,16 @@ function renderCFView(d) {
   const aCfInEvent    = cfArr('actual','cfInEvent');
   const aCfInOther    = cfArr('actual','cfInOther');
   const aCfInMemb     = cfArr('actual','cfInMembership'); // 後方互換
-  const aIn = Array.from({length:N},(_,i) => {
+  // 売上入金合計 = 明細の合計（数式）。レガシー親 cfIn のみに値があるケースは
+  // 「内訳未分類」行で補足表示し、その分も合計に含める。
+  const aInUncat = Array.from({length:N},(_,i) => {
     const det = aCfInFee[i] + aCfInTraining[i] + aCfInEvent[i] + aCfInOther[i] + aCfInMemb[i];
     const par = Number(cfArr('actual','cfIn')[i])||0;
-    return Math.max(det, par); // マネフォ取込の親値と手動内訳の大きい方を採用
+    return Math.max(0, par - det); // 親に値があるが明細未分類の差分
   });
+  const aIn = Array.from({length:N},(_,i) =>
+    aCfInFee[i] + aCfInTraining[i] + aCfInEvent[i] + aCfInOther[i] + aCfInMemb[i] + aInUncat[i]
+  );
   const aClose   = cfArr('actual','cfClose');
   const aLabor   = cfArr('actual','laborPay');
   const aOut     = cfArr('actual','outsourcePay');
@@ -3691,11 +3697,15 @@ function renderCFView(d) {
   const bCfInOtherArr    = cfArr('budget','cfInOther');
   const bCfInMembArr     = cfArr('budget','cfInMembership'); // 後方互換
   const bInRaw   = cfArr('budget','cfIn');
-  const bIn      = Array.from({length:N},(_,i) => {
+  // 売上入金合計 = 明細の合計（数式）。レガシー親 cfIn のみの分は内訳未分類として加算
+  const bInUncat = Array.from({length:N},(_,i) => {
     const det = bCfInFeeArr[i] + bCfInTrainingArr[i] + bCfInEventArr[i] + bCfInOtherArr[i] + bCfInMembArr[i];
     const par = Number(bInRaw[i])||0;
-    return Math.max(det, par); // 親値と内訳合計の大きい方を採用（二重計上回避）
+    return Math.max(0, par - det);
   });
+  const bIn = Array.from({length:N},(_,i) =>
+    bCfInFeeArr[i] + bCfInTrainingArr[i] + bCfInEventArr[i] + bCfInOtherArr[i] + bCfInMembArr[i] + bInUncat[i]
+  );
   const bFunding = cfArr('budget','funding');
   // 出金合計は詳細科目から計算（sumKeysはrows定義の前なので先に計算）
   const bAllOutKeys = [
@@ -3973,11 +3983,12 @@ function renderCFView(d) {
   const bCfInTraining  = cfArr('budget','cfInTraining');
   const bCfInEvent     = cfArr('budget','cfInEvent');
   const bCfInOther     = cfArr('budget','cfInOther');
-  // 親 cfIn と内訳合計のうち大きい方を採用（マネフォ取込で親にだけ値があるケースに対応）
+  // 売上入金合計（予算）= 明細合計 + 内訳未分類（数式）
   const bCfInDetail = Array.from({length:N},(_,i) => {
     const det = getN(bCfInFee,i)+getN(bCfInTraining,i)+getN(bCfInEvent,i)+getN(bCfInOther,i);
     const par = getN(cfArr('budget','cfIn'),i);
-    return Math.max(det, par);
+    const uncat = Math.max(0, par - det);
+    return det + uncat;
   });
 
   const rows = [
