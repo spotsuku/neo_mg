@@ -3513,15 +3513,19 @@ function renderCFView(d) {
   (() => {
     const cfGet = (section, key) => (d.cf[section]&&d.cf[section][key]) || [];
     const sumArr = (arr) => (arr||[]).reduce((a,v) => a+(Number(v)||0), 0);
+    const N_ = d.months.length;
 
-    // 入金: 親 cfIn が空でも子行（cfInFee/Training/Event/Other/旧Membership）から再計算
+    // 入金: 月ごとに max(子の合計, 親) を計算してから合算
+    // → マネフォ取込で親 cfIn にだけ値が入っている月はその値を、
+    //    手動で内訳に分解した月は内訳合計を採用（親と内訳の二重計上を防ぐ）
     const inSubKeys = ['cfInFee','cfInTraining','cfInEvent','cfInOther','cfInMembership'];
-    const aInChildren = inSubKeys.reduce((t,k) => t + sumArr(cfGet('actual',k)), 0);
-    const bInChildren = inSubKeys.reduce((t,k) => t + sumArr(cfGet('budget',k)), 0);
-    const aInParent   = sumArr(cfGet('actual','cfIn'));
-    const bInParent   = sumArr(cfGet('budget','cfIn'));
-    const aInTot = aInChildren > 0 ? aInChildren : aInParent;
-    const bInTot = bInChildren > 0 ? bInChildren : bInParent;
+    const monthIn = (section, i) => {
+      const det = inSubKeys.reduce((s,k) => s + (Number((cfGet(section,k)||[])[i])||0), 0);
+      const par = Number((cfGet(section,'cfIn')||[])[i])||0;
+      return Math.max(det, par);
+    };
+    let aInTot = 0, bInTot = 0;
+    for (let i = 0; i < N_; i++) { aInTot += monthIn('actual', i); bInTot += monthIn('budget', i); }
 
     // 出金: 原価 + 販管費(細目) + 投資 + 財務出金 をすべて含める
     const allOutKeys = [
@@ -3641,7 +3645,8 @@ function renderCFView(d) {
   const aCfInMemb     = cfArr('actual','cfInMembership'); // 後方互換
   const aIn = Array.from({length:N},(_,i) => {
     const det = aCfInFee[i] + aCfInTraining[i] + aCfInEvent[i] + aCfInOther[i] + aCfInMemb[i];
-    return det > 0 ? det : (Number(cfArr('actual','cfIn')[i])||0);
+    const par = Number(cfArr('actual','cfIn')[i])||0;
+    return Math.max(det, par); // マネフォ取込の親値と手動内訳の大きい方を採用
   });
   const aClose   = cfArr('actual','cfClose');
   const aLabor   = cfArr('actual','laborPay');
@@ -3688,7 +3693,8 @@ function renderCFView(d) {
   const bInRaw   = cfArr('budget','cfIn');
   const bIn      = Array.from({length:N},(_,i) => {
     const det = bCfInFeeArr[i] + bCfInTrainingArr[i] + bCfInEventArr[i] + bCfInOtherArr[i] + bCfInMembArr[i];
-    return det > 0 ? det : bInRaw[i];
+    const par = Number(bInRaw[i])||0;
+    return Math.max(det, par); // 親値と内訳合計の大きい方を採用（二重計上回避）
   });
   const bFunding = cfArr('budget','funding');
   // 出金合計は詳細科目から計算（sumKeysはrows定義の前なので先に計算）
@@ -3967,10 +3973,11 @@ function renderCFView(d) {
   const bCfInTraining  = cfArr('budget','cfInTraining');
   const bCfInEvent     = cfArr('budget','cfInEvent');
   const bCfInOther     = cfArr('budget','cfInOther');
-  // 内訳合計がある月はそれを使い、なければcfIn単体を使う
+  // 親 cfIn と内訳合計のうち大きい方を採用（マネフォ取込で親にだけ値があるケースに対応）
   const bCfInDetail = Array.from({length:N},(_,i) => {
     const det = getN(bCfInFee,i)+getN(bCfInTraining,i)+getN(bCfInEvent,i)+getN(bCfInOther,i);
-    return det > 0 ? det : getN(cfArr('budget','cfIn'),i);
+    const par = getN(cfArr('budget','cfIn'),i);
+    return Math.max(det, par);
   });
 
   const rows = [
