@@ -1418,6 +1418,7 @@ function sw(id, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('sec-' + id).classList.add('on');
   if (el) el.classList.add('active');
+  try { localStorage.setItem('neo_active_tab', id); } catch(e) {}
   if (id === 'pl-cf') renderPLCF();
   if (id === 'sim') {
     // タブ切替時に現在の年度に同期
@@ -1432,6 +1433,7 @@ function sw(id, el) {
 
 function setYear(y, el) {
   currentYear = y;
+  try { localStorage.setItem('neo_active_year', y); } catch(e) {}
   document.querySelectorAll('.yt').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
   const navLabels = {
@@ -9694,6 +9696,22 @@ window.addEventListener('load', async () => {
   buildSimPLTable();
   buildSimCFTable();
   renderBudgetHistory();
+
+  // 前回開いていた年度・タブを復元
+  try {
+    const savedYear = localStorage.getItem('neo_active_year');
+    if (savedYear && savedYear !== currentYear) {
+      const yBtn = Array.from(document.querySelectorAll('.year-toggle .yt'))
+        .find(b => b.getAttribute('onclick')?.includes(`'${savedYear}'`));
+      if (yBtn) setYear(savedYear, yBtn);
+    }
+    const savedTab = localStorage.getItem('neo_active_tab');
+    if (savedTab && savedTab !== 'weekly') {
+      const tBtn = Array.from(document.querySelectorAll('.tabs .tab'))
+        .find(b => b.getAttribute('onclick')?.includes(`'${savedTab}'`));
+      if (tBtn) sw(savedTab, tBtn);
+    }
+  } catch(e) { console.warn('restore tab/year:', e); }
 });
 </script>
     <script>
