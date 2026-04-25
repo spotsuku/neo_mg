@@ -3994,11 +3994,27 @@ function renderCFView(d) {
 
     // ── 収入（折りたたみ）──
     { label:'── 収入', section:true, sectionStyle:'revenue', colId:'cf-sec-revenue' },
-    R('売上入金（合計）', bCfInDetail, 'cfIn', {isTot:true}),
+    // 合計行は「子の合計 or 子が空なら親」で常に整合した値を表示
+    { label:'売上入金（合計）', bArr:bCfInDetail, aArr:aIn, isTot:true, edBKey:null, edAKey:null },
     R('　会費入金',     'cfInFee',      'cfInFee',      {isSub:true, colGroup:'cf-sec-revenue'}),
     R('　研修収入',     'cfInTraining', 'cfInTraining', {isSub:true, colGroup:'cf-sec-revenue'}),
     R('　イベント収入', 'cfInEvent',    'cfInEvent',    {isSub:true, colGroup:'cf-sec-revenue'}),
     R('　その他収入',   'cfInOther',    'cfInOther',    {isSub:true, colGroup:'cf-sec-revenue'}),
+    // 親 cfIn に値があるが内訳が割り当てられていない月を「内訳未分類」として表示
+    {
+      label:'　（内訳未分類）',
+      bArr: Array.from({length:N},(_,i) => {
+        const parent = Number((cfArr('budget','cfIn')||[])[i]) || 0;
+        const det = getN(bCfInFee,i)+getN(bCfInTraining,i)+getN(bCfInEvent,i)+getN(bCfInOther,i);
+        return parent > det ? parent - det : 0;
+      }),
+      aArr: Array.from({length:N},(_,i) => {
+        const parent = Number(cfArr('actual','cfIn')[i]) || 0;
+        const det = aCfInFee[i] + aCfInTraining[i] + aCfInEvent[i] + aCfInOther[i] + aCfInMemb[i];
+        return parent > det ? parent - det : 0;
+      }),
+      isSub:true, colGroup:'cf-sec-revenue', noEdit:true,
+    },
 
     // ── 販管費合計 ──
     { label:'── 販管費合計', section:true, colId:'cf-sec-opex' },
