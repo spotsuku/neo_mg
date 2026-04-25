@@ -263,10 +263,10 @@ export default async function handler(req, res) {
       }
 
       // ── 一回限りの移行: 既存 fiscal_data / sim_data の JSONB を cells / custom_rows / fiscal_meta に展開 ──
-      // 何度実行しても upsert なので冪等。
+      // 既存セルは絶対に上書きしない（ignoreDuplicates）。何度実行しても安全。
       // 呼び出し: GET /api/db?action=migrate_to_cells
       case 'migrate_to_cells': {
-        const summary = { cells: 0, custom_rows: 0, fiscal_meta: 0, errors: [] };
+        const summary = { cells_inserted: 0, custom_rows: 0, fiscal_meta: 0, errors: [] };
 
         // sim_data → cells (sim_pl, sim_cf) + custom_rows + fiscal_meta(.months なし)
         {
@@ -299,10 +299,11 @@ export default async function handler(req, res) {
               }
             }
             if (cells.length) {
+              // ignoreDuplicates: 既存値は絶対に書き換えない
               const { error: e2 } = await supabase.from('cells')
-                .upsert(cells, { onConflict: 'fiscal_year,sheet,row_key,month_idx' });
+                .upsert(cells, { onConflict: 'fiscal_year,sheet,row_key,month_idx', ignoreDuplicates: true });
               if (e2) summary.errors.push(`sim ${fy} cells: ${e2.message}`);
-              else summary.cells += cells.length;
+              else summary.cells_inserted += cells.length;
             }
 
             // custom rows
@@ -327,7 +328,7 @@ export default async function handler(req, res) {
             });
             if (customs.length) {
               const { error: e3 } = await supabase.from('custom_rows')
-                .upsert(customs, { onConflict: 'fiscal_year,sheet,row_key' });
+                .upsert(customs, { onConflict: 'fiscal_year,sheet,row_key', ignoreDuplicates: true });
               if (e3) summary.errors.push(`sim ${fy} custom_rows: ${e3.message}`);
               else summary.custom_rows += customs.length;
             }
@@ -358,12 +359,12 @@ export default async function handler(req, res) {
 
             if (cells.length) {
               const { error: e2 } = await supabase.from('cells')
-                .upsert(cells, { onConflict: 'fiscal_year,sheet,row_key,month_idx' });
+                .upsert(cells, { onConflict: 'fiscal_year,sheet,row_key,month_idx', ignoreDuplicates: true });
               if (e2) summary.errors.push(`fiscal ${fy} cells: ${e2.message}`);
-              else summary.cells += cells.length;
+              else summary.cells_inserted += cells.length;
             }
 
-            // meta
+            // meta（メタは安全のため通常 upsert でOK）
             const { error: e3 } = await supabase.from('fiscal_meta').upsert({
               fiscal_year: fy,
               months: row.months || null,
