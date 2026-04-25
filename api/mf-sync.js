@@ -328,7 +328,7 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
 
       if (isDebitCash && !isCashToCash) {
         cashIn[idx] += debitAmount;
-        cfMonthly.cfIn[idx] += debitAmount;
+        // ※ cfIn 親キーへの直接書き込みは廃止（合計は明細から数式で導出するため）
         // 相手方は creditor 側
         const counterpartIdent = makeIdent(creditAcct || '(摘要)', creditSub, creditPartner);
         const counterpartKey = creditAcct; // ルール判定は勘定科目名で
