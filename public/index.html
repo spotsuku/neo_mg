@@ -947,7 +947,7 @@ input.cells-edit-input {
     <div class="card">
       <div class="ct">月次PL入力テーブル（千円）— テーブルかグラフのどちらからでも編集できます</div>
       <div class="scroll-x">
-        <table id="sim-pl-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%"></table>
+        <table id="sim-pl-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%;table-layout:fixed"></table>
       </div>
       <div id="sim-pl-add-area"></div>
     </div>
@@ -1080,7 +1080,7 @@ input.cells-edit-input {
     <div class="card">
       <div class="ct">月次CF入力テーブル（千円）</div>
       <div class="scroll-x">
-        <table id="sim-cf-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%"></table>
+        <table id="sim-cf-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%;table-layout:fixed"></table>
       </div>
       <div style="font-size:10px;color:var(--text3);margin-top:6px">※ 月初残高は前月末残高から自動計算。最初の月のみ手動入力してください。</div>
       <div id="sim-cf-add-area"></div>
@@ -1215,6 +1215,7 @@ input.cells-edit-input {
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
 <script>
 // ── Storage polyfill (works in Claude artifacts AND local HTML) ──
 if (typeof window.storage === 'undefined') {
@@ -2277,6 +2278,214 @@ function buildAnnualTable(rows, unit) {
 let _plCfDirty = false;
 
 // ────────────────────────────────────────────
+//  Supabase クライアント（ブラウザ直書き込み用 / Phase 3）
+//  /api/config から URL + anon key を取得して初期化。
+//  失敗時は sbClient = null のまま → 旧 /api/db 経路にフォールバック。
+// ────────────────────────────────────────────
+let sbClient = null;
+let _sbReady = (async () => {
+  try {
+    if (!window.supabase || !window.supabase.createClient) {
+      console.warn('[supabase] CDN script not loaded');
+      return null;
+    }
+    const r = await fetch('/api/config');
+    if (!r.ok) throw new Error('config fetch failed: ' + r.status);
+    const cfg = await r.json();
+    if (!cfg.supabaseUrl || !cfg.anonKey) throw new Error('missing config');
+    sbClient = window.supabase.createClient(cfg.supabaseUrl, cfg.anonKey, {
+      auth: { persistSession: false }, // Phase 5 で persistSession:true に変更
+    });
+    console.log('[supabase] client ready');
+    return sbClient;
+  } catch (e) {
+    console.warn('[supabase] init failed, will fallback to /api/db:', e.message);
+    return null;
+  }
+})();
+
+// ────────────────────────────────────────────
+//  cells 書き込み outbox（Phase 3c）
+//  セル編集ごとに Map に入れて 120ms debounce で一括 upsert。
+//  同じセルの連打は Map のキーで自動的に最新値だけ残る。
+// ────────────────────────────────────────────
+const _cellOutbox = new Map(); // key='year|sheet|row_key|idx' → row
+let _outboxTimer = null;
+let _outboxFlushing = false;
+const OUTBOX_FLUSH_MS = 120;
+
+function _outboxKey(y, s, k, i) { return `${y}|${s}|${k}|${i}`; }
+
+function enqueueCell(fiscal_year, sheet, row_key, month_idx, value) {
+  if (!sheet || row_key == null) return;
+  const row = {
+    fiscal_year: String(fiscal_year),
+    sheet:       String(sheet),
+    row_key:     String(row_key),
+    month_idx:   Number(month_idx),
+    value:       (value === '' || value == null) ? null : Number(value),
+  };
+  _cellOutbox.set(_outboxKey(row.fiscal_year, row.sheet, row.row_key, row.month_idx), row);
+  setSaveState('pending', `${_cellOutbox.size}件保留`);
+  if (_outboxTimer) clearTimeout(_outboxTimer);
+  _outboxTimer = setTimeout(() => { _outboxTimer = null; flushCellOutbox(); }, OUTBOX_FLUSH_MS);
+}
+
+async function flushCellOutbox() {
+  if (_outboxFlushing) return; // 既に実行中
+  if (_cellOutbox.size === 0) { setSaveState('idle'); return; }
+  if (!sbClient) {
+    // sbClient 未初期化 → 後でリトライ（次回 enqueueCell が再度 schedule する）
+    return;
+  }
+  _outboxFlushing = true;
+  const batch = Array.from(_cellOutbox.values());
+  _cellOutbox.clear();
+  setSaveState('saving');
+  try {
+    const { error } = await sbClient
+      .from('cells')
+      .upsert(batch, { onConflict: 'fiscal_year,sheet,row_key,month_idx' });
+    if (error) throw error;
+    _lastSaveTime = new Date();
+    setSaveState('idle');
+  } catch (e) {
+    console.error('[outbox] flush failed:', e);
+    // 失敗バッチを戻す（既に新しい値があれば残す）
+    for (const r of batch) {
+      const k = _outboxKey(r.fiscal_year, r.sheet, r.row_key, r.month_idx);
+      if (!_cellOutbox.has(k)) _cellOutbox.set(k, r);
+    }
+    setSaveState('error', (e.message || '').slice(0, 30));
+  } finally {
+    _outboxFlushing = false;
+    if (_cellOutbox.size > 0) {
+      // 保留が残っていたら再スケジュール
+      if (_outboxTimer) clearTimeout(_outboxTimer);
+      _outboxTimer = setTimeout(() => { _outboxTimer = null; flushCellOutbox(); }, OUTBOX_FLUSH_MS);
+    }
+  }
+}
+
+// 大量書き込み（commitBudget / bank import 用）— outbox を経由せず直接 upsert
+async function bulkExplodeToCells(fiscal_year, sheet, kvObj) {
+  if (!sbClient) return;
+  if (!kvObj || typeof kvObj !== 'object') return;
+  const cells = [];
+  for (const [key, val] of Object.entries(kvObj)) {
+    if (key === 'cfOpenFirst') {
+      cells.push({ fiscal_year: String(fiscal_year), sheet, row_key: 'cfOpenFirst', month_idx: -1,
+                   value: (val === '' || val == null) ? null : Number(val) });
+      continue;
+    }
+    if (!Array.isArray(val)) continue;
+    for (let i = 0; i < val.length; i++) {
+      cells.push({ fiscal_year: String(fiscal_year), sheet, row_key: key, month_idx: i,
+                   value: (val[i] === '' || val[i] == null) ? null : Number(val[i]) });
+    }
+  }
+  if (!cells.length) return;
+  const { error } = await sbClient
+    .from('cells')
+    .upsert(cells, { onConflict: 'fiscal_year,sheet,row_key,month_idx' });
+  if (error) console.warn('[bulkExplodeToCells]', sheet, error.message);
+}
+
+// ページ離脱前に保留分を flush（既存の beforeunload と並行）
+window.addEventListener('beforeunload', () => {
+  if (_cellOutbox.size > 0 && sbClient && navigator.sendBeacon) {
+    // sendBeacon は Supabase 直叩きできないので /api/db 経由の bulk_save_cells を使用
+    try {
+      const cells = Array.from(_cellOutbox.values());
+      navigator.sendBeacon(
+        '/api/db?action=bulk_save_cells',
+        new Blob([JSON.stringify({ cells })], { type: 'application/json' })
+      );
+    } catch (e) { /* noop */ }
+  }
+});
+
+// ────────────────────────────────────────────
+//  cells テーブル 読み込みヘルパー（Phase 3b）
+//  既存の loadDB / loadSimData が JSON カラムから読んだ後、
+//  cells に値があればそれで上書き（cells 側がキャノニカル）。
+// ────────────────────────────────────────────
+async function _loadCellsByYear(year) {
+  if (!sbClient) return null;
+  const { data, error } = await sbClient
+    .from('cells')
+    .select('sheet,row_key,month_idx,value')
+    .eq('fiscal_year', String(year));
+  if (error) { console.warn('[loadCells]', year, error.message); return null; }
+  if (!data || data.length === 0) return null;
+  const sheets = {};
+  for (const c of data) {
+    if (!sheets[c.sheet]) sheets[c.sheet] = {};
+    if (c.month_idx === -1) {
+      // スカラー（cfOpenFirst 等）
+      sheets[c.sheet][c.row_key] = c.value == null ? 0 : Number(c.value);
+      continue;
+    }
+    if (!Array.isArray(sheets[c.sheet][c.row_key])) {
+      sheets[c.sheet][c.row_key] = Array(12).fill('');
+    }
+    sheets[c.sheet][c.row_key][c.month_idx] = c.value == null ? '' : Number(c.value);
+  }
+  return sheets;
+}
+
+async function _loadCustomRowsByYear(year) {
+  if (!sbClient) return null;
+  const { data, error } = await sbClient
+    .from('custom_rows')
+    .select('sheet,row_key,label,attrs,position')
+    .eq('fiscal_year', String(year))
+    .order('position', { ascending: true });
+  if (error) { console.warn('[loadCustomRows]', year, error.message); return null; }
+  return data || [];
+}
+
+async function applyCellsOverlayToSim() {
+  await _sbReady;
+  if (!sbClient) return;
+  for (const yr of ['2024','2025','2026']) {
+    const sheets = await _loadCellsByYear(yr);
+    if (!sheets) continue;
+    if (!SIM_DATA[yr]) SIM_DATA[yr] = { pl: {}, cf: { cfOpenFirst: 0 } };
+    if (sheets.sim_pl) Object.assign(SIM_DATA[yr].pl, sheets.sim_pl);
+    if (sheets.sim_cf) Object.assign(SIM_DATA[yr].cf, sheets.sim_cf);
+
+    const customs = await _loadCustomRowsByYear(yr);
+    if (customs && customs.length) {
+      const pl = customs.filter(c => c.sheet === 'sim_pl')
+        .map(c => ({ key: c.row_key, label: c.label, ...(c.attrs || {}) }));
+      const cf = customs.filter(c => c.sheet === 'sim_cf')
+        .map(c => ({ key: c.row_key, label: c.label, ...(c.attrs || {}) }));
+      if (pl.length) SIM_DATA[yr].customRows   = pl;
+      if (cf.length) SIM_DATA[yr].cfCustomRows = cf;
+    }
+    console.log(`[overlay sim] ${yr}: sim_pl=${Object.keys(sheets.sim_pl||{}).length}keys, sim_cf=${Object.keys(sheets.sim_cf||{}).length}keys`);
+  }
+}
+
+async function applyCellsOverlayToDB() {
+  await _sbReady;
+  if (!sbClient) return;
+  for (const yr of ['2024','2025','2026']) {
+    const sheets = await _loadCellsByYear(yr);
+    if (!sheets) continue;
+    if (!DB[yr]) DB[yr] = { months: [], pl: { budget:{}, actual:{} }, cf: { budget:{}, actual:{} }, reportData: {} };
+    if (!DB[yr].pl) DB[yr].pl = { budget:{}, actual:{} };
+    if (!DB[yr].cf) DB[yr].cf = { budget:{}, actual:{} };
+    if (sheets.fiscal_pl_budget) Object.assign(DB[yr].pl.budget, sheets.fiscal_pl_budget);
+    if (sheets.fiscal_pl_actual) Object.assign(DB[yr].pl.actual, sheets.fiscal_pl_actual);
+    if (sheets.fiscal_cf_budget) Object.assign(DB[yr].cf.budget, sheets.fiscal_cf_budget);
+    if (sheets.fiscal_cf_actual) Object.assign(DB[yr].cf.actual, sheets.fiscal_cf_actual);
+    console.log(`[overlay db] ${yr}: pl.budget=${Object.keys(sheets.fiscal_pl_budget||{}).length}keys`);
+  }
+}
+
+// ────────────────────────────────────────────
 //  保存状態管理システム
 //  状態: idle(同期済み) | pending(未保存) | saving(保存中) | error(失敗)
 // ────────────────────────────────────────────
@@ -2409,7 +2618,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function showPlCfSaveBar() {
-  scheduleAutoSave('PLデータ編集');
+  if (!sbClient) scheduleAutoSave('PLデータ編集'); // Phase 3c: cells outbox 利用時はスキップ
   _plCfDirty = true;
   const bar = document.getElementById('pl-cf-save-bar');
   if (bar) bar.classList.add('visible');
@@ -3055,7 +3264,9 @@ function renderPLView(d) {
       (kind === 'budget' ? d.pl.budget[key] : d.pl.actual[key])[idx] = val;
       DB[currentYear] = d;
       showPlCfSaveBar();
-      scheduleAutoSave('PLセル編集');
+      // Phase 3c: cells outbox（sbClient あれば cells、なければ scheduleAutoSave）
+      enqueueCell(currentYear, `fiscal_pl_${kind}`, key, idx, val);
+      if (!sbClient) scheduleAutoSave('PLセル編集');
       renderPLView(d); // 再描画
     }
     inp.addEventListener('blur', commit);
@@ -3233,9 +3444,13 @@ function renderPLView(d) {
           Array.isArray(existing) && existing[i] !== undefined ? existing[i] : '');
       }
       obj[last][idx] = val;
+      // Phase 3c: cells outbox（parts = ['pl','budget','rev'] → sheet='fiscal_pl_budget'）
+      if (parts.length === 3) {
+        enqueueCell(currentYear, `fiscal_${parts[0]}_${parts[1]}`, parts[2], idx, val);
+      }
     },
     format: (v) => v !== '' && v != null ? Number(v).toLocaleString() : '─',
-    onChange: () => { showPlCfSaveBar(); scheduleAutoSave('PL編集'); },
+    onChange: () => { showPlCfSaveBar(); if (!sbClient) scheduleAutoSave('PL編集'); },
     render: () => renderPLView(DB[currentYear]),
   });
 }
@@ -3878,9 +4093,13 @@ function renderCFView(d) {
           Array.isArray(existing) && existing[i] !== undefined ? existing[i] : '');
       }
       obj[last][idx] = val;
+      // Phase 3c: cells outbox
+      if (parts.length === 3) {
+        enqueueCell(currentYear, `fiscal_${parts[0]}_${parts[1]}`, parts[2], idx, val);
+      }
     },
     format: (v) => v !== '' && v != null && Number(v) !== 0 ? Number(v).toLocaleString() : '─',
-    onChange: () => { showPlCfSaveBar(); scheduleAutoSave && scheduleAutoSave('CF編集'); },
+    onChange: () => { showPlCfSaveBar(); if (!sbClient && scheduleAutoSave) scheduleAutoSave('CF編集'); },
     render: () => renderCFView(DB[currentYear]),
   });
 }
@@ -4216,6 +4435,10 @@ async function commitBankResult() {
 
   DB[yearKey] = d;
   await saveDB();
+
+  // Phase 3c: bank import の bulk 書き込みを cells にも反映
+  bulkExplodeToCells(yearKey, 'fiscal_pl_actual', d.pl.actual);
+  bulkExplodeToCells(yearKey, 'fiscal_cf_actual', d.cf.actual);
 
   // 成功通知
   const log = document.getElementById('bank-log');
@@ -6624,6 +6847,8 @@ function setSimVal(type, key, idx, val) {
       Array.isArray(cur) && cur[i] !== undefined ? cur[i] : '');
   }
   SIM_DATA[currentSimYear][type][key][idx] = val === '' ? '' : Number(val) || 0;
+  // Phase 3c: cells outbox へ送出
+  enqueueCell(currentSimYear, type === 'pl' ? 'sim_pl' : 'sim_cf', key, idx, val);
 }
 
 // Excel貼付け対応：sim PL/CF入力テーブルに貼り付けハンドラを付与
@@ -6884,7 +7109,13 @@ function buildSimPLTable() {
   const labelStyle = 'background:var(--bg2);color:var(--text2);font-size:10px;padding:5px 8px;border:1px solid var(--border);white-space:nowrap;position:sticky;left:0;z-index:2;';
   const thLabelStyle = thStyle + 'position:sticky;left:0;z-index:3;text-align:left;';
 
-  let html = `<thead><tr><th style="${thLabelStyle}min-width:120px;">科目</th>`;
+  // 列幅を固定（4月などコンテンツが多い列だけ広がるのを防ぐ）
+  const colGroup = `<colgroup>`
+    + `<col style="width:120px">`
+    + labels.map(() => `<col style="width:70px">`).join('')
+    + `<col style="width:80px">`
+    + `</colgroup>`;
+  let html = colGroup + `<thead><tr><th style="${thLabelStyle}">科目</th>`;
   labels.forEach(l => { html += `<th style="${thStyle}">${l}</th>`; });
   html += `<th style="${thStyle}">合計</th></tr></thead><tbody>`;
 
@@ -7003,10 +7234,10 @@ function buildSimPLTable() {
     },
     write: (key, idx, val) => {
       const parts = key.split('.');
-      setSimVal(parts[1], parts[2], idx, val);
+      setSimVal(parts[1], parts[2], idx, val); // setSimVal が cells outbox へ送出
     },
     format: (v) => v !== '' && v != null && Number(v) !== 0 ? Number(v).toLocaleString() : '─',
-    onChange: () => { scheduleAutoSave && scheduleAutoSave('シミュレーション編集'); },
+    onChange: () => { if (!sbClient && scheduleAutoSave) scheduleAutoSave('シミュレーション編集'); },
     render: () => { buildSimPLTable(); recalcSimPL(); },
   });
   recalcSimPL();
@@ -7023,7 +7254,13 @@ function buildSimCFTable() {
   const labelStyle = 'background:var(--bg2);color:var(--text2);font-size:10px;padding:5px 8px;border:1px solid var(--border);white-space:nowrap;position:sticky;left:0;z-index:2;';
   const thLabelStyleCf = thStyle + 'position:sticky;left:0;z-index:3;text-align:left;';
 
-  let html = `<thead><tr><th style="${thLabelStyleCf}min-width:140px;">科目（千円）</th>`;
+  // 列幅を固定（4月などコンテンツが多い列だけ広がるのを防ぐ）
+  const colGroup = `<colgroup>`
+    + `<col style="width:140px">`
+    + labels.map(() => `<col style="width:70px">`).join('')
+    + `<col style="width:80px">`
+    + `</colgroup>`;
+  let html = colGroup + `<thead><tr><th style="${thLabelStyleCf}">科目（千円）</th>`;
   labels.forEach(l => { html += `<th style="${thStyle}">${l}</th>`; });
   html += `<th style="${thStyle}">合計</th></tr></thead><tbody>`;
 
@@ -7098,10 +7335,10 @@ function buildSimCFTable() {
     },
     write: (key, idx, val) => {
       const parts = key.split('.');
-      setSimVal(parts[1], parts[2], idx, val);
+      setSimVal(parts[1], parts[2], idx, val); // setSimVal が cells outbox へ送出
     },
     format: (v) => v !== '' && v != null && Number(v) !== 0 ? Number(v).toLocaleString() : '─',
-    onChange: () => { scheduleAutoSave && scheduleAutoSave('シミュレーション編集'); },
+    onChange: () => { if (!sbClient && scheduleAutoSave) scheduleAutoSave('シミュレーション編集'); },
     render: () => { buildSimCFTable(); recalcSimCF(); },
   });
 
@@ -7155,7 +7392,7 @@ function buildSimCFTable() {
 function onSimPLInput(key, idx, val) {
   setSimVal('pl', key, idx, val);
   recalcSimPL();
-  scheduleAutoSave('シミュレーション編集');
+  if (!sbClient) scheduleAutoSave('シミュレーション編集');
 }
 
 function recalcSimPL() {
@@ -7457,6 +7694,7 @@ function updatePLScenarioNote(profitArr, goodProfit, badProfit, cumBase, cumGood
 // ── CF入力ハンドラ ──
 function onSimCFOpenChange(val) {
   SIM_DATA[currentSimYear].cf.cfOpenFirst = Number(val) || 0;
+  enqueueCell(currentSimYear, 'sim_cf', 'cfOpenFirst', -1, val);
   recalcSimCF();
 }
 function onSimCFInput(key, idx, val) {
@@ -8019,6 +8257,10 @@ async function commitBudget() {
       d.cf.budget[dbKey][idx] = getSimVal('cf', simKey, i);
     });
   });
+
+  // Phase 3c: commitBudget の bulk 書き込みを cells にも反映
+  bulkExplodeToCells(currentSimYear, 'fiscal_pl_budget', d.pl.budget);
+  bulkExplodeToCells(currentSimYear, 'fiscal_cf_budget', d.cf.budget);
 
   // ── 予算変更履歴を保存（localStorage使用）──
   const cogsTot = months.map((_,i) =>
@@ -9192,6 +9434,7 @@ function copyText(id) {
 // ───────────────────────────────────────────
 window.addEventListener('load', async () => {
   try { await loadDB(); } catch(e) { console.warn('loadDB:', e); }
+  try { await applyCellsOverlayToDB(); } catch(e) { console.warn('cells overlay (DB):', e); }
   // バージョン履歴をクラウドからlocalStorageに同期
   try {
     const cloudVers = await loadVersionsFromCloud();
@@ -9229,6 +9472,7 @@ window.addEventListener('load', async () => {
     }
   }
   try { await loadSimData(); } catch(e) { console.warn('loadSimData:', e); }
+  try { await applyCellsOverlayToSim(); } catch(e) { console.warn('cells overlay (sim):', e); }
   // 初期化完了後に保存状態を「同期済み」に設定
   _lastSaveTime = new Date();
   setSaveState('idle');
