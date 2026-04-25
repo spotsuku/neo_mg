@@ -475,12 +475,19 @@ input.cells-edit-input {
       <div style="display:flex;align-items:center;gap:8px">
         <span style="width:3px;height:14px;background:var(--chart-green);border-radius:2px;display:inline-block;flex-shrink:0"></span>
         <span style="font-size:12px;font-weight:700">資金繰り予測（直近12ヶ月）</span>
-        <span style="font-size:10px;color:var(--text3)">実績＋予算ベース ─ 先行きの資金状況を確認</span>
+        <span style="font-size:10px;color:var(--text3)" id="cf-forecast-note">実績＋予算ベース ─ 先行きの資金状況を確認</span>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:10px;color:var(--text3)">残高推移</span>
         <div id="cf-forecast-sparkline" style="display:inline-flex;align-items:flex-end;gap:2px;height:24px"></div>
       </div>
+    </div>
+    <!-- シナリオ切替タブ -->
+    <div style="display:flex;gap:4px;margin-bottom:8px;align-items:center">
+      <button class="pa-btn" id="cf-fc-tab-good" onclick="setCfForecastScenario('good',this)" style="font-size:10px;padding:4px 10px">📈 Good</button>
+      <button class="pa-btn active" id="cf-fc-tab-base" onclick="setCfForecastScenario('base',this)" style="font-size:10px;padding:4px 10px">▶ ベース</button>
+      <button class="pa-btn" id="cf-fc-tab-bad" onclick="setCfForecastScenario('bad',this)" style="font-size:10px;padding:4px 10px">📉 Bad</button>
+      <span id="cf-forecast-scenario-info" style="font-size:9px;color:var(--text3);margin-left:6px"></span>
     </div>
     <div class="scroll-x">
       <div id="cf-forecast-table" style="font-size:11px;color:var(--text3)">読込中...</div>
@@ -901,6 +908,16 @@ input.cells-edit-input {
       </div>
       <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
         💡 棒グラフのバーをクリック → 値を編集 ｜ Goodケース（緑）・Badケース（橙）は入力値から自動算出
+      </div>
+      <!-- シナリオ % エディタ -->
+      <div id="scenario-pct-editor" style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;background:var(--bg2);border-radius:var(--r);padding:8px 12px;margin-bottom:8px;font-size:11px">
+        <span style="font-weight:700;color:var(--text2)">シナリオ変動幅</span>
+        <span style="display:flex;align-items:center;gap:4px;color:var(--tc-green)">📈 Good 売上<input type="number" id="sc-good-rev" value="20" onchange="onScenarioPctChange('good','revPct',this.value)" style="width:48px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;text-align:right">%</span>
+        <span style="display:flex;align-items:center;gap:4px;color:var(--tc-green)">費用<input type="number" id="sc-good-cost" value="-10" onchange="onScenarioPctChange('good','costPct',this.value)" style="width:48px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;text-align:right">%</span>
+        <span style="color:var(--text3);margin:0 4px">／</span>
+        <span style="display:flex;align-items:center;gap:4px;color:#e67e22">📉 Bad 売上<input type="number" id="sc-bad-rev" value="-20" onchange="onScenarioPctChange('bad','revPct',this.value)" style="width:48px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;text-align:right">%</span>
+        <span style="display:flex;align-items:center;gap:4px;color:#e67e22">費用<input type="number" id="sc-bad-cost" value="10" onchange="onScenarioPctChange('bad','costPct',this.value)" style="width:48px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;text-align:right">%</span>
+        <span style="color:var(--text3);font-size:10px">※ 売上は%プラスで増、費用は%マイナスで減</span>
       </div>
       <div class="ch" style="height:280px;position:relative"><canvas id="sim-pl-chart"></canvas></div>
       <!-- バー編集ポップアップ -->
@@ -1362,7 +1379,7 @@ function sw(id, el) {
     currentSimYear = currentYear;
     const simSel = document.getElementById('sim-year-sel');
     if (simSel) simSel.value = currentYear;
-    setTimeout(() => { buildSimPLTable(); buildSimCFTable(); if (_qsOpen) drawQSChart(); }, 50);
+    setTimeout(() => { buildSimPLTable(); buildSimCFTable(); initScenarioInputs(); if (_qsOpen) drawQSChart(); }, 50);
   }
   if (id === 'report') renderReportTabs();
   if (id === 'weekly') updateWeeklyKPIs();
@@ -2003,6 +2020,29 @@ function renderCashFlowForecast() {
   if (forecast.length === 0) {
     el.innerHTML = '<span style="color:var(--text3)">データがありません</span>';
     return;
+  }
+
+  // シナリオ調整（base/good/bad）：予算月のみに適用、実績月はそのまま
+  const scenario = _cfForecastScenario || 'base';
+  const m = scenario === 'base' ? { rev:1, cost:1 } : getScenarioMultipliers(scenario);
+  // シナリオラベル更新
+  const noteEl = document.getElementById('cf-forecast-scenario-info');
+  if (noteEl) {
+    if (scenario === 'base') {
+      noteEl.textContent = '※ 予算をそのまま使用';
+    } else {
+      const c = SCENARIO_CONFIG[scenario];
+      const sign = (n) => (n > 0 ? '+' : '') + n + '%';
+      noteEl.textContent = `※ 予算月に適用：入金${sign(c.revPct)}・出金${sign(c.costPct)}（シミュ設定と連動）`;
+    }
+  }
+  // シナリオ適用：予算月のみ入金/出金を倍率調整
+  for (const f of forecast) {
+    if (!f.hasActual) {
+      f.cashIn = Math.round(f.cashIn * m.rev);
+      f.opex   = Math.round(f.opex   * m.cost);
+      f.finOut = Math.round(f.finOut * m.cost);
+    }
   }
 
   // 予算月の残高を計算（前月末残高ベース）
@@ -6322,23 +6362,28 @@ function removeSimRow(key) {
 // 後方互換のために PL_ROWS も alias
 let PL_ROWS = PL_ROWS_BASE;
 
-// CF行定義
+// CF行定義（PL_ROWS_BASEと同じ構造に揃える）
 const CF_ROWS = [
-  { key: 'cfIn',            label: '売上入金',                    color: '#378ADD' },
-  // ── NEOプログラム原価支払い ──
-  { key: 'cogsHomeroomPay', label: '原価：ホームルーム',          color: '#EF9F27', isOut: true },
-  { key: 'cogsHyogikaiPay', label: '原価：評議会',                color: '#EF9F27', isOut: true },
-  { key: 'cogsOenKaigiPay', label: '原価：応援カイギ',            color: '#EF9F27', isOut: true },
-  { key: 'cogsBigEventPay', label: '原価：大型イベント',          color: '#EF9F27', isOut: true },
-  { key: 'cogsOtherPay',    label: '原価：その他',                color: '#EF9F27', isOut: true },
-  // ── 販管費支払い ──
-  { key: 'laborPay',        label: '人件費支払',                  color: '#E24B4A', isOut: true },
-  { key: 'outsourcePay',    label: '業務委託支払',                color: '#D85A30', isOut: true },
-  { key: 'advPay',          label: '広告宣伝費',                  color: '#EF9F27', isOut: true },
-  { key: 'eventPay',        label: '外注費（イベント運営等）',    color: '#D87D27', isOut: true },
+  // ── 売上入金（合計＋内訳）──
+  { key: 'cfIn',            label: '売上入金合計',                color: '#378ADD', isRev: true, isParent: true },
+  { key: 'cfInFee',         label: 'NEO会費入金',                  color: '#378ADD', indent: true, isRev: true, parentKey: 'cfIn' },
+  { key: 'cfInTraining',    label: '研修入金',                     color: '#378ADD', indent: true, isRev: true, parentKey: 'cfIn' },
+  { key: 'cfInEvent',       label: 'イベント・その他入金',         color: '#378ADD', indent: true, isRev: true, parentKey: 'cfIn' },
+  // ── 原価支払い（セクション + 内訳）──
+  { key: '_cogsHeadCf',     label: '原価',                        color: '#EF9F27', isSection: true, isOut: true },
+  { key: 'cogsHomeroomPay', label: 'ホームルーム',                color: '#EF9F27', indent: true, isOut: true, parentKey: '_cogsHeadCf' },
+  { key: 'cogsHyogikaiPay', label: '評議会',                      color: '#EF9F27', indent: true, isOut: true, parentKey: '_cogsHeadCf' },
+  { key: 'cogsOenKaigiPay', label: '応援カイギ',                  color: '#EF9F27', indent: true, isOut: true, parentKey: '_cogsHeadCf' },
+  { key: 'cogsBigEventPay', label: '大型イベント',                color: '#EF9F27', indent: true, isOut: true, parentKey: '_cogsHeadCf' },
+  { key: 'cogsOtherPay',    label: 'その他原価',                  color: '#EF9F27', indent: true, isOut: true, parentKey: '_cogsHeadCf' },
+  // ── 販管費支払（PLと同じ6項目）──
+  { key: 'laborPay',        label: '人件費（社保込）',            color: '#E24B4A', isOut: true },
+  { key: 'outsourcePay',    label: '業務委託費',                  color: '#D85A30', isOut: true },
+  { key: 'advPay',          label: '広告販促費',                  color: '#EF9F27', isOut: true },
   { key: 'rentPay',         label: '賃料',                        color: '#888780', isOut: true },
-  { key: 'gaichuPay',       label: '外注費支払',                  color: '#D85A30', isOut: true },
-  { key: 'otherPay',        label: 'その他支出',                  color: '#B4B2A9', isOut: true },
+  { key: 'gaichuPay',       label: '外注費',                      color: '#D85A30', isOut: true },
+  { key: 'otherPay',        label: 'その他費用',                  color: '#B4B2A9', isOut: true },
+  // ── CF特有：融資・調達 ──
   { key: 'funding',         label: '融資・調達（+）',             color: '#3B6D11' },
 ];
 
@@ -6418,6 +6463,54 @@ let SIM_DATA = {
 
 function getSimMonths() { return SIM_MONTHS[currentSimYear]; }
 function getSimLabels() { return getSimMonths().map(m => MONTH_LABELS[m] || m); }
+
+// ── シナリオ設定（Good/Bad の +- 変動幅） ──
+// localStorage から復元 or デフォルト
+const _DEFAULT_SCENARIO = { good: { revPct: 20, costPct: -10 }, bad: { revPct: -20, costPct: 10 } };
+let SCENARIO_CONFIG = (() => {
+  try {
+    const raw = localStorage.getItem('neo_scenario_config');
+    if (raw) return Object.assign({}, _DEFAULT_SCENARIO, JSON.parse(raw));
+  } catch(e){}
+  return JSON.parse(JSON.stringify(_DEFAULT_SCENARIO));
+})();
+function saveScenarioConfig() {
+  try { localStorage.setItem('neo_scenario_config', JSON.stringify(SCENARIO_CONFIG)); } catch(e){}
+}
+function getScenarioMultipliers(name) {
+  const c = SCENARIO_CONFIG[name] || _DEFAULT_SCENARIO[name];
+  return { rev: 1 + (Number(c.revPct)||0)/100, cost: 1 + (Number(c.costPct)||0)/100 };
+}
+function onScenarioPctChange(scenario, kind, val) {
+  const n = Number(val);
+  if (isNaN(n)) return;
+  if (!SCENARIO_CONFIG[scenario]) SCENARIO_CONFIG[scenario] = {};
+  SCENARIO_CONFIG[scenario][kind] = n;
+  saveScenarioConfig();
+  // シミュ・サマリーともに再計算
+  if (typeof recalcSimPL === 'function') recalcSimPL();
+  if (typeof recalcSimCF === 'function') recalcSimCF();
+  if (typeof renderCashFlowForecast === 'function') renderCashFlowForecast();
+}
+// 入力欄の初期値を SCENARIO_CONFIG から設定
+function initScenarioInputs() {
+  const m = { 'sc-good-rev':['good','revPct'], 'sc-good-cost':['good','costPct'],
+              'sc-bad-rev':['bad','revPct'], 'sc-bad-cost':['bad','costPct'] };
+  Object.entries(m).forEach(([id, [s, k]]) => {
+    const el = document.getElementById(id);
+    if (el && SCENARIO_CONFIG[s] && SCENARIO_CONFIG[s][k] !== undefined) {
+      el.value = SCENARIO_CONFIG[s][k];
+    }
+  });
+}
+// 資金繰り予測のシナリオ状態
+let _cfForecastScenario = 'base';
+function setCfForecastScenario(name, btnEl) {
+  _cfForecastScenario = name;
+  document.querySelectorAll('#cf-fc-tab-good,#cf-fc-tab-base,#cf-fc-tab-bad').forEach(b => b.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+  renderCashFlowForecast();
+}
 
 function getSimVal(type, key, idx) {
   const arr = SIM_DATA[currentSimYear][type][key];
@@ -6845,12 +6938,24 @@ function buildSimCFTable() {
   </tr>`;
 
   CF_ROWS.forEach(row => {
-    html += `<tr><td style="${labelStyle}">${row.label}</td>`;
+    // セクション行（_cogsHeadCf 等）：見出しのみ表示
+    if (row.isSection) {
+      html += `<tr style="background:var(--bg2)"><td style="${labelStyle}font-weight:700;color:${row.color}" colspan="${months.length + 2}">${row.label}</td></tr>`;
+      return;
+    }
+    const indentStyle = row.indent ? 'padding-left:24px;color:var(--text3);font-size:11px;' : '';
+    const isParent = row.isParent;
+    html += `<tr><td style="${labelStyle}${indentStyle}${isParent?'font-weight:700;':''}">${row.label}</td>`;
     months.forEach((m, i) => {
-      const v = getSimVal('cf', row.key, i);
-      html += `<td tabindex="0" style="${cellStyle}padding:4px 5px;text-align:right;font-size:11px;color:var(--text)" data-cell-key="sim.cf.${row.key}" data-cell-idx="${i}">${v !== 0 ? Number(v).toLocaleString() : '─'}</td>`;
+      if (isParent) {
+        // 親行：子行の合計を表示（編集不可）
+        html += `<td id="scf-parent-${row.key}-${i}" style="${cellStyle}background:var(--bg3);text-align:right;padding:4px 5px;font-size:11px;color:var(--text3)" title="内訳の合計が自動表示されます"></td>`;
+      } else {
+        const v = getSimVal('cf', row.key, i);
+        html += `<td tabindex="0" style="${cellStyle}padding:4px 5px;text-align:right;font-size:11px;color:var(--text)" data-cell-key="sim.cf.${row.key}" data-cell-idx="${i}">${v !== 0 ? Number(v).toLocaleString() : '─'}</td>`;
+      }
     });
-    html += `<td id="scf-sum-${row.key}" style="${cellStyle}text-align:right;padding:4px 5px;font-size:11px;font-weight:700;"></td>`;
+    html += `<td id="scf-sum-${row.key}" style="${cellStyle}text-align:right;padding:4px 5px;font-size:11px;font-weight:700;${isParent?'background:var(--bg3);':''}"></td>`;
     html += `</tr>`;
   });
 
@@ -7052,9 +7157,11 @@ function recalcSimPL() {
 function drawSimPLChart(revArr, costArr, profitArr, cumArr) {
   const labels = getSimLabels();
 
-  // Good: 売上+20%・費用-10% / Bad: 売上-20%・費用+10%
-  const goodProfit = revArr.map((r, i) => Math.round(r * 1.20) - Math.round(costArr[i] * 0.90));
-  const badProfit  = revArr.map((r, i) => Math.round(r * 0.80) - Math.round(costArr[i] * 1.10));
+  // SCENARIO_CONFIG 由来の % で Good/Bad 計算
+  const goodM = getScenarioMultipliers('good');
+  const badM  = getScenarioMultipliers('bad');
+  const goodProfit = revArr.map((r, i) => Math.round(r * goodM.rev) - Math.round(costArr[i] * goodM.cost));
+  const badProfit  = revArr.map((r, i) => Math.round(r * badM.rev)  - Math.round(costArr[i] * badM.cost));
   let cumG = 0, cumB = 0, cumBase = 0;
   const cumGood  = goodProfit.map(p => { cumG += p; return cumG; });
   const cumBad   = badProfit.map(p  => { cumB += p; return cumB; });
@@ -7081,7 +7188,7 @@ function drawSimPLChart(revArr, costArr, profitArr, cumArr) {
         { label:'売上（ベース）',  data: revArr.map(v => v),  backgroundColor:'rgba(55,138,221,0.5)',  borderRadius:3, yAxisID:'y', order:4 },
         { label:'費用（ベース）',  data: costArr.map(v => -v), backgroundColor:'rgba(226,75,74,0.4)',  borderRadius:3, yAxisID:'y', order:4 },
         // 折れ線：3シナリオ月次損益（左軸）
-        { type:'line', label:'📈 Goodケース（売上+20%・費用-10%）',
+        { type:'line', label:`📈 Goodケース（売上${SCENARIO_CONFIG.good.revPct>=0?'+':''}${SCENARIO_CONFIG.good.revPct}%・費用${SCENARIO_CONFIG.good.costPct>=0?'+':''}${SCENARIO_CONFIG.good.costPct}%）`,
           data: goodProfit, borderColor:'#27ae60', backgroundColor:'rgba(39,174,96,0.08)',
           fill:false, tension:0.3, pointRadius:4, pointBackgroundColor:'#27ae60', borderWidth:2.5, yAxisID:'y', order:1 },
         { type:'line', label:'▶ ベースケース',
@@ -7089,7 +7196,7 @@ function drawSimPLChart(revArr, costArr, profitArr, cumArr) {
           fill:false, tension:0.3, pointRadius:4, borderDash:[6,3],
           pointBackgroundColor: profitArr.map(v => v >= 0 ? '#378ADD' : '#E24B4A'),
           borderWidth:2, yAxisID:'y', order:2 },
-        { type:'line', label:'📉 Badケース（売上-20%・費用+10%）',
+        { type:'line', label:`📉 Badケース（売上${SCENARIO_CONFIG.bad.revPct>=0?'+':''}${SCENARIO_CONFIG.bad.revPct}%・費用${SCENARIO_CONFIG.bad.costPct>=0?'+':''}${SCENARIO_CONFIG.bad.costPct}%）`,
           data: badProfit, borderColor:'#e67e22',
           fill:false, tension:0.3, pointRadius:4, borderDash:[3,4], pointBackgroundColor:'#e67e22',
           borderWidth:2, yAxisID:'y', order:1 },
@@ -7170,7 +7277,7 @@ function updatePLScenarioNote(profitArr, goodProfit, badProfit, cumBase, cumGood
         <div style="font-weight:700;color:var(--tc-green);margin-bottom:4px">📈 Goodケース</div>
         <div style="color:var(--tc-green)">年間累積損益：<strong>${fmtP(sumGood)}</strong></div>
         <div style="color:var(--tc-green)">黒字化：<strong>${fmtBE(beGood)}</strong></div>
-        <div style="font-size:10px;color:var(--tc-green);margin-top:3px;opacity:.8">売上+20%・費用-10%</div>
+        <div style="font-size:10px;color:var(--tc-green);margin-top:3px;opacity:.8">売上${SCENARIO_CONFIG.good.revPct>=0?'+':''}${SCENARIO_CONFIG.good.revPct}%・費用${SCENARIO_CONFIG.good.costPct>=0?'+':''}${SCENARIO_CONFIG.good.costPct}%</div>
       </div>
       <div style="background:var(--bg2);border-radius:var(--r);padding:10px 12px">
         <div style="font-weight:700;color:var(--text2);margin-bottom:4px">▶ ベースケース</div>
@@ -7182,7 +7289,7 @@ function updatePLScenarioNote(profitArr, goodProfit, badProfit, cumBase, cumGood
         <div style="font-weight:700;color:var(--tc-red);margin-bottom:4px">📉 Badケース</div>
         <div style="color:var(--tc-red)">年間累積損益：<strong>${fmtP(sumBad)}</strong></div>
         <div style="color:var(--tc-red)">黒字化：<strong>${fmtBE(beBad)}</strong></div>
-        <div style="font-size:10px;color:var(--tc-red);margin-top:3px;opacity:.8">売上-20%・費用+10%</div>
+        <div style="font-size:10px;color:var(--tc-red);margin-top:3px;opacity:.8">売上${SCENARIO_CONFIG.bad.revPct>=0?'+':''}${SCENARIO_CONFIG.bad.revPct}%・費用${SCENARIO_CONFIG.bad.costPct>=0?'+':''}${SCENARIO_CONFIG.bad.costPct}%</div>
       </div>
     </div>`;
 }
@@ -7213,18 +7320,23 @@ function recalcSimCF() {
       const el = document.getElementById(`scf-open-${i}`);
       if (el) { el.textContent = bal.toLocaleString(); el.style.color = bal < 0 ? 'var(--tc-red)' : ''; }
     }
-    const cfIn     = getSimVal('cf','cfIn', i);
+    // 売上入金 = 内訳合計（会費+研修+イベント） / 無ければ旧cfInを利用
+    const cfInDet  = getSimVal('cf','cfInFee',i) + getSimVal('cf','cfInTraining',i) + getSimVal('cf','cfInEvent',i);
+    const cfIn     = cfInDet > 0 ? cfInDet : getSimVal('cf','cfIn', i);
+    // 原価支払（5項目の合計）
+    const cogsTot  = getSimVal('cf','cogsHomeroomPay',i) + getSimVal('cf','cogsHyogikaiPay',i)
+                   + getSimVal('cf','cogsOenKaigiPay',i) + getSimVal('cf','cogsBigEventPay',i)
+                   + getSimVal('cf','cogsOtherPay',i);
     const laborPay = getSimVal('cf','laborPay', i);
     const outPay   = getSimVal('cf','outsourcePay', i);
     const advPay   = getSimVal('cf','advPay', i);
     const rentPay  = getSimVal('cf','rentPay', i);
+    const gaichuPay= getSimVal('cf','gaichuPay', i);
     const otherPay = getSimVal('cf','otherPay', i);
     const funding  = getSimVal('cf','funding', i);
 
     const totalInMo  = cfIn + funding;
-    const eventPay  = getSimVal('cf','eventPay', i);
-    const gaichuPay = getSimVal('cf','gaichuPay', i);
-    const totalOutMo = laborPay + outPay + advPay + eventPay + rentPay + gaichuPay + otherPay;
+    const totalOutMo = cogsTot + laborPay + outPay + advPay + rentPay + gaichuPay + otherPay;
     const net = totalInMo - totalOutMo;
     totalIn  += totalInMo;
     totalOut += totalOutMo;
@@ -7251,8 +7363,30 @@ function recalcSimCF() {
     }
   });
 
-  // 合計列
+  // 合計列 + 親行（cfIn等）の月別計算値表示
   CF_ROWS.forEach(row => {
+    if (row.isSection) return;
+    if (row.isParent) {
+      // 子行を集めて月別合計を表示
+      const children = CF_ROWS.filter(r => r.parentKey === row.key);
+      let total = 0;
+      months.forEach((_, i) => {
+        const sumI = children.reduce((s, c) => s + getSimVal('cf', c.key, i), 0);
+        total += sumI;
+        const cell = document.getElementById(`scf-parent-${row.key}-${i}`);
+        if (cell) {
+          cell.textContent = sumI ? sumI.toLocaleString() : '─';
+          cell.style.color = sumI ? 'var(--text)' : 'var(--text3)';
+          cell.style.fontWeight = sumI ? '700' : '';
+        }
+      });
+      const sumEl = document.getElementById(`scf-sum-${row.key}`);
+      if (sumEl) {
+        sumEl.textContent = total ? total.toLocaleString() : '─';
+        sumEl.style.color = row.isRev ? 'var(--tc-green)' : (row.isOut ? 'var(--tc-red)' : '');
+      }
+      return;
+    }
     const el = document.getElementById(`scf-sum-${row.key}`);
     if (!el) return;
     const s = months.reduce((acc, _, i) => acc + getSimVal('cf', row.key, i), 0);
@@ -7295,17 +7429,23 @@ function drawSimCFChart(months, netArr, balArr) {
     getSimVal('cf','advPay',i)   + getSimVal('cf','eventPay',i)    + getSimVal('cf','rentPay',i)   + getSimVal('cf','gaichuPay',i) + getSimVal('cf','otherPay',i)
   ));
 
-  // Good: 入金+20%・出金-10% / Bad: 入金-20%・出金+10%
+  // SCENARIO_CONFIG 由来の % で Good/Bad
+  const goodM = getScenarioMultipliers('good');
+  const badM  = getScenarioMultipliers('bad');
+  const cfInTot = (i) => {
+    const det = getSimVal('cf','cfInFee',i)+getSimVal('cf','cfInTraining',i)+getSimVal('cf','cfInEvent',i);
+    return (det > 0 ? det : getSimVal('cf','cfIn',i)) + getSimVal('cf','funding',i);
+  };
+  const cfOutTot = (i) => getSimVal('cf','cogsHomeroomPay',i)+getSimVal('cf','cogsHyogikaiPay',i)
+    +getSimVal('cf','cogsOenKaigiPay',i)+getSimVal('cf','cogsBigEventPay',i)+getSimVal('cf','cogsOtherPay',i)
+    +getSimVal('cf','laborPay',i)+getSimVal('cf','outsourcePay',i)+getSimVal('cf','advPay',i)
+    +getSimVal('cf','rentPay',i)+getSimVal('cf','gaichuPay',i)+getSimVal('cf','otherPay',i);
   let balG = baseCash, balBd = baseCash;
   const balGood = months.map((_, i) => {
-    const inn = getSimVal('cf','cfIn',i) + getSimVal('cf','funding',i);
-    const out = getSimVal('cf','laborPay',i)+getSimVal('cf','outsourcePay',i)+getSimVal('cf','advPay',i)+getSimVal('cf','rentPay',i)+getSimVal('cf','otherPay',i);
-    balG += Math.round(inn*1.20) - Math.round(out*0.90); return balG;
+    balG += Math.round(cfInTot(i)*goodM.rev) - Math.round(cfOutTot(i)*goodM.cost); return balG;
   });
   const balBadArr = months.map((_, i) => {
-    const inn = getSimVal('cf','cfIn',i) + getSimVal('cf','funding',i);
-    const out = getSimVal('cf','laborPay',i)+getSimVal('cf','outsourcePay',i)+getSimVal('cf','advPay',i)+getSimVal('cf','rentPay',i)+getSimVal('cf','otherPay',i);
-    balBd += Math.round(inn*0.80) - Math.round(out*1.10); return balBd;
+    balBd += Math.round(cfInTot(i)*badM.rev) - Math.round(cfOutTot(i)*badM.cost); return balBd;
   });
 
   const cfCanvas = document.getElementById('sim-cf-chart');
@@ -7324,7 +7464,7 @@ function drawSimCFChart(months, netArr, balArr) {
       datasets: [
         { label:'入金',  data: inArr,  backgroundColor:'rgba(39,174,96,0.45)',  borderRadius:3, yAxisID:'y', order:4 },
         { label:'出金',  data: outArr, backgroundColor:'rgba(226,75,74,0.35)',  borderRadius:3, yAxisID:'y', order:4 },
-        { type:'line', label:'📈 Goodケース（入金+20%・出金-10%）',
+        { type:'line', label:`📈 Goodケース（入金${SCENARIO_CONFIG.good.revPct>=0?'+':''}${SCENARIO_CONFIG.good.revPct}%・出金${SCENARIO_CONFIG.good.costPct>=0?'+':''}${SCENARIO_CONFIG.good.costPct}%）`,
           data: balGood, borderColor:'#27ae60',
           fill:false, tension:0.3, pointRadius:4,
           pointBackgroundColor: balGood.map(v => v < 0 ? '#E24B4A' : '#27ae60'),
@@ -7334,7 +7474,7 @@ function drawSimCFChart(months, netArr, balArr) {
           fill:false, tension:0.3, pointRadius:4, borderDash:[6,3],
           pointBackgroundColor: balArr.map(v => v < 0 ? '#E24B4A' : '#378ADD'),
           borderWidth:2, yAxisID:'y2', order:2 },
-        { type:'line', label:'📉 Badケース（入金-20%・出金+10%）',
+        { type:'line', label:`📉 Badケース（入金${SCENARIO_CONFIG.bad.revPct>=0?'+':''}${SCENARIO_CONFIG.bad.revPct}%・出金${SCENARIO_CONFIG.bad.costPct>=0?'+':''}${SCENARIO_CONFIG.bad.costPct}%）`,
           data: balBadArr, borderColor:'#e67e22',
           fill:false, tension:0.3, pointRadius:4, borderDash:[3,4],
           pointBackgroundColor: balBadArr.map(v => v < 0 ? '#E24B4A' : '#e67e22'),
@@ -7408,7 +7548,7 @@ function updateCFScenarioNote(balBase, balGood, balBad, hasData) {
         <div style="color:var(--tc-green)">年度末残高：<strong>${fmtBal(endGood)}</strong></div>
         <div style="color:var(--tc-green)">最低残高：<strong>${fmtBal(minGood)}</strong></div>
         <div>資金ショート：${fmtShort(shortGood)}</div>
-        <div style="font-size:10px;color:var(--tc-green);margin-top:3px;opacity:.8">入金+20%・出金-10%</div>
+        <div style="font-size:10px;color:var(--tc-green);margin-top:3px;opacity:.8">入金${SCENARIO_CONFIG.good.revPct>=0?'+':''}${SCENARIO_CONFIG.good.revPct}%・出金${SCENARIO_CONFIG.good.costPct>=0?'+':''}${SCENARIO_CONFIG.good.costPct}%</div>
       </div>
       <div style="background:var(--bg2);border-radius:var(--r);padding:10px 12px">
         <div style="font-weight:700;color:var(--text2);margin-bottom:4px">▶ ベースケース</div>
@@ -7422,7 +7562,7 @@ function updateCFScenarioNote(balBase, balGood, balBad, hasData) {
         <div style="color:var(--tc-red)">年度末残高：<strong>${fmtBal(endBad)}</strong></div>
         <div style="color:var(--tc-red)">最低残高：<strong>${fmtBal(minBad)}</strong></div>
         <div>資金ショート：${fmtShort(shortBad)}</div>
-        <div style="font-size:10px;color:var(--tc-red);margin-top:3px;opacity:.8">入金-20%・出金+10%</div>
+        <div style="font-size:10px;color:var(--tc-red);margin-top:3px;opacity:.8">入金${SCENARIO_CONFIG.bad.revPct>=0?'+':''}${SCENARIO_CONFIG.bad.revPct}%・出金${SCENARIO_CONFIG.bad.costPct>=0?'+':''}${SCENARIO_CONFIG.bad.costPct}%</div>
       </div>
     </div>`;
 }
