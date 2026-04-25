@@ -568,13 +568,33 @@ input.cells-edit-input {
 
   <!-- PL 予実 -->
   <div id="view-pl">
-    <!-- PL サマリーカード（年度累計: 4月〜直近入力月の合計） -->
+    <!-- PL サマリーカード（年度累計: 4月〜直近入力月の合計、予算と実績を併記） -->
     <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:1rem">
-      <div class="mc" title="年度累計（4月〜）の売上実績"><div class="mc-l">年度累計売上（実績）</div><div class="mc-v" id="pl-sum-rev-a">—</div><div class="mc-s" id="pl-sum-rev-s"></div></div>
-      <div class="mc" title="年度累計の売上予算"><div class="mc-l">年度累計売上（予算）</div><div class="mc-v" id="pl-sum-rev-b">—</div></div>
-      <div class="mc" title="年度累計の販管費実績"><div class="mc-l">年度累計販管費（実績）</div><div class="mc-v" id="pl-sum-opex-a">—</div><div class="mc-s" id="pl-sum-opex-s"></div></div>
-      <div class="mc" title="年度累計の営業利益（売上 − 原価 − 販管費）"><div class="mc-l">年度累計営業利益（実績）</div><div class="mc-v" id="pl-sum-op">—</div></div>
-      <div class="mc" title="売上実績 ÷ 売上予算（年度累計）"><div class="mc-l">売上予実達成率</div><div class="mc-v" id="pl-sum-rate">—</div><div class="mc-s" id="pl-sum-rate-s"></div></div>
+      <div class="mc" title="年度累計（4月〜）の売上 - 予算と実績を併記">
+        <div class="mc-l">年度累計売上</div>
+        <div class="mc-v" id="pl-sum-rev-a">—</div>
+        <div class="mc-s"><span id="pl-sum-rev-b" style="color:var(--text3)">—</span> <span id="pl-sum-rev-s"></span></div>
+      </div>
+      <div class="mc" title="年度累計の原価 - 予算と実績を併記">
+        <div class="mc-l">年度累計原価</div>
+        <div class="mc-v" id="pl-sum-cogs-a">—</div>
+        <div class="mc-s"><span id="pl-sum-cogs-b" style="color:var(--text3)">—</span></div>
+      </div>
+      <div class="mc" title="年度累計の販管費 - 予算と実績を併記">
+        <div class="mc-l">年度累計販管費</div>
+        <div class="mc-v" id="pl-sum-opex-a">—</div>
+        <div class="mc-s"><span id="pl-sum-opex-b" style="color:var(--text3)">—</span> <span id="pl-sum-opex-s"></span></div>
+      </div>
+      <div class="mc" title="年度累計の営業利益（売上 − 原価 − 販管費）- 予算と実績を併記">
+        <div class="mc-l">年度累計営業利益</div>
+        <div class="mc-v" id="pl-sum-op">—</div>
+        <div class="mc-s"><span id="pl-sum-op-b" style="color:var(--text3)">—</span></div>
+      </div>
+      <div class="mc" title="売上実績 ÷ 売上予算（年度累計）">
+        <div class="mc-l">売上予実達成率</div>
+        <div class="mc-v" id="pl-sum-rate">—</div>
+        <div class="mc-s" id="pl-sum-rate-s"></div>
+      </div>
     </div>
     <div class="card">
       <div class="ct">月次PL予実 — <span id="pl-year-label">2025年度</span></div>
@@ -588,13 +608,33 @@ input.cells-edit-input {
 
   <!-- CF 予実 -->
   <div id="view-cf" style="display:none">
-    <!-- CF サマリーカード（年度累計: 4月〜直近入力月の合計） -->
+    <!-- CF サマリーカード（年度累計: 4月〜直近入力月の合計、予算と実績を併記） -->
     <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:1rem">
-      <div class="mc" title="年度累計（4月〜）の入金実績"><div class="mc-l">年度累計入金（実績）</div><div class="mc-v" id="cf-sum-in-a">—</div><div class="mc-s" id="cf-sum-in-s"></div></div>
-      <div class="mc" title="年度累計（4月〜）の出金実績"><div class="mc-l">年度累計出金（実績）</div><div class="mc-v" id="cf-sum-out-a">—</div><div class="mc-s" id="cf-sum-out-s"></div></div>
-      <div class="mc" title="マネフォ同期の最新銀行残高"><div class="mc-l">月末現金残高（最新）</div><div class="mc-v" id="cf-sum-close">—</div></div>
-      <div class="mc" title="年度累計の入金 − 出金"><div class="mc-l">年度累計純CF（実績）</div><div class="mc-v" id="cf-sum-net">—</div></div>
-      <div class="mc" title="入金実績 ÷ 入金予算（年度累計）"><div class="mc-l">入金予実達成率</div><div class="mc-v" id="cf-sum-rate">—</div><div class="mc-s" id="cf-sum-rate-s"></div></div>
+      <div class="mc" title="年度累計（4月〜）の入金 - 予算と実績を併記">
+        <div class="mc-l">年度累計入金</div>
+        <div class="mc-v" id="cf-sum-in-a">—</div>
+        <div class="mc-s"><span id="cf-sum-in-b" style="color:var(--text3)">—</span> <span id="cf-sum-in-d"></span></div>
+      </div>
+      <div class="mc" title="年度累計（4月〜）の出金 - 予算と実績を併記">
+        <div class="mc-l">年度累計出金</div>
+        <div class="mc-v" id="cf-sum-out-a">—</div>
+        <div class="mc-s"><span id="cf-sum-out-b" style="color:var(--text3)">—</span> <span id="cf-sum-out-d"></span></div>
+      </div>
+      <div class="mc" title="月末現金残高 - 予算と実績を併記">
+        <div class="mc-l">月末現金残高</div>
+        <div class="mc-v" id="cf-sum-close">—</div>
+        <div class="mc-s"><span id="cf-sum-close-b" style="color:var(--text3)">—</span></div>
+      </div>
+      <div class="mc" title="年度累計の純CF（入金 − 出金）- 予算と実績を併記">
+        <div class="mc-l">年度累計純CF</div>
+        <div class="mc-v" id="cf-sum-net">—</div>
+        <div class="mc-s"><span id="cf-sum-net-b" style="color:var(--text3)">—</span></div>
+      </div>
+      <div class="mc" title="入金実績 ÷ 入金予算（年度累計）">
+        <div class="mc-l">入金予実達成率</div>
+        <div class="mc-v" id="cf-sum-rate">—</div>
+        <div class="mc-s" id="cf-sum-rate-s"></div>
+      </div>
     </div>
     <div class="card">
       <div class="ct">月次CF予実 — <span id="cf-year-label">2025年度</span></div>
@@ -3202,57 +3242,51 @@ function renderPLView(d) {
 
     const revA  = sumA(d.pl.actual.rev);
     const revB  = sumB(d.pl.budget.rev);
+    const cogsKeysSum = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+    const cogsA = cogsKeysSum.reduce((t,k) => t + sumA(d.pl.actual[k]||[]), 0);
+    const cogsB = cogsKeysSum.reduce((t,k) => t + sumB(d.pl.budget[k]||[]), 0);
     const opexA = ['labor','outsource','adv','gaichu','other'].reduce((t,k) => t + sumA(d.pl.actual[k]||[]), 0);
     const opexB = ['labor','outsource','adv','gaichu','other'].reduce((t,k) => t + sumB(d.pl.budget[k]||[]), 0);
-    const opA   = revA - opexA;
-    const opB   = revB - opexB;
-    const rateRev  = revB  > 0 ? Math.round(revA  / revB  * 100) : null;
-    const rateOpex = opexB > 0 ? Math.round(opexA / opexB * 100) : null;
+    const opA   = revA - cogsA - opexA;
+    const opB   = revB - cogsB - opexB;
+    const rateRev  = revB  > 0 ? Math.round(revA  / revB  * 100) : 0;
+    const rateOpex = opexB > 0 ? Math.round(opexA / opexB * 100) : 0;
 
     const fmt = (v) => Math.round(v).toLocaleString() + '千円';
-    const fmtP = (v) => v >= 0
+    const fmtSigned = (v) => v >= 0 ? `+${fmt(v)}` : `▲${fmt(Math.abs(v))}`;
+    const fmtP = (v) => v > 0
       ? `<span class="g">+${fmt(v)}</span>`
-      : `<span class="r">▲${fmt(Math.abs(v))}</span>`;
+      : v < 0 ? `<span class="r">▲${fmt(Math.abs(v))}</span>` : fmt(0);
     const rateBadge = (r, inverted=false) => {
-      if (!r) return '';
       const good = inverted ? r <= 100 : r >= 100;
       return `<span class="badge ${good?'bg':'br'}">${r}%</span>`;
     };
 
     const el = (id) => document.getElementById(id);
-    // 実績が未入力のときは予算合計をフォールバック表示
-    if (el('pl-sum-rev-a')) {
-      if (revA) el('pl-sum-rev-a').textContent = fmt(revA);
-      else if (revB) el('pl-sum-rev-a').innerHTML = `<span style="color:var(--text2)">${fmt(revB)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`;
-      else el('pl-sum-rev-a').textContent = '─';
-    }
-    if (el('pl-sum-rev-b'))   el('pl-sum-rev-b').textContent   = revB  ? fmt(revB)  : '─';
-    if (el('pl-sum-rev-s'))   el('pl-sum-rev-s').innerHTML     = rateBadge(rateRev);
-    if (el('pl-sum-opex-a')) {
-      if (opexA) el('pl-sum-opex-a').innerHTML = `<span class="r">${fmt(opexA)}</span>`;
-      else if (opexB) el('pl-sum-opex-a').innerHTML = `<span style="color:var(--text2)">${fmt(opexB)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`;
-      else el('pl-sum-opex-a').textContent = '─';
-    }
-    if (el('pl-sum-opex-s'))  el('pl-sum-opex-s').innerHTML    = rateBadge(rateOpex, true); // 費用は100%以下が良い
-    if (el('pl-sum-op')) {
-      if (revA || opexA) {
-        el('pl-sum-op').innerHTML = fmtP(opA);
-      } else if (revB || opexB) {
-        el('pl-sum-op').innerHTML = opB >= 0
-          ? `<span style="color:var(--text2)">+${fmt(opB)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`
-          : `<span style="color:var(--text2)">▲${fmt(Math.abs(opB))}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`;
-      } else {
-        el('pl-sum-op').textContent = '─';
-      }
-    }
+
+    // ── 売上: 実績(大、青) + 予算(小) + 達成率 ──
+    if (el('pl-sum-rev-a')) el('pl-sum-rev-a').textContent = fmt(revA);
+    if (el('pl-sum-rev-b')) el('pl-sum-rev-b').textContent = `予算 ${fmt(revB)}`;
+    if (el('pl-sum-rev-s')) el('pl-sum-rev-s').innerHTML = rateBadge(rateRev);
+
+    // ── 原価: 実績 + 予算 ──
+    if (el('pl-sum-cogs-a')) el('pl-sum-cogs-a').innerHTML = `<span class="${cogsA>0?'r':''}">${fmt(cogsA)}</span>`;
+    if (el('pl-sum-cogs-b')) el('pl-sum-cogs-b').textContent = `予算 ${fmt(cogsB)}`;
+
+    // ── 販管費: 実績(赤) + 予算(灰) + 予算比 ──
+    if (el('pl-sum-opex-a')) el('pl-sum-opex-a').innerHTML = `<span class="${opexA>0?'r':''}">${fmt(opexA)}</span>`;
+    if (el('pl-sum-opex-b')) el('pl-sum-opex-b').textContent = `予算 ${fmt(opexB)}`;
+    if (el('pl-sum-opex-s')) el('pl-sum-opex-s').innerHTML = rateBadge(rateOpex, true);
+
+    // ── 営業利益: 実績(±色) + 予算(灰) ──
+    if (el('pl-sum-op')) el('pl-sum-op').innerHTML = fmtP(opA);
+    if (el('pl-sum-op-b')) el('pl-sum-op-b').textContent = `予算 ${fmtSigned(opB)}`;
+
+    // ── 売上予実達成率: % + 内訳 ──
     if (el('pl-sum-rate')) {
-      const rateOp = opB !== 0 ? Math.round(opA / Math.abs(opB) * 100) : null;
-      el('pl-sum-rate').innerHTML = rateRev
-        ? `<span class="${rateRev>=100?'g':'r'}">${rateRev}%</span>`
-        : '─';
-      el('pl-sum-rate-s').innerHTML = rateRev
-        ? `<span style="font-size:10px;color:var(--text3)">売上予算比</span>`
-        : '';
+      el('pl-sum-rate').innerHTML = `<span class="${rateRev>=100?'g':'r'}">${rateRev}%</span>`;
+      el('pl-sum-rate-s').innerHTML =
+        `<span style="font-size:10px;color:var(--text3)">${fmt(revA)} / 予算 ${fmt(revB)}</span>`;
     }
   })();
   const revB = d.pl.budget.rev.map(v => Number(v) || 0);
@@ -3558,70 +3592,58 @@ function renderCFView(d) {
     const fmt千 = (v) => Math.round(v).toLocaleString() + '千円';
     const fmt万 = (v) => Math.round(v/10).toLocaleString() + '千円';
     const el = (id) => document.getElementById(id);
+    // 数値を「実績／予算」フォーマットで描画するヘルパー
+    const fmtSigned = (v) => v >= 0 ? `+${fmt千(v)}` : `▲${fmt千(Math.abs(v))}`;
 
-    // 実績が入っていないが予算がある年度向けに、予算合計へフォールバック表示
-    const hasActual = aInTot > 0 || aOutTot > 0 || lastClose > 0;
-
-    // 累積入金：実績 or 予算
-    if (el('cf-sum-in-a')) {
-      if (aInTot) el('cf-sum-in-a').textContent = fmt千(aInTot);
-      else if (bInTot) el('cf-sum-in-a').innerHTML = `<span style="color:var(--text2)">${fmt千(bInTot)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`;
-      else el('cf-sum-in-a').textContent = '—';
+    // 月末残高: 実績(最新非ゼロ cfClose) と 予算末残 を別々に取得
+    const bCloseArr = cfGet('budget','cfClose');
+    let bLastClose = 0;
+    for (let i = (bCloseArr||[]).length-1; i >= 0; i--) {
+      if (Number(bCloseArr[i])) { bLastClose = Number(bCloseArr[i]); break; }
     }
-    if (el('cf-sum-in-s'))   el('cf-sum-in-s').innerHTML  = rateIn
-      ? `<span class="badge ${rateIn>=100?'bg':'br'}">${rateIn}% 予算比</span>` : '';
-
-    // 累積出金：実績 or 予算
-    if (el('cf-sum-out-a')) {
-      if (aOutTot) el('cf-sum-out-a').innerHTML = `<span class="r">${fmt千(aOutTot)}</span>`;
-      else if (bOutTot) el('cf-sum-out-a').innerHTML = `<span style="color:var(--text2)">${fmt千(bOutTot)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`;
-      else el('cf-sum-out-a').textContent = '—';
-    }
-    if (el('cf-sum-out-s'))  el('cf-sum-out-s').innerHTML = rateOut
-      ? `<span class="badge ${rateOut<=100?'bg':'br'}">${rateOut}% 予算比</span>` : '';
-
-    // 月末現金残高：実績 or 予算末残
-    if (el('cf-sum-close')) {
-      if (lastClose) {
-        el('cf-sum-close').innerHTML = `<span class="${lastClose>0?'g':'r'}">${fmt千(lastClose)}</span>`;
-      } else {
-        // 予算の期末残（最終月）を取得
-        const bCloseArr = cfGet('budget','cfClose');
-        let bLast = 0;
-        for (let i = (bCloseArr||[]).length-1; i >= 0; i--) {
-          if (Number(bCloseArr[i])) { bLast = Number(bCloseArr[i]); break; }
-        }
-        // fallback: budget open - bOutTot + bInTot（簡易予測）
-        if (!bLast && (bInTot || bOutTot)) {
-          const bOpenArr = cfGet('budget','open');
-          const bOpen0 = Number((bOpenArr||[])[0]) || 0;
-          bLast = bOpen0 + bInTot - bOutTot;
-        }
-        if (bLast) el('cf-sum-close').innerHTML = `<span style="color:var(--text2)">${fmt千(bLast)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算末)</span>`;
-        else el('cf-sum-close').textContent = '—';
-      }
+    if (!bLastClose && (bInTot || bOutTot)) {
+      const bOpenArr = cfGet('budget','open');
+      const bOpen0 = Number((bOpenArr||[])[0]) || 0;
+      bLastClose = bOpen0 + bInTot - bOutTot;
     }
 
-    // 累積純CF：実績 or 予算
+    // ── 累積入金: 実績(大) + 予算(小) + 達成率 ──
+    if (el('cf-sum-in-a')) el('cf-sum-in-a').textContent = fmt千(aInTot);
+    if (el('cf-sum-in-b')) el('cf-sum-in-b').textContent = `予算 ${fmt千(bInTot)}`;
+    if (el('cf-sum-in-d')) el('cf-sum-in-d').innerHTML = rateIn !== null
+      ? `<span class="badge ${rateIn>=100?'bg':'br'}">${rateIn}%</span>` : '';
+    if (el('cf-sum-in-s')) el('cf-sum-in-s').innerHTML = '';
+
+    // ── 累積出金: 実績(大、赤) + 予算(小) + 予算比 ──
+    if (el('cf-sum-out-a')) el('cf-sum-out-a').innerHTML = `<span class="${aOutTot>0?'r':''}">${fmt千(aOutTot)}</span>`;
+    if (el('cf-sum-out-b')) el('cf-sum-out-b').textContent = `予算 ${fmt千(bOutTot)}`;
+    if (el('cf-sum-out-d')) el('cf-sum-out-d').innerHTML = rateOut !== null
+      ? `<span class="badge ${rateOut<=100?'bg':'br'}">${rateOut}%</span>` : '';
+    if (el('cf-sum-out-s')) el('cf-sum-out-s').innerHTML = '';
+
+    // ── 月末現金残高: 実績(銀行残高) + 予算末残 ──
+    if (el('cf-sum-close')) el('cf-sum-close').innerHTML = lastClose > 0
+      ? `<span class="g">${fmt千(lastClose)}</span>`
+      : (lastClose < 0 ? `<span class="r">${fmt千(lastClose)}</span>` : `${fmt千(0)}`);
+    if (el('cf-sum-close-b')) el('cf-sum-close-b').textContent = `予算末 ${fmt千(bLastClose)}`;
+
+    // ── 累積純CF: 実績(±色) + 予算(灰色) ──
     if (el('cf-sum-net')) {
-      if (hasActual) {
-        el('cf-sum-net').innerHTML = netCF >= 0
-          ? `<span class="g">+${fmt千(netCF)}</span>`
-          : `<span class="r">▲${fmt千(Math.abs(netCF))}</span>`;
-      } else if (bInTot || bOutTot) {
-        const bNetCF = bInTot - bOutTot;
-        el('cf-sum-net').innerHTML = bNetCF >= 0
-          ? `<span style="color:var(--text2)">+${fmt千(bNetCF)}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`
-          : `<span style="color:var(--text2)">▲${fmt千(Math.abs(bNetCF))}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">(予算)</span>`;
-      } else {
-        el('cf-sum-net').textContent = '—';
-      }
+      el('cf-sum-net').innerHTML = netCF > 0
+        ? `<span class="g">+${fmt千(netCF)}</span>`
+        : netCF < 0 ? `<span class="r">▲${fmt千(Math.abs(netCF))}</span>` : fmt千(0);
     }
+    if (el('cf-sum-net-b')) {
+      const bNetCF = bInTot - bOutTot;
+      el('cf-sum-net-b').textContent = `予算 ${fmtSigned(bNetCF)}`;
+    }
+
+    // ── 入金予実達成率 ──
     if (el('cf-sum-rate')) {
-      el('cf-sum-rate').innerHTML = rateIn
-        ? `<span class="${rateIn>=100?'g':'r'}">${rateIn}%</span>` : '─';
+      el('cf-sum-rate').innerHTML = rateIn !== null
+        ? `<span class="${rateIn>=100?'g':'r'}">${rateIn}%</span>` : '0%';
       const rs = el('cf-sum-rate-s');
-      if (rs) rs.innerHTML = '<span style="font-size:10px;color:var(--text3)">入金予算比</span>';
+      if (rs) rs.innerHTML = `<span style="font-size:10px;color:var(--text3)">${fmt千(aInTot)} / 予算 ${fmt千(bInTot)}</span>`;
     }
   })();
 
