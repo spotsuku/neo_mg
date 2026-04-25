@@ -2329,6 +2329,26 @@ function enqueueCell(fiscal_year, sheet, row_key, month_idx, value) {
   setSaveState('pending', `${_cellOutbox.size}件保留`);
   if (_outboxTimer) clearTimeout(_outboxTimer);
   _outboxTimer = setTimeout(() => { _outboxTimer = null; flushCellOutbox(); }, OUTBOX_FLUSH_MS);
+  // 安全網: JSONB / localStorage への並行バックアップ（データ消失防止）
+  scheduleJsonbBackup();
+}
+
+// ────────────────────────────────────────────
+//  JSONB バックアップ（cells outbox と並行実行・ステータスバーには反映しない）
+//  cells テーブルが何らかの理由で書き込めなくても /api/db save_sim/save_fiscal で
+//  sim_data / fiscal_data JSONB に必ず保存。同時に saveSimData/saveDB は
+//  localStorage にも書くので 3 重バックアップ。
+// ────────────────────────────────────────────
+let _jsonbBackupTimer = null;
+function scheduleJsonbBackup() {
+  if (_jsonbBackupTimer) clearTimeout(_jsonbBackupTimer);
+  _jsonbBackupTimer = setTimeout(async () => {
+    _jsonbBackupTimer = null;
+    try { if (typeof saveSimData === 'function') await saveSimData(); }
+    catch (e) { console.warn('[jsonb backup] sim:', e.message); }
+    try { if (typeof saveDB === 'function') await saveDB(); }
+    catch (e) { console.warn('[jsonb backup] db:', e.message); }
+  }, 1500);
 }
 
 async function flushCellOutbox() {
@@ -8391,11 +8411,23 @@ async function loadSimData() {
       const res = await fetch('/api/db?action=load_sim');
       const r = await res.json();
       if (r.ok && r.data) {
-        for (const yr of ['2024', '2025', '2026']) { if (r.data[yr]) SIM_DATA[yr] = r.data[yr]; }
+        for (const yr of ['2024', '2025', '2026']) {
+          if (r.data[yr]) {
+            SIM_DATA[yr] = r.data[yr];
+          } else {
+            // JSONB にこの年度のデータが無い → localStorage から復旧
+            const raw = localStorage.getItem('neo_sim_' + yr);
+            if (raw) {
+              try { SIM_DATA[yr] = JSON.parse(raw); console.log(`[loadSimData] ${yr} restored from localStorage`); }
+              catch(e) { console.warn(`localStorage parse failed ${yr}:`, e); }
+            }
+          }
+        }
         migrateSIMDataCogs();
         return;
       }
     }
+    // /api/db 自体が失敗 → 全年度 localStorage から復旧
     const r24 = localStorage.getItem('neo_sim_2024');
     if (r24) SIM_DATA['2024'] = JSON.parse(r24);
     const r25 = localStorage.getItem('neo_sim_2025');
@@ -9067,6 +9099,13 @@ async function loadDB() {
             };
             sanitizeYear(DB[yr], yr);
             console.log(`[loadDB] ${yr} loaded from Supabase, rev budget[0]:`, DB[yr].pl.budget.rev?.[0]);
+          } else {
+            // JSONB にこの年度のデータが無い → localStorage から復旧
+            const raw = localStorage.getItem(`neo_db_${yr}`);
+            if (raw) {
+              try { DB[yr] = JSON.parse(raw); sanitizeYear(DB[yr], yr); console.log(`[loadDB] ${yr} restored from localStorage`); }
+              catch(e) { console.warn(`localStorage parse failed for ${yr}`, e); }
+            }
           }
         }
         // Supabaseから取得後、26年度データが実質空なら初期化してSupabaseに保存
@@ -9468,6 +9507,8 @@ window.addEventListener('load', async () => {
   }
   try { await loadSimData(); } catch(e) { console.warn('loadSimData:', e); }
   try { await applyCellsOverlayToSim(); } catch(e) { console.warn('cells overlay (sim):', e); }
+  // ロード+オーバーレイ完了後に JSONB を最新状態へ同期（cells の方が新しい場合に備えて）
+  scheduleJsonbBackup();
   // 初期化完了後に保存状態を「同期済み」に設定
   _lastSaveTime = new Date();
   setSaveState('idle');
