@@ -3741,6 +3741,20 @@ function renderCFView(d) {
     { type:'line', label:'残高（予算）', data: bCloseCalc,
       borderColor:'rgba(55,138,221,0.55)', borderDash:[4,3], tension:0.3, pointRadius:2, borderWidth:1.5, yAxisID:'y2' },
   ];
+  // 棒(Y)と線(Y2) の 0 を必ず同じ高さに揃える（残高プラスがマイナス側に見える問題の解消）
+  const _allChartVals = [
+    ...bIn.map(v=>Number(v)||0),
+    ...aIn.map(v=>Number(v)||0),
+    ...bTotalOut.map(v => v ? -v : 0),
+    ...aTotalOutForChart.map(v => v ? -v : 0),
+    ...aCloseCalc.map(v=>Number(v)||0),
+    ...bCloseCalc.map(v=>Number(v)||0),
+  ];
+  const _chartMin = Math.min(0, ...(_allChartVals.length ? _allChartVals : [0]));
+  const _chartMax = Math.max(0, ...(_allChartVals.length ? _allChartVals : [0]));
+  const _chartPad = (_chartMax - _chartMin) * 0.1 || 1000;
+  const _chartYMin = Math.floor(_chartMin - _chartPad);
+  const _chartYMax = Math.ceil(_chartMax + _chartPad);
   charts['cf-chart-main'] = new Chart(document.getElementById('cf-chart-main'), {
     type: 'bar',
     data: {
@@ -3765,10 +3779,10 @@ function renderCFView(d) {
       },
       scales:{
         x:{ ticks:{color:tc,font:{size:10}}, grid:{color:gc} },
-        y:{ position:'left', stacked:true,
+        y:{ position:'left', stacked:true, min:_chartYMin, max:_chartYMax,
             ticks:{color:tc,font:{size:9},callback:v=>fmtAxisJPY(v)},
             grid:{color:gc}, title:{display:true,text:'入出金（千円）',color:tc,font:{size:9}} },
-        y2:{ position:'right',
+        y2:{ position:'right', min:_chartYMin, max:_chartYMax,
              ticks:{color:tc,font:{size:9},callback:v=>fmtAxisJPY(v)},
              grid:{display:false}, title:{display:true,text:'月末残高（千円）',color:tc,font:{size:9}} }
       }
