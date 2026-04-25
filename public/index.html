@@ -588,7 +588,7 @@ input.cells-edit-input {
       <div class="mc" title="年度累計の営業利益（売上 − 原価 − 販管費）- 予算と実績を併記">
         <div class="mc-l">年度累計営業利益</div>
         <div class="mc-v" id="pl-sum-op">—</div>
-        <div class="mc-s"><span id="pl-sum-op-b" style="color:var(--text3)">—</span></div>
+        <div class="mc-s"><span id="pl-sum-op-b" style="color:var(--text3)">—</span> <span id="pl-sum-op-s"></span></div>
       </div>
       <div class="mc" title="売上実績 ÷ 売上予算（年度累計）">
         <div class="mc-l">売上予実達成率</div>
@@ -3278,9 +3278,23 @@ function renderPLView(d) {
     if (el('pl-sum-opex-b')) el('pl-sum-opex-b').textContent = `予算 ${fmt(opexB)}`;
     if (el('pl-sum-opex-s')) el('pl-sum-opex-s').innerHTML = rateBadge(rateOpex, true);
 
-    // ── 営業利益: 実績(±色) + 予算(灰) ──
+    // ── 営業利益: 実績(±色) + 予算(灰) + 達成率 ──
+    // 達成率: opB(予算) を基準に opA(実績) の達成具合
+    //   黒字予算: 100%以上が good / 赤字予算: 100%以下が good (損失が予算より小さい)
+    let rateOp = null;
+    if (opB !== 0) rateOp = Math.round(opA / opB * 100);
     if (el('pl-sum-op')) el('pl-sum-op').innerHTML = fmtP(opA);
     if (el('pl-sum-op-b')) el('pl-sum-op-b').textContent = `予算 ${fmtSigned(opB)}`;
+    if (el('pl-sum-op-s')) {
+      if (rateOp === null) {
+        el('pl-sum-op-s').innerHTML = '';
+      } else {
+        // 黒字予算なら 100%以上が good、赤字予算なら 100%以下が good
+        const opBudgetIsProfit = opB > 0;
+        const good = opBudgetIsProfit ? rateOp >= 100 : rateOp <= 100;
+        el('pl-sum-op-s').innerHTML = `<span class="badge ${good?'bg':'br'}">${rateOp}%</span>`;
+      }
+    }
 
     // ── 売上予実達成率: % + 内訳 ──
     if (el('pl-sum-rate')) {
