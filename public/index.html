@@ -3498,18 +3498,32 @@ function renderCFView(d) {
   (() => {
     const cfGet = (section, key) => (d.cf[section]&&d.cf[section][key]) || [];
     const sumArr = (arr) => (arr||[]).reduce((a,v) => a+(Number(v)||0), 0);
-    const opexDetailKeys = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
-      'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
-      'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay','investPay'];
 
-    // 実績入金合計（売上入金のみ）
-    const aInTot  = sumArr(cfGet('actual','cfIn'));
-    const bInTot  = sumArr(cfGet('budget','cfIn'));
-    // 実績出金合計（販管費 + 借入返済）
-    const aOutTot = opexDetailKeys.reduce((t,k) => t + sumArr(cfGet('actual',k)), 0) +
-                    sumArr(cfGet('actual','loanOut'));
-    const bOutTot = opexDetailKeys.reduce((t,k) => t + sumArr(cfGet('budget',k)), 0) +
-                    sumArr(cfGet('budget','loanOut'));
+    // 入金: 親 cfIn が空でも子行（cfInFee/Training/Event/Other/旧Membership）から再計算
+    const inSubKeys = ['cfInFee','cfInTraining','cfInEvent','cfInOther','cfInMembership'];
+    const aInChildren = inSubKeys.reduce((t,k) => t + sumArr(cfGet('actual',k)), 0);
+    const bInChildren = inSubKeys.reduce((t,k) => t + sumArr(cfGet('budget',k)), 0);
+    const aInParent   = sumArr(cfGet('actual','cfIn'));
+    const bInParent   = sumArr(cfGet('budget','cfIn'));
+    const aInTot = aInChildren > 0 ? aInChildren : aInParent;
+    const bInTot = bInChildren > 0 ? bInChildren : bInParent;
+
+    // 出金: 原価 + 販管費(細目) + 投資 + 財務出金 をすべて含める
+    const allOutKeys = [
+      // 原価
+      'cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay',
+      // 販管費 固定費
+      'salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
+      // 販管費 変動費
+      'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
+      'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay',
+      // 投資
+      'investPay',
+      // 財務出金
+      'loanOut','warrantPay','finOtherPay',
+    ];
+    const aOutTot = allOutKeys.reduce((t,k) => t + sumArr(cfGet('actual',k)), 0);
+    const bOutTot = allOutKeys.reduce((t,k) => t + sumArr(cfGet('budget',k)), 0);
     // 月末残高（最新非ゼロ）
     const closeArr = cfGet('actual','cfClose');
     let lastClose = 0;
@@ -3973,8 +3987,8 @@ function renderCFView(d) {
 
     // ── 販管費合計 ──
     { label:'── 販管費合計', section:true, colId:'cf-sec-opex' },
-    // 親セクション（cf-sec-opex）を閉じるとこれらの行はすべて隠れる
-    { label:'販管費合計',  bArr:bOpexTot, aArr:aOpexTot, isTot:true, isOut:true, noDiff:false, colGroup:'cf-sec-opex' },
+    // 合計行は折りたたんでも常に表示（colGroup を付けない）
+    { label:'販管費合計',  bArr:bOpexTot, aArr:aOpexTot, isTot:true, isOut:true, noDiff:false },
     // 固定費合計 + 明細折りたたみ（cf-sec-fixed）
     { label:'　固定費合計（明細▶）', bArr:bFixed, aArr:aFixed, isTot:true, isOut:true, noDiff:false, subColId:'cf-sec-fixed', colGroup:'cf-sec-opex' },
     R('　　人件費・税金',         'salaryPay',    'salaryPay',    {isSub:true, isOut:true, colGroup:'cf-sec-fixed', colGroupParent:'cf-sec-opex'}),
