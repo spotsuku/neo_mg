@@ -6194,11 +6194,14 @@ async function applyImportedToProd() {
                    'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay',
                    'investPay','loanIn','loanOut','capitalIn','warrantPay','finOtherPay',
                    'cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'];
+  const bsKeys  = ['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained'];
 
-  // データが入っている月を特定
+  // データが入っている月を特定（PL / CF / BS いずれかに値があれば対象）
   const filledMonths = d.months.filter((m, i) => {
-    return plKeys.some(k => Number(d.pl.actual[k]?.[i]) > 0) ||
-           cfKeys.some(k => Number(d.cf.actual[k]?.[i]) > 0);
+    const plHas = plKeys.some(k => Number(d.pl?.actual?.[k]?.[i]) > 0);
+    const cfHas = cfKeys.some(k => Number(d.cf?.actual?.[k]?.[i]) > 0);
+    const bsHas = d.bs?.actual?.[i] && bsKeys.some(k => Number(d.bs.actual[i][k]) !== 0);
+    return plHas || cfHas || bsHas;
   });
 
   if (filledMonths.length === 0) {
@@ -6221,7 +6224,7 @@ function showApplyConfirmModal(filledMonths, monthLabels, d) {
   const existing = document.getElementById('apply-prod-modal');
   if (existing) existing.remove();
 
-  // PL/CF のプレビューサマリーを生成
+  // PL / CF / BS のプレビューサマリーを生成
   const plKeys = ['rev','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther',
                   'labor','outsource','adv','gaichu','other'];
   const plLabels = {
@@ -6229,22 +6232,47 @@ function showApplyConfirmModal(filledMonths, monthLabels, d) {
     cogsOenKaigi:'原価:応援', cogsBigEvent:'原価:大型EV', cogsOther:'原価:他',
     labor:'人件費', outsource:'業務委託', adv:'広告', gaichu:'外注費', other:'その他'
   };
-
-  const previewRows = plKeys.map(key => {
-    const vals = filledMonths.map(m => {
-      const i = d.months.indexOf(m);
-      return Math.round(Number(d.pl.actual[key]?.[i]) || 0);
-    });
-    if (vals.every(v => v === 0)) return null;
-    return `<tr>
-      <td style="padding:3px 8px;font-size:10px;color:var(--text3)">${plLabels[key]||key}</td>
-      ${vals.map(v => `<td style="padding:3px 6px;font-size:10px;text-align:right">${v ? v.toLocaleString() : '─'}</td>`).join('')}
-    </tr>`;
-  }).filter(Boolean).join('');
+  const cfRowKeys = ['cfIn','cfInFee','cfInTraining','cfInOther','salaryPay','bizComPay','rentPay','adSportsPay','salesOtherPay','loanIn','loanOut','cfClose'];
+  const cfLabels  = {
+    cfIn:'売上入金(計)', cfInFee:'　会費入金', cfInTraining:'　研修入金', cfInOther:'　その他入金',
+    salaryPay:'給与・社保', bizComPay:'業務委託', rentPay:'家賃', adSportsPay:'広告費',
+    salesOtherPay:'その他出金', loanIn:'新規借入', loanOut:'借入返済', cfClose:'月末残高'
+  };
+  const bsRowKeys = ['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained'];
+  const bsLabels  = {
+    cash:'現預金', receivable:'売掛金', other_ca:'その他流動資産', fixed:'固定資産',
+    payable:'買掛・未払', borrowing:'借入金', other_cl:'その他流動負債',
+    capital:'資本金', retained:'利益剰余金'
+  };
 
   const monthHeaders = filledMonths.map(m =>
     `<th style="padding:3px 6px;font-size:10px;color:var(--text3)">${MONTH_LABELS[m]||m}</th>`
   ).join('');
+
+  const buildRows = (keys, labels, getter) => keys.map(key => {
+    const vals = filledMonths.map(m => {
+      const i = d.months.indexOf(m);
+      return Math.round(Number(getter(key, i)) || 0);
+    });
+    if (vals.every(v => v === 0)) return null;
+    return `<tr>
+      <td style="padding:3px 8px;font-size:10px;color:var(--text3)">${labels[key]||key}</td>
+      ${vals.map(v => `<td style="padding:3px 6px;font-size:10px;text-align:right">${v ? v.toLocaleString() : '─'}</td>`).join('')}
+    </tr>`;
+  }).filter(Boolean).join('');
+
+  const plRows = buildRows(plKeys,    plLabels, (k, i) => d.pl?.actual?.[k]?.[i]);
+  const cfRows = buildRows(cfRowKeys, cfLabels, (k, i) => d.cf?.actual?.[k]?.[i]);
+  const bsRows = buildRows(bsRowKeys, bsLabels, (k, i) => d.bs?.actual?.[i]?.[k]);
+
+  const sectionBlock = (title, rows) => rows ? `
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">${title}</div>
+      <div class="scroll-x" style="margin-bottom:.875rem">
+        <table style="border-collapse:collapse;min-width:${100+filledMonths.length*70}px">
+          <thead><tr><th style="padding:3px 8px;font-size:10px;color:var(--text3);text-align:left">科目</th>${monthHeaders}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>` : '';
 
   const modal = document.createElement('div');
   modal.id = 'apply-prod-modal';
@@ -6266,14 +6294,10 @@ function showApplyConfirmModal(filledMonths, monthLabels, d) {
         　<span style="color:var(--text3)">${filledMonths.length}ヶ月分</span>
       </div>
 
-      <!-- PLプレビュー -->
-      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">PLデータ（千円）</div>
-      <div class="scroll-x" style="margin-bottom:.875rem">
-        <table style="border-collapse:collapse;min-width:${100+filledMonths.length*70}px">
-          <thead><tr><th style="padding:3px 8px;font-size:10px;color:var(--text3);text-align:left">科目</th>${monthHeaders}</tr></thead>
-          <tbody>${previewRows}</tbody>
-        </table>
-      </div>
+      <!-- データプレビュー（PL / CF / BS のうち実データのある区分のみ表示） -->
+      ${sectionBlock('PLデータ（千円）', plRows)}
+      ${sectionBlock('CFデータ（千円）', cfRows)}
+      ${sectionBlock('BSデータ（千円）', bsRows)}
 
       <!-- 警告 + 自動バックアップ通知 -->
       <div style="background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.35);border-radius:var(--r);padding:8px 12px;font-size:10px;color:var(--tc-green);margin-bottom:.5rem">
