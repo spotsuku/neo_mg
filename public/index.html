@@ -6424,13 +6424,14 @@ const CF_ROWS = [
   { key: 'cfInFee',         label: 'NEO会費入金',                  color: '#378ADD', indent: true, isRev: true, parentKey: 'cfIn' },
   { key: 'cfInTraining',    label: '研修入金',                     color: '#378ADD', indent: true, isRev: true, parentKey: 'cfIn' },
   { key: 'cfInEvent',       label: 'イベント・その他入金',         color: '#378ADD', indent: true, isRev: true, parentKey: 'cfIn' },
-  // ── 原価支払い（セクション + 内訳）──
+  // ── 原価支払い（セクション + 内訳 + 合計）──
   { key: '_cogsHeadCf',     label: '原価',                        color: '#EF9F27', isSection: true, isOut: true },
-  { key: 'cogsHomeroomPay', label: 'ホームルーム',                color: '#EF9F27', indent: true, isOut: true, parentKey: '_cogsHeadCf' },
-  { key: 'cogsHyogikaiPay', label: '評議会',                      color: '#EF9F27', indent: true, isOut: true, parentKey: '_cogsHeadCf' },
-  { key: 'cogsOenKaigiPay', label: '応援カイギ',                  color: '#EF9F27', indent: true, isOut: true, parentKey: '_cogsHeadCf' },
-  { key: 'cogsBigEventPay', label: '大型イベント',                color: '#EF9F27', indent: true, isOut: true, parentKey: '_cogsHeadCf' },
-  { key: 'cogsOtherPay',    label: 'その他原価',                  color: '#EF9F27', indent: true, isOut: true, parentKey: '_cogsHeadCf' },
+  { key: 'cogsHomeroomPay', label: 'ホームルーム',                color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
+  { key: 'cogsHyogikaiPay', label: '評議会',                      color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
+  { key: 'cogsOenKaigiPay', label: '応援カイギ',                  color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
+  { key: 'cogsBigEventPay', label: '大型イベント',                color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
+  { key: 'cogsOtherPay',    label: 'その他原価',                  color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
+  { key: 'cogsTotalCf',     label: '原価合計',                    color: '#EF9F27', isParent: true, isOut: true },
   // ── 販管費支払（PLと同じ6項目）──
   { key: 'laborPay',        label: '人件費（社保込）',            color: '#E24B4A', isOut: true },
   { key: 'outsourcePay',    label: '業務委託費',                  color: '#D85A30', isOut: true },
@@ -7000,13 +7001,25 @@ function buildSimCFTable() {
   const CF_ROWS_CUR = getCFRows();
   // 動的に子を持つ親キー集合（カスタム行追加に追従）
   const _cfParentSet = new Set(CF_ROWS_CUR.filter(r => CF_ROWS_CUR.some(c => c.parentKey === r.key)).map(r => r.key));
+  // 深さ計算（ネスト数に応じてインデント幅を増やす）
+  const _cfDepth = (key) => {
+    let d = 0, cur = CF_ROWS_CUR.find(r => r.key === key);
+    while (cur && cur.parentKey) {
+      d++;
+      cur = CF_ROWS_CUR.find(r => r.key === cur.parentKey);
+      if (d > 6) break;
+    }
+    return d;
+  };
   CF_ROWS_CUR.forEach(row => {
     // セクション行（_cogsHeadCf 等）：見出しのみ表示
     if (row.isSection) {
       html += `<tr style="background:var(--bg2)"><td style="${labelStyle}font-weight:700;color:${row.color}" colspan="${months.length + 2}">${row.label}</td></tr>`;
       return;
     }
-    const indentStyle = row.indent ? 'padding-left:24px;color:var(--text3);font-size:11px;' : '';
+    const depth = _cfDepth(row.key);
+    const padLeft = depth > 0 ? (12 + depth * 18) : 8;
+    const indentStyle = depth > 0 ? `padding-left:${padLeft}px;color:var(--text3);font-size:11px;` : '';
     const isParent = row.isParent || _cfParentSet.has(row.key);
     const deleteBtn = row.isCustom
       ? `<span onclick="removeSimCfRow('${row.key}')" style="cursor:pointer;color:var(--tc-red);font-size:9px;margin-left:4px;opacity:.7" title="この項目を削除">✕</span>`
@@ -7432,7 +7445,7 @@ function recalcSimCF() {
     // 売上入金 / 原価 / 各販管費は親子再帰で集計（カスタム行も含む）
     let cfIn = cfRowValue('cfIn', i);
     if (!cfIn) cfIn = getSimVal('cf','cfIn', i); // 旧データ互換
-    const cogsTot  = cfRowValue('_cogsHeadCf', i);
+    const cogsTot  = cfRowValue('cogsTotalCf', i);
     const laborPay = cfRowValue('laborPay', i);
     const outPay   = cfRowValue('outsourcePay', i);
     const advPay   = cfRowValue('advPay', i);
@@ -7471,18 +7484,16 @@ function recalcSimCF() {
 
   // 合計列 + 親行（cfIn等）の月別計算値表示
   const CF_ROWS_CUR2 = getCFRows();
-  // 各親（_cogsHeadCf や cfInFee 等、子を持つ全行）の月別表示も更新
-  // isParent フラグだけでなく、動的に子を持つ leaf も対象にする
+  // 動的に子を持つ leaf も親扱い
   const allParentKeys = new Set(CF_ROWS_CUR2.filter(r => CF_ROWS_CUR2.some(c => c.parentKey === r.key)).map(r => r.key));
   CF_ROWS_CUR2.forEach(row => {
     if (row.isSection) return;
     const isDynamicParent = allParentKeys.has(row.key);
     if (row.isParent || isDynamicParent) {
-      // 子行を集めて月別合計を表示（custom含む）
-      const children = CF_ROWS_CUR2.filter(r => r.parentKey === row.key);
+      // 子のさらに下（カスタム明細）まで含めて再帰集計
       let total = 0;
       months.forEach((_, i) => {
-        const sumI = children.reduce((s, c) => s + getSimVal('cf', c.key, i), 0);
+        const sumI = cfRowValue(row.key, i);
         total += sumI;
         const cell = document.getElementById(`scf-parent-${row.key}-${i}`);
         if (cell) {
