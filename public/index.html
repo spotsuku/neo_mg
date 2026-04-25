@@ -7283,11 +7283,16 @@ function buildSimCFTable() {
   labels.forEach(l => { html += `<th style="${thStyle}">${l}</th>`; });
   html += `<th style="${thStyle}">合計</th></tr></thead><tbody>`;
 
-  // 月初残高（1月目のみ入力、以降自動）
-  const cfOpenFirst = SIM_DATA[currentSimYear].cf.cfOpenFirst || 0;
+  // 月初残高（4月は前年度の最終月末残高(実績)を引き継ぎ。手動上書きも可）
+  const effectiveOpen = getEffectiveSimOpenBalance(currentSimYear);
+  const manualOpen    = Number(SIM_DATA[currentSimYear].cf.cfOpenFirst) || 0;
+  const isFromPrev    = effectiveOpen !== manualOpen && effectiveOpen !== 0;
+  const openTitle     = isFromPrev
+    ? `前年度末の月末残高(実績) ${effectiveOpen.toLocaleString()} 千円から自動引継ぎ。手動上書きしたい場合は数値を入力してください。`
+    : '期首月初残高（手入力）';
   html += `<tr style="background:var(--bg3)">
-    <td style="${labelStyle}font-weight:700">月初残高</td>
-    <td style="${cellStyle}"><input type="text" inputmode="decimal" style="${inputStyle}" value="${cfOpenFirst}" placeholder="0" id="scf-open-first" oninput="onSimCFOpenChange(this.value)"></td>
+    <td style="${labelStyle}font-weight:700" title="${openTitle}">月初残高${isFromPrev ? ' <span style="font-size:9px;color:var(--text3);font-weight:400">(前年度実績)</span>' : ''}</td>
+    <td style="${cellStyle}"><input type="text" inputmode="decimal" style="${inputStyle}${isFromPrev?'color:var(--text3);':''}" value="${effectiveOpen}" placeholder="0" id="scf-open-first" oninput="onSimCFOpenChange(this.value)" title="${openTitle}"></td>
     ${months.slice(1).map((_, i) => `<td id="scf-open-${i+1}" style="${cellStyle}background:var(--bg3);text-align:right;padding:4px 5px;font-size:11px;"></td>`).join('')}
     <td style="${cellStyle}background:var(--bg3);"></td>
   </tr>`;
@@ -7711,6 +7716,21 @@ function updatePLScenarioNote(profitArr, goodProfit, badProfit, cumBase, cumGood
 }
 
 // ── CF入力ハンドラ ──
+// 期首月初残高: 前年度の最終月末残高（実績）を優先。手入力(cfOpenFirst) は無い場合のフォールバック。
+function getEffectiveSimOpenBalance(simYear) {
+  const prev = simYear === '2026' ? '2025'
+             : simYear === '2025' ? '2024'
+             : null;
+  if (prev && DB[prev]?.cf?.actual?.cfClose) {
+    const arr = DB[prev].cf.actual.cfClose;
+    for (let i = arr.length - 1; i >= 0; i--) {
+      const v = Number(arr[i]);
+      if (v && v !== 0) return v;
+    }
+  }
+  return Number(SIM_DATA[simYear]?.cf?.cfOpenFirst) || 0;
+}
+
 function onSimCFOpenChange(val) {
   SIM_DATA[currentSimYear].cf.cfOpenFirst = Number(val) || 0;
   enqueueCell(currentSimYear, 'sim_cf', 'cfOpenFirst', -1, val);
@@ -7724,7 +7744,7 @@ function onSimCFInput(key, idx, val) {
 function recalcSimCF() {
   const months = getSimMonths();
   const N = months.length;
-  let bal = SIM_DATA[currentSimYear].cf.cfOpenFirst || 0;
+  let bal = getEffectiveSimOpenBalance(currentSimYear);
 
   const balArr = [];
   const netArr = [];
@@ -7838,7 +7858,7 @@ function recalcSimCF() {
 
 function drawSimCFChart(months, netArr, balArr) {
   const labels = getSimLabels();
-  const baseCash = SIM_DATA[currentSimYear].cf.cfOpenFirst || 0;
+  const baseCash = getEffectiveSimOpenBalance(currentSimYear);
 
   // 入出金は cfRowValue（再帰集計）を使う。カスタム子行や入金内訳も正しく合算される。
   const inArr  = months.map((_, i) => cfRowValue('cfIn', i) + getSimVal('cf','funding',i));
