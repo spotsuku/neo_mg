@@ -6679,27 +6679,28 @@ function getCFRows() {
 let PL_ROWS = PL_ROWS_BASE;
 
 // CF行定義（PL_ROWS_BASEと同じ構造に揃える）
+// 全セクションで小計を「項目の上」に統一: 売上入金合計 / 原価合計 / 販管費合計
 const CF_ROWS = [
-  // ── 売上入金（合計＋内訳）──
+  // ── 売上入金（合計を最上段に）──
   { key: 'cfIn',            label: '売上入金合計',                color: '#378ADD', isRev: true, isParent: true },
   { key: 'cfInFee',         label: 'NEO会費入金',                  color: '#378ADD', indent: true, isRev: true, parentKey: 'cfIn' },
   { key: 'cfInTraining',    label: '研修入金',                     color: '#378ADD', indent: true, isRev: true, parentKey: 'cfIn' },
   { key: 'cfInEvent',       label: 'イベント・その他入金',         color: '#378ADD', indent: true, isRev: true, parentKey: 'cfIn' },
-  // ── 原価支払い（セクション + 内訳 + 合計）──
-  { key: '_cogsHeadCf',     label: '原価',                        color: '#EF9F27', isSection: true, isOut: true },
+  // ── 原価支払い（合計を最上段に）──
+  { key: 'cogsTotalCf',     label: '原価合計',                    color: '#EF9F27', isParent: true, isOut: true },
   { key: 'cogsHomeroomPay', label: 'ホームルーム',                color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
   { key: 'cogsHyogikaiPay', label: '評議会',                      color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
   { key: 'cogsOenKaigiPay', label: '応援カイギ',                  color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
   { key: 'cogsBigEventPay', label: '大型イベント',                color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
   { key: 'cogsOtherPay',    label: 'その他原価',                  color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
-  { key: 'cogsTotalCf',     label: '原価合計',                    color: '#EF9F27', isParent: true, isOut: true },
-  // ── 販管費支払（PLと同じ6項目）──
-  { key: 'laborPay',        label: '人件費（社保込）',            color: '#E24B4A', isOut: true },
-  { key: 'outsourcePay',    label: '業務委託費',                  color: '#D85A30', isOut: true },
-  { key: 'advPay',          label: '広告販促費',                  color: '#EF9F27', isOut: true },
-  { key: 'rentPay',         label: '賃料',                        color: '#888780', isOut: true },
-  { key: 'gaichuPay',       label: '外注費',                      color: '#D85A30', isOut: true },
-  { key: 'otherPay',        label: 'その他費用',                  color: '#B4B2A9', isOut: true },
+  // ── 販管費（合計を最上段に）──
+  { key: 'opexTotalCf',     label: '販管費合計',                  color: '#E24B4A', isParent: true, isOut: true },
+  { key: 'laborPay',        label: '人件費（社保込）',            color: '#E24B4A', indent: true, isOut: true, parentKey: 'opexTotalCf' },
+  { key: 'outsourcePay',    label: '業務委託費',                  color: '#D85A30', indent: true, isOut: true, parentKey: 'opexTotalCf' },
+  { key: 'advPay',          label: '広告販促費',                  color: '#EF9F27', indent: true, isOut: true, parentKey: 'opexTotalCf' },
+  { key: 'rentPay',         label: '賃料',                        color: '#888780', indent: true, isOut: true, parentKey: 'opexTotalCf' },
+  { key: 'gaichuPay',       label: '外注費',                      color: '#D85A30', indent: true, isOut: true, parentKey: 'opexTotalCf' },
+  { key: 'otherPay',        label: 'その他費用',                  color: '#B4B2A9', indent: true, isOut: true, parentKey: 'opexTotalCf' },
   // ── CF特有：融資・調達 ──
   { key: 'funding',         label: '融資・調達（+）',             color: '#3B6D11' },
 ];
@@ -7821,23 +7822,17 @@ function drawSimCFChart(months, netArr, balArr) {
   const labels = getSimLabels();
   const baseCash = SIM_DATA[currentSimYear].cf.cfOpenFirst || 0;
 
-  const inArr  = months.map((_, i) => getSimVal('cf','cfIn',i) + getSimVal('cf','funding',i));
+  // 入出金は cfRowValue（再帰集計）を使う。カスタム子行や入金内訳も正しく合算される。
+  const inArr  = months.map((_, i) => cfRowValue('cfIn', i) + getSimVal('cf','funding',i));
   const outArr = months.map((_, i) => -(
-    getSimVal('cf','laborPay',i) + getSimVal('cf','outsourcePay',i) +
-    getSimVal('cf','advPay',i)   + getSimVal('cf','eventPay',i)    + getSimVal('cf','rentPay',i)   + getSimVal('cf','gaichuPay',i) + getSimVal('cf','otherPay',i)
+    cfRowValue('cogsTotalCf', i) + cfRowValue('opexTotalCf', i)
   ));
 
-  // SCENARIO_CONFIG 由来の % で Good/Bad
+  // SCENARIO_CONFIG 由来の % で Good/Bad（同じ集計関数を使う）
   const goodM = getScenarioMultipliers('good');
   const badM  = getScenarioMultipliers('bad');
-  const cfInTot = (i) => {
-    const det = getSimVal('cf','cfInFee',i)+getSimVal('cf','cfInTraining',i)+getSimVal('cf','cfInEvent',i);
-    return (det > 0 ? det : getSimVal('cf','cfIn',i)) + getSimVal('cf','funding',i);
-  };
-  const cfOutTot = (i) => getSimVal('cf','cogsHomeroomPay',i)+getSimVal('cf','cogsHyogikaiPay',i)
-    +getSimVal('cf','cogsOenKaigiPay',i)+getSimVal('cf','cogsBigEventPay',i)+getSimVal('cf','cogsOtherPay',i)
-    +getSimVal('cf','laborPay',i)+getSimVal('cf','outsourcePay',i)+getSimVal('cf','advPay',i)
-    +getSimVal('cf','rentPay',i)+getSimVal('cf','gaichuPay',i)+getSimVal('cf','otherPay',i);
+  const cfInTot  = (i) => cfRowValue('cfIn', i) + getSimVal('cf','funding',i);
+  const cfOutTot = (i) => cfRowValue('cogsTotalCf', i) + cfRowValue('opexTotalCf', i);
   let balG = baseCash, balBd = baseCash;
   const balGood = months.map((_, i) => {
     balG += Math.round(cfInTot(i)*goodM.rev) - Math.round(cfOutTot(i)*goodM.cost); return balG;
