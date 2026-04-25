@@ -947,7 +947,7 @@ input.cells-edit-input {
     <div class="card">
       <div class="ct">月次PL入力テーブル（千円）— テーブルかグラフのどちらからでも編集できます</div>
       <div class="scroll-x">
-        <table id="sim-pl-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%"></table>
+        <table id="sim-pl-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%;table-layout:fixed"></table>
       </div>
       <div id="sim-pl-add-area"></div>
     </div>
@@ -1080,7 +1080,7 @@ input.cells-edit-input {
     <div class="card">
       <div class="ct">月次CF入力テーブル（千円）</div>
       <div class="scroll-x">
-        <table id="sim-cf-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%"></table>
+        <table id="sim-cf-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%;table-layout:fixed"></table>
       </div>
       <div style="font-size:10px;color:var(--text3);margin-top:6px">※ 月初残高は前月末残高から自動計算。最初の月のみ手動入力してください。</div>
       <div id="sim-cf-add-area"></div>
@@ -6884,7 +6884,13 @@ function buildSimPLTable() {
   const labelStyle = 'background:var(--bg2);color:var(--text2);font-size:10px;padding:5px 8px;border:1px solid var(--border);white-space:nowrap;position:sticky;left:0;z-index:2;';
   const thLabelStyle = thStyle + 'position:sticky;left:0;z-index:3;text-align:left;';
 
-  let html = `<thead><tr><th style="${thLabelStyle}min-width:120px;">科目</th>`;
+  // 列幅を固定（4月などコンテンツが多い列だけ広がるのを防ぐ）
+  const colGroup = `<colgroup>`
+    + `<col style="width:120px">`
+    + labels.map(() => `<col style="width:70px">`).join('')
+    + `<col style="width:80px">`
+    + `</colgroup>`;
+  let html = colGroup + `<thead><tr><th style="${thLabelStyle}">科目</th>`;
   labels.forEach(l => { html += `<th style="${thStyle}">${l}</th>`; });
   html += `<th style="${thStyle}">合計</th></tr></thead><tbody>`;
 
@@ -7023,7 +7029,13 @@ function buildSimCFTable() {
   const labelStyle = 'background:var(--bg2);color:var(--text2);font-size:10px;padding:5px 8px;border:1px solid var(--border);white-space:nowrap;position:sticky;left:0;z-index:2;';
   const thLabelStyleCf = thStyle + 'position:sticky;left:0;z-index:3;text-align:left;';
 
-  let html = `<thead><tr><th style="${thLabelStyleCf}min-width:140px;">科目（千円）</th>`;
+  // 列幅を固定（4月などコンテンツが多い列だけ広がるのを防ぐ）
+  const colGroup = `<colgroup>`
+    + `<col style="width:140px">`
+    + labels.map(() => `<col style="width:70px">`).join('')
+    + `<col style="width:80px">`
+    + `</colgroup>`;
+  let html = colGroup + `<thead><tr><th style="${thLabelStyleCf}">科目（千円）</th>`;
   labels.forEach(l => { html += `<th style="${thStyle}">${l}</th>`; });
   html += `<th style="${thStyle}">合計</th></tr></thead><tbody>`;
 
