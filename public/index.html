@@ -10126,6 +10126,18 @@ window.mfFetch = async function(type) {
 };
 
 // ── プレビュー描画 ──
+// 期首残高 = 前年度BSの最終データ月の残高を返す（無ければ {}）
+function mfGetOpeningBS(fy) {
+  if (typeof DB === 'undefined') return {};
+  const prevYr = String(Number(fy) - 1);
+  const prev = DB[prevYr];
+  if (!prev || !prev.bs?.actual) return {};
+  const indices = Object.keys(prev.bs.actual).map(Number).filter(n => !isNaN(n));
+  if (!indices.length) return {};
+  const lastIdx = Math.max(...indices);
+  return prev.bs.actual[lastIdx] || {};
+}
+
 function mfRenderPreview() {
   const p = window._mfPending;
   if (!p) return;
@@ -10190,11 +10202,16 @@ function mfRenderPreview() {
     aiEl.style.display = 'none';
     samplesEl.style.display = 'none';
     const monthly = p.bs.monthly || {};
-    const bsNote = `<div style="background:rgba(239,159,39,0.10);border:1px solid rgba(239,159,39,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:10px;color:var(--tc-amber);line-height:1.5">
-      ⚠ <strong>期首残高が仕訳から取得できないため「期首=0 起点の累計残高」として表示しています。</strong><br>
-      各月の値 = 期首からその月末までの純増減（資産系: 借方−貸方、負債・純資産系: 貸方−借方）。<br>
-      実残高は「期首残高 + 表示値」となります。現預金がマイナスのように見える場合は、期中に減少した純額を示しています。
-    </div>`;
+    const opening = mfGetOpeningBS(p.fy);
+    const hasOpening = Object.values(opening).some(v => Number(v) !== 0);
+    const bsNote = hasOpening
+      ? `<div style="background:rgba(39,174,96,0.10);border:1px solid rgba(39,174,96,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:10px;color:var(--tc-green);line-height:1.5">
+          ✅ <strong>${Number(p.fy)-1}年度3月末の残高を期首として加算した実残高を表示しています。</strong>
+        </div>`
+      : `<div style="background:rgba(239,159,39,0.10);border:1px solid rgba(239,159,39,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:10px;color:var(--tc-amber);line-height:1.5">
+          ⚠ <strong>期首残高が仕訳から取得できないため「期首=0 起点の累計残高」として表示しています。</strong><br>
+          前年度（${Number(p.fy)-1}年度）BS実績を入力すると、自動で期首残高として加算されます。
+        </div>`;
     tblEl.innerHTML = bsNote + mfBuildTable(months, monthNames, [
       { label:'【資産の部】',         key:'__header__' },
       { label:'　現預金',              key:'cash',       isRev:true },
@@ -10208,7 +10225,7 @@ function mfRenderPreview() {
       { label:'【純資産の部】',       key:'__header__' },
       { label:'　資本金',              key:'capital',    isRev:true },
       { label:'　利益剰余金',          key:'retained',   isRev:true },
-    ], (key, i) => (monthly[key] && monthly[key][i]) || 0, initialVisibleIdxSet);
+    ], (key, i) => ((monthly[key] && monthly[key][i]) || 0) + (Number(opening[key]) || 0), initialVisibleIdxSet);
 
   } else if (p.type === 'journals') {
     // AI仕分けサマリー
@@ -10546,11 +10563,16 @@ window.mfOnCommitMonthChange = function() {
     }, visibleIdxSet);
   } else if (p.type === 'trial_bs') {
     const monthly = p.bs.monthly || {};
-    const bsNote = `<div style="background:rgba(239,159,39,0.10);border:1px solid rgba(239,159,39,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:10px;color:var(--tc-amber);line-height:1.5">
-      ⚠ <strong>期首残高が仕訳から取得できないため「期首=0 起点の累計残高」として表示しています。</strong><br>
-      各月の値 = 期首からその月末までの純増減（資産系: 借方−貸方、負債・純資産系: 貸方−借方）。<br>
-      実残高は「期首残高 + 表示値」となります。現預金がマイナスのように見える場合は、期中に減少した純額を示しています。
-    </div>`;
+    const opening = mfGetOpeningBS(p.fy);
+    const hasOpening = Object.values(opening).some(v => Number(v) !== 0);
+    const bsNote = hasOpening
+      ? `<div style="background:rgba(39,174,96,0.10);border:1px solid rgba(39,174,96,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:10px;color:var(--tc-green);line-height:1.5">
+          ✅ <strong>${Number(p.fy)-1}年度3月末の残高を期首として加算した実残高を表示しています。</strong>
+        </div>`
+      : `<div style="background:rgba(239,159,39,0.10);border:1px solid rgba(239,159,39,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:10px;color:var(--tc-amber);line-height:1.5">
+          ⚠ <strong>期首残高が仕訳から取得できないため「期首=0 起点の累計残高」として表示しています。</strong><br>
+          前年度（${Number(p.fy)-1}年度）BS実績を入力すると、自動で期首残高として加算されます。
+        </div>`;
     tblEl.innerHTML = bsNote + mfBuildTable(months, monthNames, [
       { label:'【資産の部】',         key:'__header__' },
       { label:'　現預金',              key:'cash',       isRev:true },
@@ -10564,7 +10586,7 @@ window.mfOnCommitMonthChange = function() {
       { label:'【純資産の部】',       key:'__header__' },
       { label:'　資本金',              key:'capital',    isRev:true },
       { label:'　利益剰余金',          key:'retained',   isRev:true },
-    ], (key, i) => (monthly[key] && monthly[key][i]) || 0, visibleIdxSet);
+    ], (key, i) => ((monthly[key] && monthly[key][i]) || 0) + (Number(opening[key]) || 0), visibleIdxSet);
   } else if (p.type === 'journals') {
     const monthly = p.cf.monthly || {};
     tblEl.innerHTML = mfBuildTable(months, monthNames, [
@@ -11078,11 +11100,13 @@ window.mfCommitConfirmed = async function() {
       if (!db.bs) db.bs = {};
       if (!db.bs.actual) db.bs.actual = {};
       const monthly = p.bs.monthly || {};
+      const opening = mfGetOpeningBS(p.fy);
       commitMonths.forEach(m => {
         const row = {};
         let hasVal = false;
         keys.forEach(k => {
-          const v = (monthly[k] && monthly[k][m.idx]) || 0;
+          const delta = (monthly[k] && monthly[k][m.idx]) || 0;
+          const v = delta + (Number(opening[k]) || 0);
           row[k] = v;
           if (v !== 0) hasVal = true;
         });
