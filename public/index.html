@@ -3353,12 +3353,15 @@ function renderPLView(d) {
   }
 
   destroyChart('pl-chart');
+  // 支出（原価・販管費）を 0 より下に表示するため負値で描画
+  const cogsAneg = cogsA.map(v => v !== null && v > 0 ? -v : (v === null ? null : 0));
+  const opexAneg = opexA.map(v => v !== null && v > 0 ? -v : (v === null ? null : 0));
   // 左右軸の 0 位置を揃える（営業損益のマイナスが見にくくなる問題を解消）
   const _plAllVals = [
     ...(revB||[]).map(v=>Number(v)||0),
     ...(revA||[]).map(v=>Number(v)||0),
-    ...(cogsA||[]).map(v=>Number(v)||0),
-    ...(opexA||[]).map(v=>Number(v)||0),
+    ...(cogsAneg||[]).map(v=>Number(v)||0),
+    ...(opexAneg||[]).map(v=>Number(v)||0),
     ...(gpA||[]).map(v=>Number(v)||0),
     ...(profA||[]).map(v=>Number(v)||0),
   ];
@@ -3374,15 +3377,27 @@ function renderPLView(d) {
       datasets: [
         { label: '売上予算', data: revB, backgroundColor: 'rgba(55,138,221,0.25)', borderRadius: 3, order: 3 },
         { label: '売上実績', data: revA, backgroundColor: '#378ADD', borderRadius: 3, order: 2 },
-        { label: '原価実績', data: cogsA, backgroundColor: 'rgba(239,159,39,0.55)', borderRadius: 3, order: 2 },
-        { label: '販管費実績', data: opexA, backgroundColor: 'rgba(226,75,74,0.55)', borderRadius: 3, order: 2 },
+        { label: '原価実績', data: cogsAneg, backgroundColor: 'rgba(239,159,39,0.55)', borderRadius: 3, order: 2 },
+        { label: '販管費実績', data: opexAneg, backgroundColor: 'rgba(226,75,74,0.55)', borderRadius: 3, order: 2 },
         { type: 'line', label: '粗利', data: gpA, borderColor: '#EF9F27', borderDash: [4,3], pointRadius: 2, tension: 0.3, yAxisID: 'y2', order: 0 },
         { type: 'line', label: '営業損益', data: profA, borderColor: '#3B6D11', pointRadius: 3, tension: 0.3, yAxisID: 'y2', order: 0 }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { font: { size: 10 }, color: tc, boxWidth: 10, padding: 8 } } },
+      plugins: {
+        legend: { labels: { font: { size: 10 }, color: tc, boxWidth: 10, padding: 8 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              if (v === null || v === undefined || v === 0) return null;
+              const a = Math.abs(Math.round(v));
+              return ` ${ctx.dataset.label}：${v<0?'▲':''}${a.toLocaleString()}千円`;
+            }
+          }
+        }
+      },
       scales: {
         x: { ticks: { color: tc, font: { size: 10 } }, grid: { color: gc } },
         y:  { position: 'left',  min:_plYMin, max:_plYMax, ticks: { color: tc, font: { size: 10 }, callback: v => fmtAxisJPY(v) }, grid: { color: gc } },
