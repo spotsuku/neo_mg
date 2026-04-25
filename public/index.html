@@ -886,6 +886,18 @@ input.cells-edit-input {
     </div>
   </div>
 
+  <!-- シナリオ % エディタ（PL/CF 両方に共通適用） -->
+  <div id="scenario-pct-editor" style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;background:var(--bg2);border-radius:var(--r);padding:8px 12px;margin-bottom:.875rem;font-size:11px">
+    <span style="font-weight:700;color:var(--text2)">シナリオ変動幅</span>
+    <span style="font-size:10px;color:var(--text3)">PL・CF 両方に同じ%が反映されます</span>
+    <span style="display:flex;align-items:center;gap:4px;color:var(--tc-green)">📈 Good 売上/入金<input type="number" id="sc-good-rev" value="20" onchange="onScenarioPctChange('good','revPct',this.value)" style="width:52px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;text-align:right">%</span>
+    <span style="display:flex;align-items:center;gap:4px;color:var(--tc-green)">費用/出金<input type="number" id="sc-good-cost" value="-10" onchange="onScenarioPctChange('good','costPct',this.value)" style="width:52px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;text-align:right">%</span>
+    <span style="color:var(--text3);margin:0 4px">／</span>
+    <span style="display:flex;align-items:center;gap:4px;color:#e67e22">📉 Bad 売上/入金<input type="number" id="sc-bad-rev" value="-20" onchange="onScenarioPctChange('bad','revPct',this.value)" style="width:52px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;text-align:right">%</span>
+    <span style="display:flex;align-items:center;gap:4px;color:#e67e22">費用/出金<input type="number" id="sc-bad-cost" value="10" onchange="onScenarioPctChange('bad','costPct',this.value)" style="width:52px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;text-align:right">%</span>
+    <span style="color:var(--text3);font-size:10px">※ 売上/入金は%プラスで増、費用/出金は%マイナスで減</span>
+  </div>
+
   <!-- ══ PL シミュレーション ══ -->
   <div id="sim-pl">
     <div class="metrics" style="grid-template-columns:repeat(5,minmax(0,1fr))">
@@ -909,16 +921,6 @@ input.cells-edit-input {
       </div>
       <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
         💡 棒グラフのバーをクリック → 値を編集 ｜ Goodケース（緑）・Badケース（橙）は入力値から自動算出
-      </div>
-      <!-- シナリオ % エディタ -->
-      <div id="scenario-pct-editor" style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;background:var(--bg2);border-radius:var(--r);padding:8px 12px;margin-bottom:8px;font-size:11px">
-        <span style="font-weight:700;color:var(--text2)">シナリオ変動幅</span>
-        <span style="display:flex;align-items:center;gap:4px;color:var(--tc-green)">📈 Good 売上<input type="number" id="sc-good-rev" value="20" onchange="onScenarioPctChange('good','revPct',this.value)" style="width:48px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;text-align:right">%</span>
-        <span style="display:flex;align-items:center;gap:4px;color:var(--tc-green)">費用<input type="number" id="sc-good-cost" value="-10" onchange="onScenarioPctChange('good','costPct',this.value)" style="width:48px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;text-align:right">%</span>
-        <span style="color:var(--text3);margin:0 4px">／</span>
-        <span style="display:flex;align-items:center;gap:4px;color:#e67e22">📉 Bad 売上<input type="number" id="sc-bad-rev" value="-20" onchange="onScenarioPctChange('bad','revPct',this.value)" style="width:48px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;text-align:right">%</span>
-        <span style="display:flex;align-items:center;gap:4px;color:#e67e22">費用<input type="number" id="sc-bad-cost" value="10" onchange="onScenarioPctChange('bad','costPct',this.value)" style="width:48px;padding:2px 4px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;text-align:right">%</span>
-        <span style="color:var(--text3);font-size:10px">※ 売上は%プラスで増、費用は%マイナスで減</span>
       </div>
       <div class="ch" style="height:280px;position:relative"><canvas id="sim-pl-chart"></canvas></div>
       <!-- バー編集ポップアップ -->
