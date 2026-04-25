@@ -3297,6 +3297,20 @@ function renderPLView(d) {
   }
 
   destroyChart('pl-chart');
+  // 左右軸の 0 位置を揃える（営業損益のマイナスが見にくくなる問題を解消）
+  const _plAllVals = [
+    ...(revB||[]).map(v=>Number(v)||0),
+    ...(revA||[]).map(v=>Number(v)||0),
+    ...(cogsA||[]).map(v=>Number(v)||0),
+    ...(opexA||[]).map(v=>Number(v)||0),
+    ...(gpA||[]).map(v=>Number(v)||0),
+    ...(profA||[]).map(v=>Number(v)||0),
+  ];
+  const _plMin = Math.min(0, ...(_plAllVals.length?_plAllVals:[0]));
+  const _plMax = Math.max(0, ...(_plAllVals.length?_plAllVals:[0]));
+  const _plPad = (_plMax - _plMin) * 0.1 || 1000;
+  const _plYMin = Math.floor(_plMin - _plPad);
+  const _plYMax = Math.ceil(_plMax + _plPad);
   charts['pl-chart'] = new Chart(document.getElementById('pl-chart'), {
     type: 'bar',
     data: {
@@ -3315,8 +3329,8 @@ function renderPLView(d) {
       plugins: { legend: { labels: { font: { size: 10 }, color: tc, boxWidth: 10, padding: 8 } } },
       scales: {
         x: { ticks: { color: tc, font: { size: 10 } }, grid: { color: gc } },
-        y: { position: 'left', ticks: { color: tc, font: { size: 10 }, callback: v => fmtAxisJPY(v) }, grid: { color: gc } },
-        y2: { position: 'right', ticks: { color: tc, font: { size: 10 }, callback: v => fmtAxisJPY(v) }, grid: { display: false } }
+        y:  { position: 'left',  min:_plYMin, max:_plYMax, ticks: { color: tc, font: { size: 10 }, callback: v => fmtAxisJPY(v) }, grid: { color: gc } },
+        y2: { position: 'right', min:_plYMin, max:_plYMax, ticks: { color: tc, font: { size: 10 }, callback: v => fmtAxisJPY(v) }, grid: { display: false } }
       }
     }
   });
@@ -3719,16 +3733,18 @@ function renderCFView(d) {
   const budgetDatasets = [
     { type:'bar', label:'売上入金（予算）', data: bIn.map(v=>Number(v)||0),
       backgroundColor:'rgba(55,138,221,0.25)', borderColor:'rgba(55,138,221,0.6)', borderWidth:1, borderRadius:3,
-      yAxisID:'y' },
+      stack:'budget', yAxisID:'y' },
     { type:'bar', label:'支出合計（予算）', data: bTotalOut.map(v => v ? -v : 0),
       backgroundColor:'rgba(226,75,74,0.22)', borderColor:'rgba(226,75,74,0.6)', borderWidth:1, borderRadius:3,
-      yAxisID:'y' },
+      stack:'budget', yAxisID:'y' },
   ];
   const actualDatasets = [
     { type:'bar', label:'売上入金（実績）', data: aIn.map(v=>Number(v)||0),
-      backgroundColor:'rgba(55,138,221,0.85)', borderRadius:3, yAxisID:'y' },
+      backgroundColor:'rgba(55,138,221,0.85)', borderRadius:3,
+      stack:'actual', yAxisID:'y' },
     { type:'bar', label:'支出合計（実績）', data: aTotalOutForChart.map(v => v ? -v : 0),
-      backgroundColor:'rgba(226,75,74,0.8)', borderRadius:3, yAxisID:'y' },
+      backgroundColor:'rgba(226,75,74,0.8)', borderRadius:3,
+      stack:'actual', yAxisID:'y' },
   ];
   // 残高ラインはこの時点で利用可能な aCloseCalc / bCloseCalc を使用
   // （bCloseDisplay/aCloseDisplay はテーブル用に後段で再計算され、ほぼ同等の値）
