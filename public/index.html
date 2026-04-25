@@ -9699,17 +9699,19 @@ window.addEventListener('load', async () => {
 
   // 前回開いていた年度・タブを復元
   try {
+    const yearOrder = ['2024','2025','2026'];
     const savedYear = localStorage.getItem('neo_active_year');
-    if (savedYear && savedYear !== currentYear) {
-      const yBtn = Array.from(document.querySelectorAll('.year-toggle .yt'))
-        .find(b => b.getAttribute('onclick')?.includes(`'${savedYear}'`));
-      if (yBtn) setYear(savedYear, yBtn);
+    const yIdx = yearOrder.indexOf(savedYear);
+    if (yIdx >= 0 && savedYear !== currentYear) {
+      const yBtns = document.querySelectorAll('.year-toggle .yt');
+      if (yBtns[yIdx]) setYear(savedYear, yBtns[yIdx]);
     }
+    const tabOrder = ['weekly','pl-cf','import','sim','report','pdf'];
     const savedTab = localStorage.getItem('neo_active_tab');
-    if (savedTab && savedTab !== 'weekly') {
-      const tBtn = Array.from(document.querySelectorAll('.tabs .tab'))
-        .find(b => b.getAttribute('onclick')?.includes(`'${savedTab}'`));
-      if (tBtn) sw(savedTab, tBtn);
+    const tIdx = tabOrder.indexOf(savedTab);
+    if (tIdx > 0) { // 0='weekly' はデフォルトなのでスキップ
+      const tBtns = document.querySelectorAll('.tabs .tab');
+      if (tBtns[tIdx]) sw(savedTab, tBtns[tIdx]);
     }
   } catch(e) { console.warn('restore tab/year:', e); }
 });
