@@ -1418,6 +1418,7 @@ function sw(id, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('sec-' + id).classList.add('on');
   if (el) el.classList.add('active');
+  try { localStorage.setItem('neo_active_tab', id); } catch(e) {}
   if (id === 'pl-cf') renderPLCF();
   if (id === 'sim') {
     // タブ切替時に現在の年度に同期
@@ -1432,6 +1433,7 @@ function sw(id, el) {
 
 function setYear(y, el) {
   currentYear = y;
+  try { localStorage.setItem('neo_active_year', y); } catch(e) {}
   document.querySelectorAll('.yt').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
   const navLabels = {
@@ -2515,13 +2517,15 @@ async function _loadCustomRowsByYear(year) {
 
 async function applyCellsOverlayToSim() {
   await _sbReady;
-  if (!sbClient) return;
+  if (!sbClient) return false;
+  let loaded = false;
   for (const yr of ['2024','2025','2026']) {
     const sheets = await _loadCellsByYear(yr);
     if (!sheets) continue;
     if (!SIM_DATA[yr]) SIM_DATA[yr] = { pl: {}, cf: { cfOpenFirst: 0 } };
     if (sheets.sim_pl) Object.assign(SIM_DATA[yr].pl, sheets.sim_pl);
     if (sheets.sim_cf) Object.assign(SIM_DATA[yr].cf, sheets.sim_cf);
+    loaded = true;
 
     const customs = await _loadCustomRowsByYear(yr);
     if (customs && customs.length) {
@@ -2534,6 +2538,7 @@ async function applyCellsOverlayToSim() {
     }
     console.log(`[overlay sim] ${yr}: sim_pl=${Object.keys(sheets.sim_pl||{}).length}keys, sim_cf=${Object.keys(sheets.sim_cf||{}).length}keys`);
   }
+  return loaded;
 }
 
 async function applyCellsOverlayToDB() {
@@ -7689,7 +7694,7 @@ function recalcSimPL() {
       el.textContent = sv ? sv.toLocaleString() : '─';
     }
   });
-  const costSum = costArr.reduce((a, b) => a + b, 0);
+  const costSum = costArr.reduce((acc, c, i) => acc + (c - cogsArr[i]), 0);
   const profSum = profitArr.reduce((a, b) => a + b, 0);
   const costSumEl = document.getElementById('spl-sum-cost');
   const profSumEl = document.getElementById('spl-sum-profit');
@@ -9668,9 +9673,20 @@ window.addEventListener('load', async () => {
     }
   }
   try { await loadSimData(); } catch(e) { console.warn('loadSimData:', e); }
-  try { await applyCellsOverlayToSim(); } catch(e) { console.warn('cells overlay (sim):', e); }
-  // ロード+オーバーレイ完了後に JSONB を最新状態へ同期（cells の方が新しい場合に備えて）
-  scheduleJsonbBackup();
+  let _simOverlayOK = false;
+  try { _simOverlayOK = await applyCellsOverlayToSim(); } catch(e) { console.warn('cells overlay (sim):', e); }
+  // overlay 失敗時は JSONB バックアップを抑止（ハードコード初期値で sim_data を上書きしない）
+  // 失敗時は 3 秒後にもう一度 overlay を試み、成功したらテーブルを再描画
+  if (_simOverlayOK) {
+    scheduleJsonbBackup();
+  } else {
+    setTimeout(async () => {
+      try {
+        const ok = await applyCellsOverlayToSim();
+        if (ok) { buildSimPLTable(); buildSimCFTable(); scheduleJsonbBackup(); }
+      } catch(e) { console.warn('cells overlay (sim) retry:', e); }
+    }, 3000);
+  }
   // 初期化完了後に保存状態を「同期済み」に設定
   _lastSaveTime = new Date();
   setSaveState('idle');
@@ -9680,6 +9696,22 @@ window.addEventListener('load', async () => {
   buildSimPLTable();
   buildSimCFTable();
   renderBudgetHistory();
+
+  // 前回開いていた年度・タブを復元
+  try {
+    const savedYear = localStorage.getItem('neo_active_year');
+    if (savedYear && savedYear !== currentYear) {
+      const yBtn = Array.from(document.querySelectorAll('.year-toggle .yt'))
+        .find(b => b.getAttribute('onclick')?.includes(`'${savedYear}'`));
+      if (yBtn) setYear(savedYear, yBtn);
+    }
+    const savedTab = localStorage.getItem('neo_active_tab');
+    if (savedTab && savedTab !== 'weekly') {
+      const tBtn = Array.from(document.querySelectorAll('.tabs .tab'))
+        .find(b => b.getAttribute('onclick')?.includes(`'${savedTab}'`));
+      if (tBtn) sw(savedTab, tBtn);
+    }
+  } catch(e) { console.warn('restore tab/year:', e); }
 });
 </script>
     <script>
