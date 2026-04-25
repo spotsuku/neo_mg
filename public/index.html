@@ -3858,41 +3858,37 @@ function renderCFView(d) {
   }
 
   // ── 月初残高・月末残高（予算の自動ロール計算）──
-  // 月初予算: 1月目は 入力値 > 前年度末残高実績 > 0 / 2月目以降は前月の月末
-  // 月末予算: 月初 + 月次純CF
+  // 月初予算: 1月目のみ ストア値 > 前年度末残高実績 / 2月目以降は必ず前月末（強制ロール）
+  // 月末予算: 月初 + 月次純CF（必ず計算で導出）
+  // → これにより「月初 + 月次純CF = 月末」「前月末 = 当月初」が常に成立する
   const bOpenDisplay = new Array(N).fill(0);
   const bCloseDisplay = new Array(N).fill(0);
   for (let i = 0; i < N; i++) {
-    const stored = getN(bOpen, i);
-    if (stored > 0) {
-      bOpenDisplay[i] = stored;
-    } else if (i === 0) {
-      bOpenDisplay[i] = prevYrClose;  // 期首は前年度の期末残高実績を引用
+    if (i === 0) {
+      const stored = getN(bOpen, 0);
+      bOpenDisplay[0] = stored > 0 ? stored : prevYrClose;
     } else {
-      bOpenDisplay[i] = bCloseDisplay[i-1];
+      bOpenDisplay[i] = bCloseDisplay[i-1]; // 強制的に前月末から引き継ぎ
     }
     bCloseDisplay[i] = Math.round(bOpenDisplay[i] + bNetCFd[i]);
   }
 
-  // 月初実績: 1月目は 実績入力 > 予算月初（前年度末実績にフォールバック済み）
-  //          2月目以降は前月の月末実績
-  // 月末実績: 入力があればそれ / 無ければ 月初 + 実績純CF（実績CFが無ければ null）
+  // 月初実績: 1月目のみ実績入力 > 予算月初 / 2月目以降は前月末を強制引き継ぎ
+  // 月末実績: 実績純CFが計算可能なら 月初 + 純CF（強制）。
+  //          純CFが null（actual 未入力月）でストア close があればそれを使用。
   const aOpenDisplay = new Array(N).fill(null);
   const aCloseDisplay = new Array(N).fill(null);
   for (let i = 0; i < N; i++) {
-    const storedOpen = getN(aOpen, i);
-    if (storedOpen > 0) {
-      aOpenDisplay[i] = storedOpen;
-    } else if (i === 0) {
-      // 期首: 実績 > 予算月初 > 前年度末残高実績
-      aOpenDisplay[i] = bOpenDisplay[0] || prevYrClose || null;
+    if (i === 0) {
+      const storedOpen = getN(aOpen, 0);
+      aOpenDisplay[0] = storedOpen > 0 ? storedOpen : (bOpenDisplay[0] || prevYrClose || null);
     } else {
-      aOpenDisplay[i] = aCloseDisplay[i-1];  // 前月末を引き継ぎ
+      aOpenDisplay[i] = aCloseDisplay[i-1]; // 強制的に前月末から引き継ぎ
     }
-    if (hasActualClose(i)) {
-      aCloseDisplay[i] = getN(aClose, i);
-    } else if (aNetCFd[i] !== null && aOpenDisplay[i] !== null) {
+    if (aNetCFd[i] !== null && aOpenDisplay[i] !== null) {
       aCloseDisplay[i] = Math.round(aOpenDisplay[i] + aNetCFd[i]);
+    } else if (hasActualClose(i)) {
+      aCloseDisplay[i] = getN(aClose, i); // 実績純CFが計算不可ならストア close をフォールバック
     } else {
       aCloseDisplay[i] = null;
     }
