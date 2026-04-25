@@ -568,13 +568,13 @@ input.cells-edit-input {
 
   <!-- PL 予実 -->
   <div id="view-pl">
-    <!-- PL サマリーカード -->
+    <!-- PL サマリーカード（年度累計: 4月〜直近入力月の合計） -->
     <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:1rem">
-      <div class="mc"><div class="mc-l">累積売上（実績）</div><div class="mc-v" id="pl-sum-rev-a">—</div><div class="mc-s" id="pl-sum-rev-s"></div></div>
-      <div class="mc"><div class="mc-l">累積売上（予算）</div><div class="mc-v" id="pl-sum-rev-b">—</div></div>
-      <div class="mc"><div class="mc-l">累積販管費（実績）</div><div class="mc-v" id="pl-sum-opex-a">—</div><div class="mc-s" id="pl-sum-opex-s"></div></div>
-      <div class="mc"><div class="mc-l">営業利益（累積実績）</div><div class="mc-v" id="pl-sum-op">—</div></div>
-      <div class="mc"><div class="mc-l">予実達成率</div><div class="mc-v" id="pl-sum-rate">—</div><div class="mc-s" id="pl-sum-rate-s"></div></div>
+      <div class="mc" title="年度累計（4月〜）の売上実績"><div class="mc-l">年度累計売上（実績）</div><div class="mc-v" id="pl-sum-rev-a">—</div><div class="mc-s" id="pl-sum-rev-s"></div></div>
+      <div class="mc" title="年度累計の売上予算"><div class="mc-l">年度累計売上（予算）</div><div class="mc-v" id="pl-sum-rev-b">—</div></div>
+      <div class="mc" title="年度累計の販管費実績"><div class="mc-l">年度累計販管費（実績）</div><div class="mc-v" id="pl-sum-opex-a">—</div><div class="mc-s" id="pl-sum-opex-s"></div></div>
+      <div class="mc" title="年度累計の営業利益（売上 − 原価 − 販管費）"><div class="mc-l">年度累計営業利益（実績）</div><div class="mc-v" id="pl-sum-op">—</div></div>
+      <div class="mc" title="売上実績 ÷ 売上予算（年度累計）"><div class="mc-l">売上予実達成率</div><div class="mc-v" id="pl-sum-rate">—</div><div class="mc-s" id="pl-sum-rate-s"></div></div>
     </div>
     <div class="card">
       <div class="ct">月次PL予実 — <span id="pl-year-label">2025年度</span></div>
@@ -588,13 +588,13 @@ input.cells-edit-input {
 
   <!-- CF 予実 -->
   <div id="view-cf" style="display:none">
-    <!-- CF サマリーカード -->
+    <!-- CF サマリーカード（年度累計: 4月〜直近入力月の合計） -->
     <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:1rem">
-      <div class="mc"><div class="mc-l">累積入金（実績）</div><div class="mc-v" id="cf-sum-in-a">—</div><div class="mc-s" id="cf-sum-in-s"></div></div>
-      <div class="mc"><div class="mc-l">累積出金（実績）</div><div class="mc-v" id="cf-sum-out-a">—</div><div class="mc-s" id="cf-sum-out-s"></div></div>
-      <div class="mc"><div class="mc-l">月末現金残高</div><div class="mc-v" id="cf-sum-close">—</div></div>
-      <div class="mc"><div class="mc-l">累積純CF（実績）</div><div class="mc-v" id="cf-sum-net">—</div></div>
-      <div class="mc"><div class="mc-l">入金予実達成率</div><div class="mc-v" id="cf-sum-rate">—</div><div class="mc-s" id="cf-sum-rate-s"></div></div>
+      <div class="mc" title="年度累計（4月〜）の入金実績"><div class="mc-l">年度累計入金（実績）</div><div class="mc-v" id="cf-sum-in-a">—</div><div class="mc-s" id="cf-sum-in-s"></div></div>
+      <div class="mc" title="年度累計（4月〜）の出金実績"><div class="mc-l">年度累計出金（実績）</div><div class="mc-v" id="cf-sum-out-a">—</div><div class="mc-s" id="cf-sum-out-s"></div></div>
+      <div class="mc" title="マネフォ同期の最新銀行残高"><div class="mc-l">月末現金残高（最新）</div><div class="mc-v" id="cf-sum-close">—</div></div>
+      <div class="mc" title="年度累計の入金 − 出金"><div class="mc-l">年度累計純CF（実績）</div><div class="mc-v" id="cf-sum-net">—</div></div>
+      <div class="mc" title="入金実績 ÷ 入金予算（年度累計）"><div class="mc-l">入金予実達成率</div><div class="mc-v" id="cf-sum-rate">—</div><div class="mc-s" id="cf-sum-rate-s"></div></div>
     </div>
     <div class="card">
       <div class="ct">月次CF予実 — <span id="cf-year-label">2025年度</span></div>
@@ -1777,6 +1777,14 @@ const _cfSectionOpen = {
 function toggleCFSection(id) {
   _cfSectionOpen[id] = !_cfSectionOpen[id];
   renderCFView(DB[currentYear]);
+}
+
+// PL詳細表の販管費 固定/変動 トグル
+function togglePLOpex(id) {
+  if (!window._plOpexOpen) window._plOpexOpen = {};
+  window._plOpexOpen[id] = window._plOpexOpen[id] === false ? true : false;
+  try { localStorage.setItem('neo_pl_opex_open', JSON.stringify(window._plOpexOpen)); } catch(e){}
+  renderPLView(DB[currentYear]);
 }
 
 // ───────────────────────────────────────────
@@ -3335,6 +3343,30 @@ function renderPLView(d) {
     }
   });
 
+  // 販管費 固定/変動 折りたたみ状態（永続化）
+  if (!window._plOpexOpen) {
+    try { window._plOpexOpen = JSON.parse(localStorage.getItem('neo_pl_opex_open') || '{}'); }
+    catch(e) { window._plOpexOpen = {}; }
+  }
+  const plOpexOpen = (id) => window._plOpexOpen[id] !== false; // デフォルト開
+  const fixedOpen = plOpexOpen('pl-fixed');
+  const varOpen   = plOpexOpen('pl-var');
+
+  // 販管費を 固定費 / 変動費 に分類
+  // 固定費: labor (人件費) / outsource (業務委託費) / other (その他費用：賃料等)
+  // 変動費: adv  (広告販促費) / gaichu (外注費)
+  const _N = d.months.length;
+  const sumArr12 = (arr) => Array.from({length:_N}, (_, i) =>
+    (Number((arr||[])[i]) || 0));
+  const fixedKeys = ['labor', 'outsource', 'other'];
+  const varKeys   = ['adv', 'gaichu'];
+  const opexFixedB = Array.from({length:_N},(_,i)=>fixedKeys.reduce((t,k)=>t+(Number((d.pl.budget[k]||[])[i])||0),0));
+  const opexFixedA = Array.from({length:_N},(_,i)=>fixedKeys.reduce((t,k)=>t+(Number((d.pl.actual[k]||[])[i])||0),0));
+  const opexVarB   = Array.from({length:_N},(_,i)=>varKeys.reduce((t,k)=>t+(Number((d.pl.budget[k]||[])[i])||0),0));
+  const opexVarA   = Array.from({length:_N},(_,i)=>varKeys.reduce((t,k)=>t+(Number((d.pl.actual[k]||[])[i])||0),0));
+  const opexAllB   = Array.from({length:_N},(_,i)=>opexFixedB[i]+opexVarB[i]);
+  const opexAllA   = Array.from({length:_N},(_,i)=>opexFixedA[i]+opexVarA[i]);
+
   // Table
   const rows = [
     { key: 'rev',          label: '売上合計',           b: d.pl.budget.rev,                    a: d.pl.actual.rev },
@@ -3347,12 +3379,23 @@ function renderPLView(d) {
     { key: 'cogsOther',    label: '└ その他原価',       b: getCogs('budget','cogsOther'),      a: getCogs('actual','cogsOther'),      indent: true, isOut: true },
     // ── 粗利 ──
     { key: '_grossProfit', label: '粗利',               b: gpB,   a: gpA,   isTot: true, isRev: true, noEdit: true },
-    // ── 販管費セクション ──
-    { key: 'labor',        label: '├ 人件費',           b: d.pl.budget.labor,                  a: d.pl.actual.labor,                  indent: true, isOut: true },
-    { key: 'outsource',    label: '├ 業務委託費',       b: d.pl.budget.outsource,              a: d.pl.actual.outsource,              indent: true, isOut: true },
-    { key: 'adv',          label: '├ 広告販促費',       b: d.pl.budget.adv,                    a: d.pl.actual.adv,                    indent: true, isOut: true },
-    { key: 'gaichu',       label: '├ 外注費',           b: d.pl.budget.gaichu||[],             a: d.pl.actual.gaichu||[],             indent: true, isOut: true },
-    { key: 'other',        label: '└ その他費用',       b: d.pl.budget.other,                  a: d.pl.actual.other,                  indent: true, isOut: true },
+    // ── 販管費（合計を最上段に） ──
+    { key: '_opexTotal',   label: '販管費合計',         b: opexAllB,   a: opexAllA, isTot: true, isOut: true, noEdit: true },
+    // 固定費小計（トグル）
+    { key: '_opexFixed',   label: `${fixedOpen?'▼':'▶'} 固定費合計`, b: opexFixedB, a: opexFixedA, isTot: true, isOut: true, noEdit: true,
+      toggleId: 'pl-fixed' },
+    ...(fixedOpen ? [
+      { key: 'labor',     label: '　├ 人件費',     b: d.pl.budget.labor,     a: d.pl.actual.labor,     indent: true, isOut: true, group: 'pl-fixed' },
+      { key: 'outsource', label: '　├ 業務委託費', b: d.pl.budget.outsource, a: d.pl.actual.outsource, indent: true, isOut: true, group: 'pl-fixed' },
+      { key: 'other',     label: '　└ その他費用', b: d.pl.budget.other,     a: d.pl.actual.other,     indent: true, isOut: true, group: 'pl-fixed' },
+    ] : []),
+    // 変動費小計（トグル）
+    { key: '_opexVar',     label: `${varOpen?'▼':'▶'} 変動費合計`, b: opexVarB, a: opexVarA, isTot: true, isOut: true, noEdit: true,
+      toggleId: 'pl-var' },
+    ...(varOpen ? [
+      { key: 'adv',       label: '　├ 広告販促費', b: d.pl.budget.adv,         a: d.pl.actual.adv,         indent: true, isOut: true, group: 'pl-var' },
+      { key: 'gaichu',    label: '　└ 外注費',     b: d.pl.budget.gaichu||[],  a: d.pl.actual.gaichu||[],  indent: true, isOut: true, group: 'pl-var' },
+    ] : []),
   ];
 
   let html = `<table class="dt" style="min-width:${80 + d.months.length * 80}px;border-collapse:separate;border-spacing:0"><thead><tr>
@@ -3367,9 +3410,12 @@ function renderPLView(d) {
      const _sb  = `position:sticky;left:0;z-index:1;background:var(--bg2)`;
      const _sb2 = `position:sticky;left:130px;z-index:1;background:var(--bg2)`;
      const _ind = row.indent ? `padding-left:14px;font-size:10px;color:var(--text3);${_sb}` : _sb;
+    // 折りたたみトグル付き行はクリック可能
+    const _onClick = row.toggleId ? `onclick="togglePLOpex('${row.toggleId}')"` : '';
+    const _cursor  = row.toggleId ? 'cursor:pointer;' : '';
     // budget row
     const bSum = (row.b || []).reduce((s, v) => s + (Number(v) || 0), 0);
-     html += `<tr><td class="l" style="${_ind}">${row.label}</td><td class="l" style="font-size:9px;color:var(--text3);${_sb2}">予算</td>`;
+     html += `<tr ${row.toggleId?'class="tot"':''}><td class="l" ${_onClick} style="${_cursor}${_ind}">${row.label}</td><td class="l" style="font-size:9px;color:var(--text3);${_sb2}">予算</td>`;
     // sparse array対策：forEachは空スロットを飛ばすので密配列に再構築
     const _N = d.months.length;
     const _toDense = (arr) => Array.from({length:_N}, (_, i) =>
@@ -3395,38 +3441,7 @@ function renderPLView(d) {
     html += `<td class="${diffSum > 0 ? 'diff-pos' : diffSum < 0 ? 'diff-neg' : 'diff-zero'}">${diffSum > 0 ? '+' : ''}${Math.round(diffSum).toLocaleString()}</td></tr>`;
   });
 
-  // ── 販管費合計行 ──
-  const opexStyle = 'background:var(--bg3);';
-  html += `<tr class="tot" style="${opexStyle}"><td class="l" style="font-weight:700;position:sticky;left:0;z-index:1;${opexStyle}">販管費合計</td><td class="l" style="font-size:9px;color:var(--text3);position:sticky;left:130px;z-index:1;${opexStyle}">予算</td>`;
-  let bOpexSum = 0;
-  d.months.forEach((_, i) => {
-    const bOpex = (Number(d.pl.budget.labor[i]) || 0) + (Number(d.pl.budget.outsource[i]) || 0) + (Number(d.pl.budget.adv[i]) || 0) + (Number((d.pl.budget.gaichu||[])[i]) || 0) + (Number(d.pl.budget.other[i]) || 0);
-    bOpexSum += bOpex;
-    html += `<td class="budget" style="${opexStyle}color:var(--tc-red)">${bOpex ? bOpex.toLocaleString() : '─'}</td>`;
-  });
-  html += `<td class="budget" style="${opexStyle}color:var(--tc-red);font-weight:700">${bOpexSum ? bOpexSum.toLocaleString() : '─'}</td></tr>`;
-
-  html += `<tr class="tot" style="${opexStyle}"><td class="l" style="position:sticky;left:0;z-index:1;${opexStyle}"></td><td class="l" style="font-size:9px;font-weight:700;color:var(--text);position:sticky;left:130px;z-index:1;${opexStyle}">実績</td>`;
-  let aOpexSum = 0;
-  d.months.forEach((_, i) => {
-    const ae = (Number(d.pl.actual.labor[i]) || 0) + (Number(d.pl.actual.outsource[i]) || 0) + (Number(d.pl.actual.adv[i]) || 0) + (Number((d.pl.actual.gaichu||[])[i]) || 0) + (Number(d.pl.actual.other[i]) || 0);
-    if (!ae) { html += `<td style="${opexStyle}">─</td>`; return; }
-    aOpexSum += ae;
-    html += `<td class="actual" style="${opexStyle}color:var(--tc-red)">${ae.toLocaleString()}</td>`;
-  });
-  html += `<td class="actual" style="${opexStyle}color:var(--tc-red);font-weight:700">${aOpexSum ? aOpexSum.toLocaleString() : '─'}</td></tr>`;
-
-  // 差異行（販管費）
-  html += `<tr style="${opexStyle}"><td class="l"></td><td class="l" style="font-size:9px;color:var(--text3)">差異</td>`;
-  d.months.forEach((_, i) => {
-    const be = (Number(d.pl.budget.labor[i])||0)+(Number(d.pl.budget.outsource[i])||0)+(Number(d.pl.budget.adv[i])||0)+(Number((d.pl.budget.gaichu||[])[i])||0)+(Number(d.pl.budget.other[i])||0);
-    const ae = (Number(d.pl.actual.labor[i])||0)+(Number(d.pl.actual.outsource[i])||0)+(Number(d.pl.actual.adv[i])||0)+(Number((d.pl.actual.gaichu||[])[i])||0)+(Number(d.pl.actual.other[i])||0);
-    if (!be && !ae) { html += `<td class="diff-zero" style="${opexStyle}">─</td>`; return; }
-    const diff = be - ae; // 費用は予算より少ない方が良い（+が良）
-    html += `<td class="${diff > 0 ? 'diff-pos' : diff < 0 ? 'diff-neg' : 'diff-zero'}" style="${opexStyle}">${diff > 0 ? '+' : ''}${diff !== 0 ? Math.round(diff).toLocaleString() : '─'}</td>`;
-  });
-  const opexDiff = bOpexSum - aOpexSum;
-  html += `<td class="${opexDiff > 0 ? 'diff-pos' : opexDiff < 0 ? 'diff-neg' : 'diff-zero'}" style="${opexStyle}font-weight:700">${opexDiff > 0 ? '+' : ''}${opexDiff !== 0 ? Math.round(opexDiff).toLocaleString() : '─'}</td></tr>`;
+  // 販管費合計／固定費／変動費の各行は rows[] 配列内で表示済み（最上段配置）
 
   // ── 営業損益行 ──
   // 営業損益行（粗利 - 販管費）
