@@ -7689,7 +7689,7 @@ function recalcSimPL() {
       el.textContent = sv ? sv.toLocaleString() : '─';
     }
   });
-  const costSum = costArr.reduce((a, b) => a + b, 0);
+  const costSum = costArr.reduce((acc, c, i) => acc + (c - cogsArr[i]), 0);
   const profSum = profitArr.reduce((a, b) => a + b, 0);
   const costSumEl = document.getElementById('spl-sum-cost');
   const profSumEl = document.getElementById('spl-sum-profit');
