@@ -878,6 +878,7 @@ input.cells-edit-input {
       </div>
       <button class="btn" onclick="resetSimData()" style="font-size:11px">↩ リセット</button>
       <button class="btn btn-p" onclick="saveSimData()">💾 保存</button>
+      <button class="btn btn-g" onclick="saveSimVersion()" style="font-weight:700" title="このシミュレーションに名前を付けて保存します">🏷️ 名前付き保存</button>
       <button class="btn btn-g" onclick="openBudgetModal()" style="font-weight:700">📌 予算に反映</button>
       <button class="btn" onclick="openVersionPanel()" style="font-size:10px">🕐 バージョン履歴</button>
       <span style="font-size:10px;color:var(--text3)">※ 予算反映時は自動バックアップされます</span>
@@ -1080,6 +1081,7 @@ input.cells-edit-input {
         <table id="sim-cf-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%"></table>
       </div>
       <div style="font-size:10px;color:var(--text3);margin-top:6px">※ 月初残高は前月末残高から自動計算。最初の月のみ手動入力してください。</div>
+      <div id="sim-cf-add-area"></div>
     </div>
     <div class="card">
       <div class="ct">AI分析</div>
@@ -6359,6 +6361,57 @@ function removeSimRow(key) {
   buildSimPLTable();
 }
 
+// CF カスタム行を追加（type: 'rev' | 'cogs' | 'opex'、parentKey は親行のキー）
+function addSimCfRow(type, parentKey) {
+  const parentLabel = parentKey ? CF_ROWS.concat(getCfCustomRows(currentSimYear)).find(r => r.key === parentKey)?.label : null;
+  const msg = parentLabel
+    ? `「${parentLabel}」のCF明細項目名を入力してください`
+    : 'CF明細項目名を入力してください';
+  const label = prompt(msg);
+  if (!label || !label.trim()) return;
+  const key = 'customCf_' + Date.now();
+  if (!SIM_DATA[currentSimYear].cfCustomRows) SIM_DATA[currentSimYear].cfCustomRows = [];
+  SIM_DATA[currentSimYear].cfCustomRows.push({
+    key, label: label.trim(), type, parentKey: parentKey || null
+  });
+  buildSimCFTable();
+}
+function removeSimCfRow(key) {
+  if (!SIM_DATA[currentSimYear].cfCustomRows) return;
+  SIM_DATA[currentSimYear].cfCustomRows = SIM_DATA[currentSimYear].cfCustomRows.filter(r => r.key !== key);
+  buildSimCFTable();
+}
+function getCfCustomRows(year) {
+  return (SIM_DATA[year] && SIM_DATA[year].cfCustomRows) || [];
+}
+// 任意のCF行キーの実効値（子があれば子の合計、無ければ直接値）
+function cfRowValue(key, idx) {
+  const all = getCFRows();
+  const children = all.filter(r => r.parentKey === key);
+  if (children.length) return children.reduce((s, c) => s + cfRowValue(c.key, idx), 0);
+  return getSimVal('cf', key, idx);
+}
+
+// CF行（固定+カスタム）を親直後に挿入して返す
+function getCFRows() {
+  const customRows = getCfCustomRows(currentSimYear);
+  const base = [...CF_ROWS];
+  customRows.slice().reverse().forEach(r => {
+    const isRev = r.type === 'rev';
+    const row = {
+      key: r.key, label: r.label, color: isRev ? '#378ADD' : '#E24B4A',
+      isCustom: true, isRev, isOut: !isRev,
+      indent: !!r.parentKey, parentKey: r.parentKey || null
+    };
+    if (r.parentKey) {
+      const idx = base.findIndex(b => b.key === r.parentKey);
+      if (idx >= 0) { base.splice(idx + 1, 0, row); return; }
+    }
+    base.push(row);
+  });
+  return base;
+}
+
 // 後方互換のために PL_ROWS も alias
 let PL_ROWS = PL_ROWS_BASE;
 
@@ -6409,16 +6462,20 @@ let SIM_DATA = {
     },
     cf: {
       cfOpenFirst:      5371,
-      cfIn:             [900,900,900,1000,1000,1000,1100,1100,1100,1200,1200,1200],
+      // 売上入金（PLの売上と同期した初期値）
+      cfInFee:          [900,900,900,1000,1000,1000,1100,1100,1100,1200,1200,1200],
+      cfInTraining:     [100,100,200,200,300,300,400,400,500,500,500,500],
+      cfInEvent:        [0,50,100,0,50,100,0,50,300,50,50,100],
+      // 原価支払（PLと同期）
       cogsHomeroomPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
       cogsHyogikaiPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
       cogsOenKaigiPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
       cogsBigEventPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
       cogsOtherPay:     [0,0,0,0,0,0,0,0,0,0,0,0],
+      // 販管費支払（PLと同期）
       laborPay:         [310,310,310,310,310,310,360,360,360,360,360,360],
       outsourcePay:     [380,380,380,380,380,380,380,380,380,380,380,380],
       advPay:           [80,80,150,80,80,250,80,80,350,80,80,150],
-      eventPay:         [50,50,100,50,50,150,50,50,200,50,50,100],
       rentPay:          [90,90,90,90,90,90,90,90,90,90,90,90],
       gaichuPay:        [80,80,80,80,80,80,80,80,80,80,80,80],
       otherPay:         [50,50,50,50,50,50,50,50,50,50,50,50]
@@ -6443,7 +6500,9 @@ let SIM_DATA = {
     },
     cf: {
       cfOpenFirst:      7620,
-      cfIn:             [1000,1000,1000,1100,1100,1100,1200,1200,1200,1300,1300,1300],
+      cfInFee:          [1000,1000,1000,1100,1100,1100,1200,1200,1200,1300,1300,1300],
+      cfInTraining:     [200,200,300,300,400,400,500,500,500,500,500,500],
+      cfInEvent:        [0,50,100,0,50,200,0,50,400,50,50,100],
       cogsHomeroomPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
       cogsHyogikaiPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
       cogsOenKaigiPay:  [0,0,0,0,0,0,0,0,0,0,0,0],
@@ -6452,7 +6511,6 @@ let SIM_DATA = {
       laborPay:         [400,400,400,400,400,400,450,450,450,450,450,450],
       outsourcePay:     [400,400,400,400,400,400,400,400,400,400,400,400],
       advPay:           [100,100,200,100,100,300,100,100,400,100,100,200],
-      eventPay:         [50,50,100,50,50,150,50,50,200,50,50,100],
       rentPay:          [90,90,90,90,90,90,90,90,90,90,90,90],
       gaichuPay:        [100,100,100,100,100,100,100,100,100,100,100,100],
       otherPay:         [60,60,60,60,60,60,60,60,60,60,60,60]
@@ -6937,18 +6995,23 @@ function buildSimCFTable() {
     <td style="${cellStyle}background:var(--bg3);"></td>
   </tr>`;
 
-  CF_ROWS.forEach(row => {
+  const CF_ROWS_CUR = getCFRows();
+  // 動的に子を持つ親キー集合（カスタム行追加に追従）
+  const _cfParentSet = new Set(CF_ROWS_CUR.filter(r => CF_ROWS_CUR.some(c => c.parentKey === r.key)).map(r => r.key));
+  CF_ROWS_CUR.forEach(row => {
     // セクション行（_cogsHeadCf 等）：見出しのみ表示
     if (row.isSection) {
       html += `<tr style="background:var(--bg2)"><td style="${labelStyle}font-weight:700;color:${row.color}" colspan="${months.length + 2}">${row.label}</td></tr>`;
       return;
     }
     const indentStyle = row.indent ? 'padding-left:24px;color:var(--text3);font-size:11px;' : '';
-    const isParent = row.isParent;
-    html += `<tr><td style="${labelStyle}${indentStyle}${isParent?'font-weight:700;':''}">${row.label}</td>`;
+    const isParent = row.isParent || _cfParentSet.has(row.key);
+    const deleteBtn = row.isCustom
+      ? `<span onclick="removeSimCfRow('${row.key}')" style="cursor:pointer;color:var(--tc-red);font-size:9px;margin-left:4px;opacity:.7" title="この項目を削除">✕</span>`
+      : '';
+    html += `<tr><td style="${labelStyle}${indentStyle}${isParent?'font-weight:700;':''}">${row.label}${deleteBtn}</td>`;
     months.forEach((m, i) => {
       if (isParent) {
-        // 親行：子行の合計を表示（編集不可）
         html += `<td id="scf-parent-${row.key}-${i}" style="${cellStyle}background:var(--bg3);text-align:right;padding:4px 5px;font-size:11px;color:var(--text3)" title="内訳の合計が自動表示されます"></td>`;
       } else {
         const v = getSimVal('cf', row.key, i);
@@ -6988,6 +7051,50 @@ function buildSimCFTable() {
     onChange: () => { scheduleAutoSave && scheduleAutoSave('シミュレーション編集'); },
     render: () => { buildSimCFTable(); recalcSimCF(); },
   });
+
+  // CF 明細追加ボタンエリア（PL同様）
+  const cfAddArea = document.getElementById('sim-cf-add-area');
+  if (cfAddArea) {
+    const revBtns = [
+      { key:'cfInFee',      label:'NEO会費入金' },
+      { key:'cfInTraining', label:'研修入金' },
+      { key:'cfInEvent',    label:'イベント・その他入金' },
+    ].map(r =>
+      `<button class="btn btn-g" style="font-size:10px;padding:3px 9px" onclick="addSimCfRow('rev','${r.key}')">＋ ${r.label}に追加</button>`
+    ).join('');
+    const cogsBtns = [
+      { key:'cogsHomeroomPay', label:'ホームルーム' },
+      { key:'cogsHyogikaiPay', label:'評議会' },
+      { key:'cogsOenKaigiPay', label:'応援カイギ' },
+      { key:'cogsBigEventPay', label:'大型イベント' },
+      { key:'cogsOtherPay',    label:'その他原価' },
+    ].map(r =>
+      `<button class="btn" style="font-size:10px;padding:3px 9px;border-color:rgba(239,159,39,0.4);color:var(--tc-amber)" onclick="addSimCfRow('cogs','${r.key}')">＋ ${r.label}に追加</button>`
+    ).join('');
+    const opexBtns = [
+      { key:'laborPay',     label:'人件費（社保込）' },
+      { key:'outsourcePay', label:'業務委託費' },
+      { key:'advPay',       label:'広告販促費' },
+      { key:'rentPay',      label:'賃料' },
+      { key:'gaichuPay',    label:'外注費' },
+      { key:'otherPay',     label:'その他費用' },
+    ].map(r =>
+      `<button class="btn" style="font-size:10px;padding:3px 9px" onclick="addSimCfRow('opex','${r.key}')">＋ ${r.label}に追加</button>`
+    ).join('');
+    cfAddArea.innerHTML = `
+      <div style="margin-top:10px;padding:10px 12px;background:var(--bg2);border-radius:var(--r);border:1px solid var(--border)">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px">📌 CF明細項目を追加</div>
+        <div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+          <span style="font-size:10px;color:var(--tc-green);font-weight:700;margin-right:2px">入金</span>${revBtns}
+        </div>
+        <div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+          <span style="font-size:10px;color:var(--tc-amber);font-weight:700;margin-right:2px">原価</span>${cogsBtns}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+          <span style="font-size:10px;color:var(--tc-red);font-weight:700;margin-right:2px">販管費</span>${opexBtns}
+        </div>
+      </div>`;
+  }
   recalcSimCF();
 }
 
@@ -7320,20 +7427,17 @@ function recalcSimCF() {
       const el = document.getElementById(`scf-open-${i}`);
       if (el) { el.textContent = bal.toLocaleString(); el.style.color = bal < 0 ? 'var(--tc-red)' : ''; }
     }
-    // 売上入金 = 内訳合計（会費+研修+イベント） / 無ければ旧cfInを利用
-    const cfInDet  = getSimVal('cf','cfInFee',i) + getSimVal('cf','cfInTraining',i) + getSimVal('cf','cfInEvent',i);
-    const cfIn     = cfInDet > 0 ? cfInDet : getSimVal('cf','cfIn', i);
-    // 原価支払（5項目の合計）
-    const cogsTot  = getSimVal('cf','cogsHomeroomPay',i) + getSimVal('cf','cogsHyogikaiPay',i)
-                   + getSimVal('cf','cogsOenKaigiPay',i) + getSimVal('cf','cogsBigEventPay',i)
-                   + getSimVal('cf','cogsOtherPay',i);
-    const laborPay = getSimVal('cf','laborPay', i);
-    const outPay   = getSimVal('cf','outsourcePay', i);
-    const advPay   = getSimVal('cf','advPay', i);
-    const rentPay  = getSimVal('cf','rentPay', i);
-    const gaichuPay= getSimVal('cf','gaichuPay', i);
-    const otherPay = getSimVal('cf','otherPay', i);
-    const funding  = getSimVal('cf','funding', i);
+    // 売上入金 / 原価 / 各販管費は親子再帰で集計（カスタム行も含む）
+    let cfIn = cfRowValue('cfIn', i);
+    if (!cfIn) cfIn = getSimVal('cf','cfIn', i); // 旧データ互換
+    const cogsTot  = cfRowValue('_cogsHeadCf', i);
+    const laborPay = cfRowValue('laborPay', i);
+    const outPay   = cfRowValue('outsourcePay', i);
+    const advPay   = cfRowValue('advPay', i);
+    const rentPay  = cfRowValue('rentPay', i);
+    const gaichuPay= cfRowValue('gaichuPay', i);
+    const otherPay = cfRowValue('otherPay', i);
+    const funding  = cfRowValue('funding', i);
 
     const totalInMo  = cfIn + funding;
     const totalOutMo = cogsTot + laborPay + outPay + advPay + rentPay + gaichuPay + otherPay;
@@ -7364,11 +7468,16 @@ function recalcSimCF() {
   });
 
   // 合計列 + 親行（cfIn等）の月別計算値表示
-  CF_ROWS.forEach(row => {
+  const CF_ROWS_CUR2 = getCFRows();
+  // 各親（_cogsHeadCf や cfInFee 等、子を持つ全行）の月別表示も更新
+  // isParent フラグだけでなく、動的に子を持つ leaf も対象にする
+  const allParentKeys = new Set(CF_ROWS_CUR2.filter(r => CF_ROWS_CUR2.some(c => c.parentKey === r.key)).map(r => r.key));
+  CF_ROWS_CUR2.forEach(row => {
     if (row.isSection) return;
-    if (row.isParent) {
-      // 子行を集めて月別合計を表示
-      const children = CF_ROWS.filter(r => r.parentKey === row.key);
+    const isDynamicParent = allParentKeys.has(row.key);
+    if (row.isParent || isDynamicParent) {
+      // 子行を集めて月別合計を表示（custom含む）
+      const children = CF_ROWS_CUR2.filter(r => r.parentKey === row.key);
       let total = 0;
       months.forEach((_, i) => {
         const sumI = children.reduce((s, c) => s + getSimVal('cf', c.key, i), 0);
@@ -8015,11 +8124,65 @@ function migrateSIMDataCogs() {
   const cogsCFKeys = ['cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'];
   for (const yr of ['2024','2025','2026']) {
     if (!SIM_DATA[yr]) continue;
+    if (!SIM_DATA[yr].pl) SIM_DATA[yr].pl = {};
+    if (!SIM_DATA[yr].cf) SIM_DATA[yr].cf = {};
     cogsPlKeys.forEach(k => {
       if (!SIM_DATA[yr].pl[k]) SIM_DATA[yr].pl[k] = Array(12).fill(0);
     });
     cogsCFKeys.forEach(k => {
       if (!SIM_DATA[yr].cf[k]) SIM_DATA[yr].cf[k] = Array(12).fill(0);
+    });
+    // 旧形式マイグレーション
+    const cf = SIM_DATA[yr].cf;
+    const pl = SIM_DATA[yr].pl;
+    // 1) 旧 cfIn しかない場合 → cfInFee + cfInTraining + cfInEvent に PL の比率で分配
+    const hasOldCfIn = Array.isArray(cf.cfIn) && cf.cfIn.some(v => Number(v) > 0);
+    const hasNewIn = ['cfInFee','cfInTraining','cfInEvent'].some(k =>
+      Array.isArray(cf[k]) && cf[k].some(v => Number(v) > 0));
+    if (hasOldCfIn && !hasNewIn) {
+      cf.cfInFee = Array(12).fill(0);
+      cf.cfInTraining = Array(12).fill(0);
+      cf.cfInEvent = Array(12).fill(0);
+      for (let i = 0; i < 12; i++) {
+        const tot = Number(cf.cfIn[i]) || 0;
+        if (!tot) continue;
+        const fee = Number(pl.fee?.[i]) || 0;
+        const tr  = Number(pl.training?.[i]) || 0;
+        const ev  = Number(pl.event?.[i]) || 0;
+        const sumPL = fee + tr + ev;
+        if (sumPL > 0) {
+          cf.cfInFee[i]      = Math.round(tot * fee / sumPL);
+          cf.cfInTraining[i] = Math.round(tot * tr  / sumPL);
+          cf.cfInEvent[i]    = tot - cf.cfInFee[i] - cf.cfInTraining[i];
+        } else {
+          // PL情報なしなら全額 cfInFee に寄せる
+          cf.cfInFee[i] = tot;
+        }
+      }
+    }
+    // 2) 旧 eventPay → gaichuPay に統合（PLと同じ6項目構造に揃える）
+    if (Array.isArray(cf.eventPay) && cf.eventPay.some(v => Number(v) > 0)) {
+      if (!Array.isArray(cf.gaichuPay) || cf.gaichuPay.length < 12) cf.gaichuPay = Array(12).fill(0);
+      for (let i = 0; i < 12; i++) {
+        cf.gaichuPay[i] = (Number(cf.gaichuPay[i]) || 0) + (Number(cf.eventPay[i]) || 0);
+      }
+      cf.eventPay = Array(12).fill(0); // クリア
+    }
+    // 3) 売上入金 / 原価支払 が全0 なら PL から自動初期化（イベント・原価は0でもPLが0なのでスキップ）
+    const cfInZero = ['cfInFee','cfInTraining','cfInEvent'].every(k =>
+      !Array.isArray(cf[k]) || cf[k].every(v => !Number(v)));
+    if (cfInZero) {
+      cf.cfInFee      = (pl.fee      || Array(12).fill(0)).slice();
+      cf.cfInTraining = (pl.training || Array(12).fill(0)).slice();
+      cf.cfInEvent    = (pl.event    || Array(12).fill(0)).slice();
+    }
+    cogsCFKeys.forEach((cfKey, idx) => {
+      const plKey = cogsPlKeys[idx];
+      const cfArr = cf[cfKey], plArr = pl[plKey];
+      if ((!Array.isArray(cfArr) || cfArr.every(v => !Number(v))) &&
+          Array.isArray(plArr) && plArr.some(v => Number(v))) {
+        cf[cfKey] = plArr.slice();
+      }
     });
   }
 }
@@ -8705,6 +8868,32 @@ function openVersionPanel() {
 function closeVersionPanel() {
   document.getElementById('ver-panel').classList.remove('open');
   document.getElementById('ver-overlay').classList.remove('open');
+}
+
+// シミュレーション専用 名前付き保存（バージョン履歴に [シミュ] プレフィックスで保存）
+function saveSimVersion() {
+  const desc = prompt('このシミュレーションに名前を付けて保存します（例：強気シナリオ・5月時点案）');
+  if (desc === null) return;
+  const versions = getVersions();
+  const ver = {
+    id: Date.now(),
+    desc: '[シミュ] ' + (desc.trim() || '名前なし'),
+    savedAt: new Date().toISOString(),
+    year: currentSimYear,
+    DB: JSON.parse(JSON.stringify(DB)),
+    SIM_DATA: JSON.parse(JSON.stringify(SIM_DATA)),
+  };
+  versions.unshift(ver);
+  if (versions.length > VER_MAX) versions.splice(VER_MAX);
+  saveVersions(versions);
+  saveVersionToCloud(ver);
+  // 視覚的フィードバック
+  const ok = document.getElementById('sim-save-ok');
+  if (ok) {
+    ok.style.display = 'inline';
+    ok.textContent = '✓ ' + ver.desc + ' を保存しました';
+    setTimeout(() => { ok.style.display = 'none'; ok.textContent = '✓ 保存しました'; }, 3000);
+  }
 }
 
 // 現在の状態を保存
