@@ -101,6 +101,7 @@ const PL_ACCT_MAP = {
   'システム利用料':'other','接待交際費':'other','会議費':'other','研修採用費':'other',
   '採用費':'other','保険料':'other','新聞図書費':'other','諸会費':'other',
   '荷造運賃':'other','雑費':'other','減価償却費':'other','リース料':'other',
+  '修繕費':'other','イベント費用':'other',
   // 収益（会費等）は売上ではなく 'rev_other' として分離
   '会費収入':'rev_other','協賛金収入':'rev_other','入会金収入':'rev_other',
   '営業代行収入':'rev_other','受取手数料':'rev_other','雑収入':'rev_other',

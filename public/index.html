@@ -9903,6 +9903,12 @@ function mfInit() {
   <div id="mf-preview-breakdown" style="display:none;margin-top:12px">
     <details open>
       <summary style="font-size:11px;font-weight:700;color:var(--text3);cursor:pointer">📊 勘定科目別の集計内訳（MF推移表と比較用）</summary>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:10px;color:var(--text3)">未分類の科目をAIでPL/BSに自動分類できます（次回取得時にも適用）</span>
+        <button class="btn btn-p" style="font-size:10px;padding:3px 10px;font-weight:700" onclick="mfAiCategorizeBd()" id="mf-ai-bd-btn">🤖 AIで一括仕分け</button>
+        <button class="btn btn-g" style="font-size:10px;padding:3px 10px;font-weight:700;display:none" onclick="mfAcceptAllAiBd()" id="mf-accept-ai-bd-btn">✓ AI提案を全て記憶</button>
+        <span id="mf-bd-saved" style="font-size:10px;color:var(--text3);display:none"></span>
+      </div>
       <div class="scroll-x" style="margin-top:8px">
         <div id="mf-preview-breakdown-table"></div>
       </div>
@@ -10857,6 +10863,172 @@ window.mfAcceptAllAi = function() {
   saved.textContent = `✓ ${count}件のAI提案を記憶しました（次回取得時に自動適用）`;
 
   document.getElementById('mf-accept-ai-btn').style.display = 'none';
+};
+
+// ── 勘定科目別内訳の AI 仕分け（PL/BS分類） ──
+window.mfAiCategorizeBd = async function() {
+  const p = window._mfPending;
+  const breakdown = (p && p.breakdown) || [];
+  if (breakdown.length === 0) { alert('仕分け対象がありません'); return; }
+
+  // 既に分類済みは対象外、未分類のみAIに投げる
+  let plOv = {}, bsOv = {};
+  try { plOv = JSON.parse(localStorage.getItem('mfPlCategoryOverrides') || '{}'); } catch(e) {}
+  try { bsOv = JSON.parse(localStorage.getItem('mfBsCategoryOverrides') || '{}'); } catch(e) {}
+  const targets = breakdown.filter(r => {
+    const overridden = plOv[r.name] !== undefined || bsOv[r.name] !== undefined;
+    return !overridden && !r.category; // 自動マップ未ヒット & 上書き無し
+  });
+  if (targets.length === 0) { alert('未分類の勘定科目はありません'); return; }
+
+  const btn = document.getElementById('mf-ai-bd-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ AI分析中...';
+  const saved = document.getElementById('mf-bd-saved');
+  saved.style.display = 'inline';
+  saved.style.color = 'var(--text3)';
+  saved.textContent = `🤖 ${targets.length}件をAIで分析中...`;
+
+  try {
+    // PL / BS カテゴリ候補
+    const plCats = [
+      { v:'rev',       l:'PL: 売上',         hint:'売上高・本業収益' },
+      { v:'rev_other', l:'PL: その他収益',   hint:'雑収入・受取利息・為替差益等' },
+      { v:'cogs',      l:'PL: 原価',         hint:'仕入・会場費・原価系' },
+      { v:'labor',     l:'PL: 人件費',       hint:'給与・賞与・役員報酬・社保・福利厚生' },
+      { v:'outsource', l:'PL: 業務委託',     hint:'業務委託料' },
+      { v:'adv',       l:'PL: 広告販促',     hint:'広告宣伝・販売促進' },
+      { v:'gaichu',    l:'PL: 外注',         hint:'専門家報酬・外注加工' },
+      { v:'other',     l:'PL: その他販管費', hint:'家賃/通信/旅費/租税公課/会議費 等' },
+    ];
+    const bsCats = [
+      { v:'cash',       l:'BS資産: 現預金',         hint:'現金・普通預金等' },
+      { v:'receivable', l:'BS資産: 売掛金',         hint:'売掛・完成工事未収' },
+      { v:'other_ca',   l:'BS資産: その他流動',     hint:'前払・仮払・短期貸付・未収入金' },
+      { v:'fixed',      l:'BS資産: 固定資産',       hint:'建物/備品/敷金/投資有価証券等' },
+      { v:'payable',    l:'BS負債: 買掛・未払',     hint:'買掛/未払金/未払費用/前受金/預り金' },
+      { v:'borrowing',  l:'BS負債: 借入金',         hint:'短期/長期借入金・1年内返済' },
+      { v:'other_cl',   l:'BS負債: その他流動',     hint:'仮受金・前受収益・引当金等' },
+      { v:'capital',    l:'BS純資産: 資本金',       hint:'資本金・資本準備金・新株予約権' },
+      { v:'retained',   l:'BS純資産: 利益剰余金',   hint:'繰越利益剰余金・利益準備金' },
+    ];
+
+    const batchSize = 20;
+    const results = {};
+    for (let i = 0; i < targets.length; i += batchSize) {
+      const batch = targets.slice(i, i + batchSize);
+      const list = batch.map((r, idx) =>
+        `${i + idx + 1}. ${r.name} （金額: ${r.net?.toLocaleString?.() || 0}千円, 借方: ${r.debit?.toLocaleString?.() || 0}, 貸方: ${r.credit?.toLocaleString?.() || 0}）`
+      ).join('\n');
+      const catList = (arr) => arr.map(c => `    - ${c.v}: ${c.l}（${c.hint}）`).join('\n');
+      const prompt = `あなたは経理の専門家です。以下の勘定科目を、ダッシュボード上のPL/BS分類に振り分けてください。
+
+会社: 株式会社スポーツネーション（NEO福岡 - 経営者コミュニティ運営）
+事業: NEOメンバーシップ会費・研修・イベント運営
+
+PL分類:
+${catList(plCats)}
+
+BS分類:
+${catList(bsCats)}
+
+判定対象（番号で返答）:
+${list}
+
+判定ルール:
+- 勘定科目名から最も適切な日本会計上の分類を選ぶ
+- 借方/貸方の偏りも参考に（費用は借方超過、収益は貸方超過、資産は借方超過、負債・純資産は貸方超過）
+- 「業務委託費」「業務委託料」→outsource、「外注費/支払報酬」→gaichu
+- 「イベント費用」「会場費」は原則 cogs
+- 営業外損益（支払利息・雑収入・受取利息）は rev_other 扱い
+- 法人税等は other（販管費に集約）
+- 判断に迷う費用 → other、収益 → rev_other
+
+JSON形式のみで返答（説明不要）:
+{
+  "1": {"cat": "カテゴリキー", "reason": "20文字以内"},
+  "2": {"cat": "...", "reason": "..."}
+}`;
+      const res = await callAI(prompt, 3000);
+      const jsonMatch = res.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) { console.warn('AI(BD) response no JSON:', res.slice(0,200)); continue; }
+      try {
+        const parsed = JSON.parse(jsonMatch[0].replace(/```json|```/g,'').trim());
+        Object.entries(parsed).forEach(([key, val]) => {
+          const globalIdx = parseInt(key);
+          if (globalIdx > 0 && globalIdx <= targets.length) {
+            results[targets[globalIdx - 1].name] = val;
+          }
+        });
+      } catch(e) { console.warn('AI(BD) JSON parse failed:', e); }
+      saved.textContent = `🤖 AI分析中... ${Math.min(i + batchSize, targets.length)}/${targets.length}`;
+    }
+
+    // UIに反映
+    const PL_KEYS_SET = new Set(['rev','rev_other','cogs','labor','outsource','adv','gaichu','other']);
+    const BS_KEYS_SET = new Set(['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained']);
+    let changeCount = 0;
+    document.querySelectorAll('.mf-bd-cat-select').forEach(sel => {
+      const acct = sel.dataset.acct;
+      const r = results[acct];
+      if (!r || !r.cat) return;
+      if (!PL_KEYS_SET.has(r.cat) && !BS_KEYS_SET.has(r.cat)) return;
+      if (sel.value === r.cat) return;
+      sel.value = r.cat;
+      sel.style.background = 'rgba(239,159,39,.15)';
+      sel.style.border = '1px solid var(--tc-amber)';
+      sel.dataset.aiSuggestion = '1';
+      sel.dataset.aiReason = r.reason || '';
+      sel.title = `🤖 AI提案: ${r.reason || ''}`;
+      changeCount++;
+      const row = sel.closest('tr');
+      const statusCell = row?.querySelector('td:last-child');
+      if (statusCell) statusCell.innerHTML = '<span class="badge" style="background:rgba(239,159,39,.15);color:var(--tc-amber)">AI提案</span>';
+    });
+
+    saved.style.color = 'var(--tc-green)';
+    saved.textContent = `✓ AI分析完了: ${changeCount}件の提案。確認後「✓ AI提案を全て記憶」で保存`;
+    const acceptBtn = document.getElementById('mf-accept-ai-bd-btn');
+    if (acceptBtn && changeCount > 0) acceptBtn.style.display = 'inline-block';
+  } catch(e) {
+    console.error('[mfAiCategorizeBd]', e);
+    saved.style.color = 'var(--tc-red)';
+    saved.textContent = '❌ AI分析失敗: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🤖 AIで一括仕分け';
+  }
+};
+
+// ── BD AI提案を全て記憶 ──
+window.mfAcceptAllAiBd = function() {
+  const PL_KEYS_SET = new Set(['rev','rev_other','cogs','labor','outsource','adv','gaichu','other']);
+  let plOv = {}, bsOv = {};
+  try { plOv = JSON.parse(localStorage.getItem('mfPlCategoryOverrides') || '{}'); } catch(e) {}
+  try { bsOv = JSON.parse(localStorage.getItem('mfBsCategoryOverrides') || '{}'); } catch(e) {}
+  let count = 0;
+  document.querySelectorAll('.mf-bd-cat-select').forEach(sel => {
+    if (sel.dataset.aiSuggestion !== '1') return;
+    const acct = sel.dataset.acct;
+    const cat = sel.value;
+    if (!acct || !cat) return;
+    delete plOv[acct]; delete bsOv[acct];
+    if (PL_KEYS_SET.has(cat)) plOv[acct] = cat;
+    else bsOv[acct] = cat;
+    sel.style.background = '';
+    sel.style.border = '';
+    delete sel.dataset.aiSuggestion;
+    const row = sel.closest('tr');
+    const statusCell = row?.querySelector('td:last-child');
+    if (statusCell) statusCell.innerHTML = '<span class="badge bg">記憶済</span>';
+    count++;
+  });
+  localStorage.setItem('mfPlCategoryOverrides', JSON.stringify(plOv));
+  localStorage.setItem('mfBsCategoryOverrides', JSON.stringify(bsOv));
+  const saved = document.getElementById('mf-bd-saved');
+  saved.style.color = 'var(--tc-green)';
+  saved.textContent = `✓ ${count}件のAI提案を記憶しました（次回取得時に自動適用）`;
+  document.getElementById('mf-accept-ai-bd-btn').style.display = 'none';
 };
 
 window.mfCancelPreview = function() {
