@@ -53,9 +53,13 @@ async function resolveFiscalPeriods(token, fiscalYear) {
     }).map(p => ({
       start: p.start_date,
       end: p.end_date,
+      // MFの period 識別子（API バージョンにより id / accounting_period_id / uuid の可能性があるため全て拾う）
+      id: p.id || p.accounting_period_id || p.uuid || null,
     }));
 
     if (overlapping.length > 0) {
+      console.log(`[mf-sync] resolved ${overlapping.length} overlapping periods for FY${fy}:`,
+        overlapping.map(p => `${p.start}〜${p.end}${p.id?'(id='+p.id+')':''}`).join(', '));
       return {
         periods: overlapping,
         filterStart: `${fy}-04-01`,
@@ -68,7 +72,7 @@ async function resolveFiscalPeriods(token, fiscalYear) {
 
   // フォールバック: そのまま4月〜3月
   return {
-    periods: [{ start: `${fy}-04-01`, end: `${fy + 1}-03-31` }],
+    periods: [{ start: `${fy}-04-01`, end: `${fy + 1}-03-31`, id: null }],
     filterStart: `${fy}-04-01`,
     filterEnd: `${fy + 1}-03-31`,
   };
@@ -175,10 +179,13 @@ async function fetchAllJournals(token, periodsInfo, options = {}) {
   const perPage = 500;
 
   // MFの各会計期間ごとに仕訳を取得
+  // accounting_period_id を渡さないと現行期間しか返さない事例があるため、
+  // /offices から取得した id を付加して期間ごとに明示的にフェッチする。
   for (const period of periodsInfo.periods) {
-    console.log(`[mf-sync] fetching journals for period ${period.start} ~ ${period.end}`);
+    console.log(`[mf-sync] fetching journals for period ${period.start} ~ ${period.end}${period.id?' (id='+period.id+')':''}`);
     for (let page = 1; page <= 100; page++) {
       const params = { start_date: period.start, end_date: period.end, page, per_page: perPage };
+      if (period.id) params.accounting_period_id = period.id;
       const data = await mfFetch(token, '/journals', params);
       const journals = data.journals || data.data || [];
       allJournals.push(...journals);
@@ -558,11 +565,15 @@ export default async function handler(req, res) {
           results[ep] = { ok: false, error: e.message.slice(0, 150) };
         }
       }
-      // 会計期間情報
+      // 会計期間情報（id を含む全フィールドを返してデバッグ容易にする）
       try {
         const off = await mfFetch(token, '/offices');
         results._accounting_periods = (off?.accounting_periods || []).map(p => ({
-          start_date: p.start_date, end_date: p.end_date, keys: Object.keys(p),
+          start_date: p.start_date, end_date: p.end_date,
+          id: p.id || p.accounting_period_id || p.uuid || null,
+          keys: Object.keys(p),
+          // 検証用に id 系の値を全部含める（パラメータ名が変わる可能性に備え）
+          raw_id_fields: { id: p.id, accounting_period_id: p.accounting_period_id, uuid: p.uuid },
         }));
       } catch (e) { results._accounting_periods_err = e.message.slice(0, 100); }
       return res.status(200).json({ ok: true, results });
