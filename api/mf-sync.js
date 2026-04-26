@@ -101,7 +101,9 @@ const PL_ACCT_MAP = {
   'システム利用料':'other','接待交際費':'other','会議費':'other','研修採用費':'other',
   '採用費':'other','保険料':'other','新聞図書費':'other','諸会費':'other',
   '荷造運賃':'other','雑費':'other','減価償却費':'other','リース料':'other',
-  '修繕費':'other','イベント費用':'other',
+  '修繕費':'other',
+  // イベント費用: 2026年度以降は cogs（resolvePlKey 内で年度判定）。
+  // 2025年度以前は 'other'（販管費）として処理する。
   // 収益（会費等）は売上ではなく 'rev_other' として分離
   '会費収入':'rev_other','協賛金収入':'rev_other','入会金収入':'rev_other',
   '営業代行収入':'rev_other','受取手数料':'rev_other','雑収入':'rev_other',
@@ -115,17 +117,22 @@ const BS_ACCT_MAP = {
   '売掛金':'receivable','完成工事未収入金':'receivable','未収入金':'other_ca',
   '前払費用':'other_ca','仮払金':'other_ca','立替金':'other_ca','短期貸付金':'other_ca',
   '繰延税金資産':'other_ca','商品':'other_ca','貯蔵品':'other_ca',
+  '仮払消費税':'other_ca','仮払消費税等':'other_ca',
   '建物':'fixed','建物附属設備':'fixed','構築物':'fixed','車両運搬具':'fixed',
   '工具器具備品':'fixed','土地':'fixed','ソフトウェア':'fixed','のれん':'fixed',
   '投資有価証券':'fixed','出資金':'fixed','保証金':'fixed','敷金':'fixed',
+  '差入保証金':'fixed','長期前払費用':'fixed',
   '買掛金':'payable','未払金':'payable','未払費用':'payable',
   '未払法人税等':'payable','未払消費税等':'payable','前受金':'payable','預り金':'payable',
-  '短期借入金':'borrowing','長期借入金':'borrowing',
-  '1年内返済予定の長期借入金':'borrowing','1年以内返済予定の長期借入金':'borrowing',
+  '短期借入金':'borrowing_short',
+  '1年内返済予定の長期借入金':'borrowing_short','1年以内返済予定の長期借入金':'borrowing_short',
+  '長期借入金':'borrowing',
   '仮受金':'other_cl','前受収益':'other_cl','賞与引当金':'other_cl',
+  '仮受消費税':'other_cl','仮受消費税等':'other_cl',
   '資本金':'capital','資本準備金':'capital','その他資本剰余金':'capital',
   '利益準備金':'retained','繰越利益剰余金':'retained','別途積立金':'retained',
   'その他利益剰余金':'retained',
+  '新株予約権':'warrant',
 };
 
 // CF科目分類（仕訳の勘定科目名からCFカテゴリを推定）
@@ -208,10 +215,17 @@ async function fetchAllJournals(token, periodsInfo, options = {}) {
 
 function buildFromJournals(journals, fiscalYear, options = {}) {
   const { cfCategoryOverrides = {}, plCategoryOverrides = {}, bsCategoryOverrides = {} } = options;
+  const fyNum = parseInt(fiscalYear);
   // ユーザー上書きが最優先、次に静的マップ
-  const resolvePlKey = (name) => plCategoryOverrides[name] !== undefined
-    ? plCategoryOverrides[name] || null
-    : (PL_ACCT_MAP[name] || null);
+  // 年度依存マッピング:
+  //   - イベント費用: 2026年度以降は 'cogs'（原価）、2025年度以前は 'other'（販管費）
+  //     2025年度11月までは業務委託費に混ざっており税理士の振替が困難なため、
+  //     2026年4月から正しく原価分類に切り替える運用ルール。
+  const resolvePlKey = (name) => {
+    if (plCategoryOverrides[name] !== undefined) return plCategoryOverrides[name] || null;
+    if (name === 'イベント費用') return fyNum >= 2026 ? 'cogs' : 'other';
+    return PL_ACCT_MAP[name] || null;
+  };
   const resolveBsKey = (name) => bsCategoryOverrides[name] !== undefined
     ? bsCategoryOverrides[name] || null
     : (BS_ACCT_MAP[name] || null);
@@ -227,7 +241,7 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
   PL_KEYS.forEach(k => { plDebit[k] = new Array(n).fill(0); plCredit[k] = new Array(n).fill(0); });
 
   // ── BS: 月次残高 ──
-  const BS_KEYS = ['cash', 'receivable', 'other_ca', 'fixed', 'payable', 'borrowing', 'other_cl', 'capital', 'retained'];
+  const BS_KEYS = ['cash', 'receivable', 'other_ca', 'fixed', 'payable', 'borrowing_short', 'borrowing', 'other_cl', 'capital', 'retained', 'warrant'];
   const bsMonthly = {};
   BS_KEYS.forEach(k => { bsMonthly[k] = new Array(n).fill(0); });
   const bsSummary = {};
@@ -402,7 +416,7 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
   // 資産: 借方+貸方− / 負債・純資産: 貸方+借方−
   // 期首残高は仕訳からは取得できないため期首=0 起点の累計残高として表示
   BS_KEYS.forEach(k => {
-    const isLiabOrEq = ['payable', 'borrowing', 'other_cl', 'capital', 'retained'].includes(k);
+    const isLiabOrEq = ['payable', 'borrowing', 'borrowing_short', 'other_cl', 'capital', 'retained', 'warrant'].includes(k);
     let running = 0;
     for (let i = 0; i < n; i++) {
       const monthlyDelta = isLiabOrEq ? -bsDelta[k][i] : bsDelta[k][i];

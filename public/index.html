@@ -5973,15 +5973,17 @@ function renderCSVConfirmTable(parsed, months, kind) {
     {
       title: '── BS（千円）', color: 'rgba(239,159,39,0.07)',
       rows: [
-        { section:'bs', key:'cash',       label:'現預金',       isRev:true },
-        { section:'bs', key:'receivable', label:'売掛金',       isRev:true },
-        { section:'bs', key:'other_ca',   label:'その他流動資産',isRev:true },
-        { section:'bs', key:'fixed',      label:'固定資産',     isRev:true },
-        { section:'bs', key:'payable',    label:'買掛金・未払金',isOut:true },
-        { section:'bs', key:'borrowing',  label:'借入金',       isOut:true },
-        { section:'bs', key:'other_cl',   label:'その他流動負債',isOut:true },
-        { section:'bs', key:'capital',    label:'資本金',       isRev:true },
-        { section:'bs', key:'retained',   label:'利益剰余金',   isRev:true },
+        { section:'bs', key:'cash',            label:'現預金',         isRev:true },
+        { section:'bs', key:'receivable',      label:'売掛金',         isRev:true },
+        { section:'bs', key:'other_ca',        label:'その他流動資産', isRev:true },
+        { section:'bs', key:'fixed',           label:'固定資産',       isRev:true },
+        { section:'bs', key:'payable',         label:'買掛金・未払金', isOut:true },
+        { section:'bs', key:'borrowing_short', label:'短期借入金',     isOut:true },
+        { section:'bs', key:'borrowing',       label:'長期借入金',     isOut:true },
+        { section:'bs', key:'other_cl',        label:'その他流動負債', isOut:true },
+        { section:'bs', key:'capital',         label:'資本金',         isRev:true },
+        { section:'bs', key:'retained',        label:'利益剰余金',     isRev:true },
+        { section:'bs', key:'warrant',         label:'新株予約権',     isRev:true },
       ]
     },
   ];
@@ -6194,7 +6196,7 @@ async function applyImportedToProd() {
                    'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay',
                    'investPay','loanIn','loanOut','capitalIn','warrantPay','finOtherPay',
                    'cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'];
-  const bsKeys  = ['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained'];
+  const bsKeys  = ['cash','receivable','other_ca','fixed','payable','borrowing_short','borrowing','other_cl','capital','retained','warrant'];
 
   // データが入っている月を特定（PL / CF / BS いずれかに値があれば対象）
   const filledMonths = d.months.filter((m, i) => {
@@ -6238,11 +6240,11 @@ function showApplyConfirmModal(filledMonths, monthLabels, d) {
     salaryPay:'給与・社保', bizComPay:'業務委託', rentPay:'家賃', adSportsPay:'広告費',
     salesOtherPay:'その他出金', loanIn:'新規借入', loanOut:'借入返済', cfClose:'月末残高'
   };
-  const bsRowKeys = ['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained'];
+  const bsRowKeys = ['cash','receivable','other_ca','fixed','payable','borrowing_short','borrowing','other_cl','capital','retained','warrant'];
   const bsLabels  = {
     cash:'現預金', receivable:'売掛金', other_ca:'その他流動資産', fixed:'固定資産',
-    payable:'買掛・未払', borrowing:'借入金', other_cl:'その他流動負債',
-    capital:'資本金', retained:'利益剰余金'
+    payable:'買掛・未払', borrowing_short:'短期借入金', borrowing:'長期借入金', other_cl:'その他流動負債',
+    capital:'資本金', retained:'利益剰余金', warrant:'新株予約権'
   };
 
   const monthHeaders = filledMonths.map(m =>
@@ -6546,14 +6548,39 @@ async function loadImportedList() {
     }
     // BS
     return [
-      { label:'現預金',         kind:'pair', get:(i)=>({a:bsA('cash',i),       b:bsB('cash',i)}) },
-      { label:'売掛金',         kind:'pair', get:(i)=>({a:bsA('receivable',i), b:bsB('receivable',i)}) },
-      { label:'その他流動資産', kind:'pair', get:(i)=>({a:bsA('other_ca',i),   b:bsB('other_ca',i)}) },
-      { label:'固定資産',       kind:'pair', get:(i)=>({a:bsA('fixed',i),      b:bsB('fixed',i)}) },
-      { label:'買掛・未払',     kind:'pair', isOut:true, get:(i)=>({a:bsA('payable',i),    b:bsB('payable',i)}) },
-      { label:'借入金',         kind:'pair', isOut:true, get:(i)=>({a:bsA('borrowing',i),  b:bsB('borrowing',i)}) },
-      { label:'資本金',         kind:'pair', get:(i)=>({a:bsA('capital',i),    b:bsB('capital',i)}) },
-      { label:'利益剰余金',     kind:'pair', get:(i)=>({a:bsA('retained',i),   b:bsB('retained',i)}) },
+      { label:'　現預金',         kind:'pair', get:(i)=>({a:bsA('cash',i),       b:bsB('cash',i)}) },
+      { label:'　売掛金',         kind:'pair', get:(i)=>({a:bsA('receivable',i), b:bsB('receivable',i)}) },
+      { label:'　その他流動資産', kind:'pair', get:(i)=>({a:bsA('other_ca',i),   b:bsB('other_ca',i)}) },
+      { label:'流動資産合計',     kind:'calc', get:(i)=>{
+          const a=bsA('cash',i)+bsA('receivable',i)+bsA('other_ca',i);
+          return a !== 0 ? a : null;
+        } },
+      { label:'　固定資産',       kind:'pair', get:(i)=>({a:bsA('fixed',i),      b:bsB('fixed',i)}) },
+      { label:'固定資産合計',     kind:'calc', get:(i)=>bsA('fixed',i) || null },
+      { label:'資産の部合計',     kind:'calc', get:(i)=>{
+          const t=bsA('cash',i)+bsA('receivable',i)+bsA('other_ca',i)+bsA('fixed',i);
+          return t !== 0 ? t : null;
+        } },
+      { label:'　買掛・未払',     kind:'pair', isOut:true, get:(i)=>({a:bsA('payable',i),         b:bsB('payable',i)}) },
+      { label:'　短期借入金',     kind:'pair', isOut:true, get:(i)=>({a:bsA('borrowing_short',i), b:bsB('borrowing_short',i)}) },
+      { label:'　その他流動負債', kind:'pair', isOut:true, get:(i)=>({a:bsA('other_cl',i),        b:bsB('other_cl',i)}) },
+      { label:'流動負債合計',     kind:'calc', get:(i)=>{
+          const t=bsA('payable',i)+bsA('borrowing_short',i)+bsA('other_cl',i);
+          return t !== 0 ? t : null;
+        } },
+      { label:'　長期借入金',     kind:'pair', isOut:true, get:(i)=>({a:bsA('borrowing',i),       b:bsB('borrowing',i)}) },
+      { label:'固定負債合計',     kind:'calc', get:(i)=>bsA('borrowing',i) || null },
+      { label:'負債の部合計',     kind:'calc', get:(i)=>{
+          const t=bsA('payable',i)+bsA('borrowing_short',i)+bsA('other_cl',i)+bsA('borrowing',i);
+          return t !== 0 ? t : null;
+        } },
+      { label:'　資本金',         kind:'pair', get:(i)=>({a:bsA('capital',i),    b:bsB('capital',i)}) },
+      { label:'　利益剰余金',     kind:'pair', get:(i)=>({a:bsA('retained',i),   b:bsB('retained',i)}) },
+      { label:'　新株予約権',     kind:'pair', get:(i)=>({a:bsA('warrant',i),    b:bsB('warrant',i)}) },
+      { label:'純資産の部合計',   kind:'calc', get:(i)=>{
+          const t=bsA('capital',i)+bsA('retained',i)+bsA('warrant',i);
+          return t !== 0 ? t : null;
+        } },
     ];
   };
 
@@ -10242,20 +10269,35 @@ function mfRenderPreview() {
           ⚠ <strong>期首残高が仕訳から取得できないため「期首=0 起点の累計残高」として表示しています。</strong><br>
           前年度（${Number(p.fy)-1}年度）BS実績を入力すると、自動で期首残高として加算されます。
         </div>`;
+    const getBS = (k, i) => ((monthly[k] && monthly[k][i]) || 0) + (Number(opening[k]) || 0);
+    const sumCa = i => getBS('cash',i) + getBS('receivable',i) + getBS('other_ca',i);
+    const sumFa = i => getBS('fixed',i);
+    const sumCl = i => getBS('payable',i) + getBS('borrowing_short',i) + getBS('other_cl',i);
+    const sumFl = i => getBS('borrowing',i);
+    const sumEq = i => getBS('capital',i) + getBS('retained',i) + getBS('warrant',i);
     tblEl.innerHTML = bsNote + mfBuildTable(months, monthNames, [
       { label:'【資産の部】',         key:'__header__' },
-      { label:'　現預金',              key:'cash',       isRev:true },
-      { label:'　売掛金',              key:'receivable', isRev:true },
-      { label:'　その他流動資産',      key:'other_ca',   isRev:true },
-      { label:'　固定資産',            key:'fixed',      isRev:true },
+      { label:'　　現預金',            key:'cash',       isRev:true },
+      { label:'　　売掛金',            key:'receivable', isRev:true },
+      { label:'　　その他流動資産',    key:'other_ca',   isRev:true },
+      { label:'　流動資産合計',        key:'__calc__',   isRev:true, formula:sumCa },
+      { label:'　　固定資産',          key:'fixed',      isRev:true },
+      { label:'　固定資産合計',        key:'__calc__',   isRev:true, formula:sumFa },
+      { label:'資産の部合計',          key:'__calc__',   isRev:true, formula:i => sumCa(i)+sumFa(i) },
       { label:'【負債の部】',         key:'__header__' },
-      { label:'　買掛金・未払金',      key:'payable',    isOut:true },
-      { label:'　借入金',              key:'borrowing',  isOut:true },
-      { label:'　その他流動負債',      key:'other_cl',   isOut:true },
+      { label:'　　買掛金・未払金',    key:'payable',         isOut:true },
+      { label:'　　短期借入金',        key:'borrowing_short', isOut:true },
+      { label:'　　その他流動負債',    key:'other_cl',        isOut:true },
+      { label:'　流動負債合計',        key:'__calc__',        isOut:true, formula:sumCl },
+      { label:'　　長期借入金',        key:'borrowing',       isOut:true },
+      { label:'　固定負債合計',        key:'__calc__',        isOut:true, formula:sumFl },
+      { label:'負債の部合計',          key:'__calc__',        isOut:true, formula:i => sumCl(i)+sumFl(i) },
       { label:'【純資産の部】',       key:'__header__' },
-      { label:'　資本金',              key:'capital',    isRev:true },
-      { label:'　利益剰余金',          key:'retained',   isRev:true },
-    ], (key, i) => ((monthly[key] && monthly[key][i]) || 0) + (Number(opening[key]) || 0), initialVisibleIdxSet);
+      { label:'　　資本金',            key:'capital',  isRev:true },
+      { label:'　　利益剰余金',        key:'retained', isRev:true },
+      { label:'　　新株予約権',        key:'warrant',  isRev:true },
+      { label:'純資産の部合計',        key:'__calc__', isRev:true, formula:sumEq },
+    ], (key, i, row) => row?.key === '__calc__' ? row.formula(i) : getBS(key, i), initialVisibleIdxSet);
 
   } else if (p.type === 'journals') {
     // AI仕分けサマリー
@@ -10408,10 +10450,12 @@ function mfRenderPreview() {
       { v:'other_ca', l:'BS資産: その他流動' },
       { v:'fixed', l:'BS資産: 固定資産' },
       { v:'payable', l:'BS負債: 買掛・未払' },
-      { v:'borrowing', l:'BS負債: 借入金' },
+      { v:'borrowing_short', l:'BS負債: 短期借入金' },
+      { v:'borrowing', l:'BS負債: 長期借入金' },
       { v:'other_cl', l:'BS負債: その他流動' },
       { v:'capital', l:'BS純資産: 資本金' },
       { v:'retained', l:'BS純資産: 利益剰余金' },
+      { v:'warrant', l:'BS純資産: 新株予約権' },
     ];
     let plOverrides = {}, bsOverrides = {};
     try { plOverrides = JSON.parse(localStorage.getItem('mfPlCategoryOverrides') || '{}'); } catch(e) {}
@@ -10603,20 +10647,35 @@ window.mfOnCommitMonthChange = function() {
           ⚠ <strong>期首残高が仕訳から取得できないため「期首=0 起点の累計残高」として表示しています。</strong><br>
           前年度（${Number(p.fy)-1}年度）BS実績を入力すると、自動で期首残高として加算されます。
         </div>`;
+    const getBS = (k, i) => ((monthly[k] && monthly[k][i]) || 0) + (Number(opening[k]) || 0);
+    const sumCa = i => getBS('cash',i) + getBS('receivable',i) + getBS('other_ca',i);
+    const sumFa = i => getBS('fixed',i);
+    const sumCl = i => getBS('payable',i) + getBS('borrowing_short',i) + getBS('other_cl',i);
+    const sumFl = i => getBS('borrowing',i);
+    const sumEq = i => getBS('capital',i) + getBS('retained',i) + getBS('warrant',i);
     tblEl.innerHTML = bsNote + mfBuildTable(months, monthNames, [
       { label:'【資産の部】',         key:'__header__' },
-      { label:'　現預金',              key:'cash',       isRev:true },
-      { label:'　売掛金',              key:'receivable', isRev:true },
-      { label:'　その他流動資産',      key:'other_ca',   isRev:true },
-      { label:'　固定資産',            key:'fixed',      isRev:true },
+      { label:'　　現預金',            key:'cash',       isRev:true },
+      { label:'　　売掛金',            key:'receivable', isRev:true },
+      { label:'　　その他流動資産',    key:'other_ca',   isRev:true },
+      { label:'　流動資産合計',        key:'__calc__',   isRev:true, formula:sumCa },
+      { label:'　　固定資産',          key:'fixed',      isRev:true },
+      { label:'　固定資産合計',        key:'__calc__',   isRev:true, formula:sumFa },
+      { label:'資産の部合計',          key:'__calc__',   isRev:true, formula:i => sumCa(i)+sumFa(i) },
       { label:'【負債の部】',         key:'__header__' },
-      { label:'　買掛金・未払金',      key:'payable',    isOut:true },
-      { label:'　借入金',              key:'borrowing',  isOut:true },
-      { label:'　その他流動負債',      key:'other_cl',   isOut:true },
+      { label:'　　買掛金・未払金',    key:'payable',         isOut:true },
+      { label:'　　短期借入金',        key:'borrowing_short', isOut:true },
+      { label:'　　その他流動負債',    key:'other_cl',        isOut:true },
+      { label:'　流動負債合計',        key:'__calc__',        isOut:true, formula:sumCl },
+      { label:'　　長期借入金',        key:'borrowing',       isOut:true },
+      { label:'　固定負債合計',        key:'__calc__',        isOut:true, formula:sumFl },
+      { label:'負債の部合計',          key:'__calc__',        isOut:true, formula:i => sumCl(i)+sumFl(i) },
       { label:'【純資産の部】',       key:'__header__' },
-      { label:'　資本金',              key:'capital',    isRev:true },
-      { label:'　利益剰余金',          key:'retained',   isRev:true },
-    ], (key, i) => ((monthly[key] && monthly[key][i]) || 0) + (Number(opening[key]) || 0), visibleIdxSet);
+      { label:'　　資本金',            key:'capital',  isRev:true },
+      { label:'　　利益剰余金',        key:'retained', isRev:true },
+      { label:'　　新株予約権',        key:'warrant',  isRev:true },
+      { label:'純資産の部合計',        key:'__calc__', isRev:true, formula:sumEq },
+    ], (key, i, row) => row?.key === '__calc__' ? row.formula(i) : getBS(key, i), visibleIdxSet);
   } else if (p.type === 'journals') {
     const monthly = p.cf.monthly || {};
     tblEl.innerHTML = mfBuildTable(months, monthNames, [
@@ -10966,7 +11025,7 @@ JSON形式のみで返答（説明不要）:
 
     // UIに反映
     const PL_KEYS_SET = new Set(['rev','rev_other','cogs','labor','outsource','adv','gaichu','other']);
-    const BS_KEYS_SET = new Set(['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained']);
+    const BS_KEYS_SET = new Set(['cash','receivable','other_ca','fixed','payable','borrowing_short','borrowing','other_cl','capital','retained','warrant']);
     let changeCount = 0;
     document.querySelectorAll('.mf-bd-cat-select').forEach(sel => {
       const acct = sel.dataset.acct;
@@ -11043,7 +11102,7 @@ window.mfSavePlBsOverride = function(sel) {
   const cat = sel.value;
   if (!acct) return;
   const PL_KEYS = ['rev','rev_other','cogs','labor','outsource','adv','gaichu','other'];
-  const BS_KEYS = ['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained'];
+  const BS_KEYS = ['cash','receivable','other_ca','fixed','payable','borrowing_short','borrowing','other_cl','capital','retained','warrant'];
   let plOv = {}, bsOv = {};
   try { plOv = JSON.parse(localStorage.getItem('mfPlCategoryOverrides') || '{}'); } catch(e) {}
   try { bsOv = JSON.parse(localStorage.getItem('mfBsCategoryOverrides') || '{}'); } catch(e) {}
@@ -11292,7 +11351,7 @@ window.mfCommitConfirmed = async function() {
       });
 
     } else if (p.type === 'trial_bs') {
-      const keys = ['cash','receivable','other_ca','fixed','payable','borrowing','other_cl','capital','retained'];
+      const keys = ['cash','receivable','other_ca','fixed','payable','borrowing_short','borrowing','other_cl','capital','retained','warrant'];
       if (!db.bs) db.bs = {};
       if (!db.bs.actual) db.bs.actual = {};
       const monthly = p.bs.monthly || {};
