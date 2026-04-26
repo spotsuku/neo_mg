@@ -321,6 +321,14 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
       if (bsKeyDebit && bsDelta[bsKeyDebit]) bsDelta[bsKeyDebit][idx] += debitAmount;
       if (bsKeyCredit && bsDelta[bsKeyCredit]) bsDelta[bsKeyCredit][idx] -= creditAmount;
 
+      // ── 消費税の取り込み（MF推移表は仕訳の tax_value から仮払/仮受消費税を集計）──
+      // value (税抜本体) とは別に MF API は branches[].debitor.tax_value / creditor.tax_value
+      // に消費税額を持つ。これを 仮払消費税(other_ca) / 仮受消費税(other_cl) に振り分ける。
+      const debitTaxYen  = Number(b.debitor?.tax_value  || 0);
+      const creditTaxYen = Number(b.creditor?.tax_value || 0);
+      if (debitTaxYen > 0)  bsDelta['other_ca'][idx] += debitTaxYen  / 1000; // 仮払消費税: 資産増加
+      if (creditTaxYen > 0) bsDelta['other_cl'][idx] -= creditTaxYen / 1000; // 仮受消費税: 負債増加（負債は -bsDelta が増加方向）
+
       // ── CF計算: 現預金の借方=入金、貸方=出金 ──
       const isDebitCash = cashNames.some(c => debitAcct.includes(c));
       const isCreditCash = cashNames.some(c => creditAcct.includes(c));
@@ -426,6 +434,19 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
     // summary は最終月の残高
     bsSummary[k] = bsMonthly[k][n - 1] || 0;
   });
+
+  // 当期純利益累計を 利益剰余金 (retained) に加算する
+  // MF推移表は「繰越利益剰余金 + 当期純利益」を BS の利益剰余金として表示する仕様。
+  // ダッシュボードもこれに合わせて整合させる（資産=負債+純資産が成立するように）。
+  let cumNetIncome = 0;
+  for (let i = 0; i < n; i++) {
+    const rev   = (pl.rev?.actual?.[i] || 0) + (pl.rev_other?.actual?.[i] || 0);
+    const cogs  =  pl.cogs?.actual?.[i] || 0;
+    const opex  = ['labor','outsource','adv','gaichu','other'].reduce((t, k) => t + (pl[k]?.actual?.[i] || 0), 0);
+    cumNetIncome += rev - cogs - opex;
+    bsMonthly['retained'][i] += cumNetIncome;
+  }
+  bsSummary['retained'] = bsMonthly['retained'][n - 1] || 0;
 
   // 勘定科目別内訳（累積円→千円に最終丸め）
   const breakdown = Object.entries(acctBreakdown)
