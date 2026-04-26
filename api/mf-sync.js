@@ -108,6 +108,10 @@ const PL_ACCT_MAP = {
   '会費収入':'rev_other','協賛金収入':'rev_other','入会金収入':'rev_other',
   '営業代行収入':'rev_other','受取手数料':'rev_other','雑収入':'rev_other',
   '売上値引・割戻':'rev_other',
+  '受取利息':'rev_other','受取配当金':'rev_other','為替差益':'rev_other',
+  // 営業外費用 / 法人税等: 'non_op'（PL内訳には出さず BS retained 計算のみで利用）
+  '支払利息':'non_op','雑損失':'non_op','為替差損':'non_op',
+  '法人税等':'non_op','法人税、住民税及び事業税':'non_op',
 };
 
 // BS科目マッピング
@@ -233,7 +237,8 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
   const n = monthIdx.length;
 
   // ── PL: 月次損益（借方・貸方の純額を計算） ──
-  const PL_KEYS = ['rev', 'rev_other', 'labor', 'outsource', 'adv', 'gaichu', 'other', 'cogs'];
+  // 'non_op' は営業外費用・法人税等（PL preview には出さず BS retained 計算でのみ使用）
+  const PL_KEYS = ['rev', 'rev_other', 'labor', 'outsource', 'adv', 'gaichu', 'other', 'cogs', 'non_op'];
   const pl = {};
   PL_KEYS.forEach(k => { pl[k] = { actual: new Array(n).fill(0) }; });
   // 借方・貸方を別々に集計（純額計算用）
@@ -440,10 +445,11 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
   // ダッシュボードもこれに合わせて整合させる（資産=負債+純資産が成立するように）。
   let cumNetIncome = 0;
   for (let i = 0; i < n; i++) {
-    const rev   = (pl.rev?.actual?.[i] || 0) + (pl.rev_other?.actual?.[i] || 0);
-    const cogs  =  pl.cogs?.actual?.[i] || 0;
-    const opex  = ['labor','outsource','adv','gaichu','other'].reduce((t, k) => t + (pl[k]?.actual?.[i] || 0), 0);
-    cumNetIncome += rev - cogs - opex;
+    const rev    = (pl.rev?.actual?.[i] || 0) + (pl.rev_other?.actual?.[i] || 0);
+    const cogs   =  pl.cogs?.actual?.[i] || 0;
+    const opex   = ['labor','outsource','adv','gaichu','other'].reduce((t, k) => t + (pl[k]?.actual?.[i] || 0), 0);
+    const nonOp  =  pl.non_op?.actual?.[i] || 0; // 営業外費用・法人税等
+    cumNetIncome += rev - cogs - opex - nonOp;
     bsMonthly['retained'][i] += cumNetIncome;
   }
   bsSummary['retained'] = bsMonthly['retained'][n - 1] || 0;

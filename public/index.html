@@ -10297,7 +10297,7 @@ function mfRenderPreview() {
       { label:'　　利益剰余金',        key:'retained', isRev:true },
       { label:'　　新株予約権',        key:'warrant',  isRev:true },
       { label:'純資産の部合計',        key:'__calc__', isRev:true, formula:sumEq },
-    ], (key, i, row) => row?.key === '__calc__' ? row.formula(i) : getBS(key, i), initialVisibleIdxSet);
+    ], (key, i, row) => row?.key === '__calc__' ? row.formula(i) : getBS(key, i), initialVisibleIdxSet, { hideTotal: true });
 
   } else if (p.type === 'journals') {
     // AI仕分けサマリー
@@ -10534,26 +10534,29 @@ function mfRenderPreview() {
   card.style.display = 'block';
 }
 
-function mfBuildTable(months, monthNames, rows, getter, visibleIdxSet) {
+function mfBuildTable(months, monthNames, rows, getter, visibleIdxSet, opts) {
   // visibleIdxSet が指定されていれば、その idx の列のみ表示
+  // opts.hideTotal: 「合計」列を出さない（BS など累計残高表示で意味の無い場合）
   const isVisible = (i) => !visibleIdxSet || visibleIdxSet.has(i);
   const visibleMonths = months.map((m, i) => ({ m, i })).filter(x => isVisible(x.i));
+  const hideTotal = !!(opts && opts.hideTotal);
+  const colSpanExtra = hideTotal ? 1 : 2; // 科目列(1) + 合計列(0|1)
   let html = `<table class="dt" style="min-width:${120 + visibleMonths.length * 75}px;width:100%;font-size:11px">
     <thead><tr>
       <th class="l" style="min-width:140px;font-size:10px;position:sticky;left:0;background:var(--bg2);z-index:1">科目 / 月</th>
       ${visibleMonths.map(({i}) => `<th style="min-width:70px;font-size:10px">${monthNames[i]}</th>`).join('')}
-      <th style="min-width:80px;font-size:10px;background:var(--bg3)">合計</th>
+      ${hideTotal ? '' : '<th style="min-width:80px;font-size:10px;background:var(--bg3)">合計</th>'}
     </tr></thead><tbody>`;
 
   rows.forEach(row => {
     // セパレーター
     if (row.key === '__sep__') {
-      html += `<tr><td colspan="${visibleMonths.length + 2}" style="height:4px;background:var(--border2)"></td></tr>`;
+      html += `<tr><td colspan="${visibleMonths.length + colSpanExtra}" style="height:4px;background:var(--border2)"></td></tr>`;
       return;
     }
     // セクション見出し（太字 + 背景色）
     if (row.key === '__header__') {
-      html += `<tr><td colspan="${visibleMonths.length + 2}" style="padding:5px 8px;background:var(--bg3);font-size:11px;font-weight:700;color:var(--text);border-top:1px solid var(--border2)">${row.label}</td></tr>`;
+      html += `<tr><td colspan="${visibleMonths.length + colSpanExtra}" style="padding:5px 8px;background:var(--bg3);font-size:11px;font-weight:700;color:var(--text);border-top:1px solid var(--border2)">${row.label}</td></tr>`;
       return;
     }
     // 計算行（粗利・営業利益）は border-top + 強調表示
@@ -10575,14 +10578,16 @@ function mfBuildTable(months, monthNames, rows, getter, visibleIdxSet) {
         : (v !== 0 ? v.toLocaleString() : '—');
       html += `<td style="text-align:right;padding:3px 6px;font-size:10px;${valClr};${rowStyle}">${cellVal}</td>`;
     });
-    const totClr = isCalc
-      ? (total >= 0 ? 'color:var(--tc-green);font-weight:700' : 'color:var(--tc-red);font-weight:700')
-      : (total === 0 ? 'color:var(--text3)' : (row.isOut ? 'color:var(--tc-red)' : (row.isRev ? 'color:var(--tc-green)' : '')));
-    const totRowStyle = isCalc ? ';border-top:1px solid var(--border2)' : '';
-    const totVal = isCalc
-      ? (total >= 0 ? total.toLocaleString() : '▲' + Math.abs(total).toLocaleString())
-      : (total !== 0 ? total.toLocaleString() : '—');
-    html += `<td style="text-align:right;padding:3px 6px;font-size:10px;font-weight:700;background:var(--bg3);${totClr}${totRowStyle}">${totVal}</td>`;
+    if (!hideTotal) {
+      const totClr = isCalc
+        ? (total >= 0 ? 'color:var(--tc-green);font-weight:700' : 'color:var(--tc-red);font-weight:700')
+        : (total === 0 ? 'color:var(--text3)' : (row.isOut ? 'color:var(--tc-red)' : (row.isRev ? 'color:var(--tc-green)' : '')));
+      const totRowStyle = isCalc ? ';border-top:1px solid var(--border2)' : '';
+      const totVal = isCalc
+        ? (total >= 0 ? total.toLocaleString() : '▲' + Math.abs(total).toLocaleString())
+        : (total !== 0 ? total.toLocaleString() : '—');
+      html += `<td style="text-align:right;padding:3px 6px;font-size:10px;font-weight:700;background:var(--bg3);${totClr}${totRowStyle}">${totVal}</td>`;
+    }
     html += '</tr>';
   });
 
@@ -10675,7 +10680,7 @@ window.mfOnCommitMonthChange = function() {
       { label:'　　利益剰余金',        key:'retained', isRev:true },
       { label:'　　新株予約権',        key:'warrant',  isRev:true },
       { label:'純資産の部合計',        key:'__calc__', isRev:true, formula:sumEq },
-    ], (key, i, row) => row?.key === '__calc__' ? row.formula(i) : getBS(key, i), visibleIdxSet);
+    ], (key, i, row) => row?.key === '__calc__' ? row.formula(i) : getBS(key, i), visibleIdxSet, { hideTotal: true });
   } else if (p.type === 'journals') {
     const monthly = p.cf.monthly || {};
     tblEl.innerHTML = mfBuildTable(months, monthNames, [
