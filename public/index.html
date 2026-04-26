@@ -10268,7 +10268,15 @@ window.mfFetch = async function(type) {
     const jCount = d.journal_count || d.total_journals || 0;
     const excluded = d.excluded_unrealized || 0;
     const unLabel = excluded > 0 ? `、未実現${excluded}件除外` : '';
-    log.textContent = `✓ ${labels[type]} 取得完了（${jCount}件の仕訳${unLabel}）→ 下のプレビューを確認`;
+    // 期間ごとの取得件数を表示（旧期から取れているか診断用）
+    let pcLabel = '';
+    if (Array.isArray(d.period_counts) && d.period_counts.length > 0) {
+      pcLabel = ' / 期間別: ' + d.period_counts.map(p =>
+        `${p.start.slice(2,7).replace('-','/')}〜${p.end.slice(2,7).replace('-','/')}=${p.count}`
+      ).join(', ');
+      console.log('[mf-import] period_counts:', d.period_counts);
+    }
+    log.textContent = `✓ ${labels[type]} 取得完了（${jCount}件の仕訳${unLabel}）${pcLabel} → 下のプレビューを確認`;
     document.getElementById('mf-preview-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   } catch(e) {
