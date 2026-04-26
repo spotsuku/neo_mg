@@ -55,6 +55,7 @@ async function resolveFiscalPeriods(token, fiscalYear) {
       end: p.end_date,
       // MFの period 識別子（API バージョンにより id / accounting_period_id / uuid の可能性があるため全て拾う）
       id: p.id || p.accounting_period_id || p.uuid || null,
+      fiscal_year: p.fiscal_year, // MFの期番号（整数）
     }));
 
     if (overlapping.length > 0) {
@@ -179,12 +180,14 @@ async function fetchAllJournals(token, periodsInfo, options = {}) {
   const perPage = 500;
 
   // MFの各会計期間ごとに仕訳を取得
-  // accounting_period_id を渡さないと現行期間しか返さない事例があるため、
-  // /offices から取得した id を付加して期間ごとに明示的にフェッチする。
+  // /offices は accounting period に id を返さず fiscal_year (整数) のみのため、
+  // /journals API には fiscal_year を渡して期間を切り替える。
+  // 6月決算→3月決算切替などで現年度と過去期にまたがるケースに対応。
   for (const period of periodsInfo.periods) {
-    console.log(`[mf-sync] fetching journals for period ${period.start} ~ ${period.end}${period.id?' (id='+period.id+')':''}`);
+    console.log(`[mf-sync] fetching journals for period ${period.start} ~ ${period.end}${period.fiscal_year?' (fiscal_year='+period.fiscal_year+')':''}`);
     for (let page = 1; page <= 100; page++) {
       const params = { start_date: period.start, end_date: period.end, page, per_page: perPage };
+      if (period.fiscal_year != null) params.fiscal_year = period.fiscal_year;
       if (period.id) params.accounting_period_id = period.id;
       const data = await mfFetch(token, '/journals', params);
       const journals = data.journals || data.data || [];
@@ -571,9 +574,12 @@ export default async function handler(req, res) {
         results._accounting_periods = (off?.accounting_periods || []).map(p => ({
           start_date: p.start_date, end_date: p.end_date,
           id: p.id || p.accounting_period_id || p.uuid || null,
+          fiscal_year: p.fiscal_year, // ← MF独自の期番号（整数）
           keys: Object.keys(p),
           // 検証用に id 系の値を全部含める（パラメータ名が変わる可能性に備え）
           raw_id_fields: { id: p.id, accounting_period_id: p.accounting_period_id, uuid: p.uuid },
+          // 全フィールドの値ダンプ（id のキー名特定用）
+          full: p,
         }));
       } catch (e) { results._accounting_periods_err = e.message.slice(0, 100); }
       return res.status(200).json({ ok: true, results });
