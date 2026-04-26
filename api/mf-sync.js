@@ -428,31 +428,36 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
   // BS: 借方-貸方の純額を月次デルタとして算出し、累計して期中残高を作る
   // 資産: 借方+貸方− / 負債・純資産: 貸方+借方−
   // 期首残高は仕訳からは取得できないため期首=0 起点の累計残高として表示
+  // ※ 丸めは最後にまとめて行う（途中で千円丸めすると累計時に円単位の誤差が累積するため）
   BS_KEYS.forEach(k => {
     const isLiabOrEq = ['payable', 'borrowing', 'borrowing_short', 'other_cl', 'capital', 'retained', 'warrant'].includes(k);
     let running = 0;
     for (let i = 0; i < n; i++) {
       const monthlyDelta = isLiabOrEq ? -bsDelta[k][i] : bsDelta[k][i];
       running += monthlyDelta;
-      bsMonthly[k][i] = Math.round(running); // 累計残高
+      bsMonthly[k][i] = running; // 千円(小数含む) - 後で一括 round
     }
-    // summary は最終月の残高
-    bsSummary[k] = bsMonthly[k][n - 1] || 0;
   });
 
   // 当期純利益累計を 利益剰余金 (retained) に加算する
   // MF推移表は「繰越利益剰余金 + 当期純利益」を BS の利益剰余金として表示する仕様。
-  // ダッシュボードもこれに合わせて整合させる（資産=負債+純資産が成立するように）。
+  // ※ 丸め前の plCredit/plDebit から直接計算し円単位の精度を保つ。
+  //    pl[k].actual は各月で千円丸め済なので使わない。
   let cumNetIncome = 0;
   for (let i = 0; i < n; i++) {
-    const rev    = (pl.rev?.actual?.[i] || 0) + (pl.rev_other?.actual?.[i] || 0);
-    const cogs   =  pl.cogs?.actual?.[i] || 0;
-    const opex   = ['labor','outsource','adv','gaichu','other'].reduce((t, k) => t + (pl[k]?.actual?.[i] || 0), 0);
-    const nonOp  =  pl.non_op?.actual?.[i] || 0; // 営業外費用・法人税等
-    cumNetIncome += rev - cogs - opex - nonOp;
+    const rev = (plCredit.rev[i]       - plDebit.rev[i]) +
+                (plCredit.rev_other[i] - plDebit.rev_other[i]);
+    const expKeys = ['cogs','labor','outsource','adv','gaichu','other','non_op'];
+    const exp = expKeys.reduce((t, k) => t + (plDebit[k][i] - plCredit[k][i]), 0);
+    cumNetIncome += rev - exp;
     bsMonthly['retained'][i] += cumNetIncome;
   }
-  bsSummary['retained'] = bsMonthly['retained'][n - 1] || 0;
+
+  // 全 BS 値を最後に千円に丸める（累計後の値で一回だけ round → 累積誤差ゼロ）
+  BS_KEYS.forEach(k => {
+    for (let i = 0; i < n; i++) bsMonthly[k][i] = Math.round(bsMonthly[k][i]);
+    bsSummary[k] = bsMonthly[k][n - 1] || 0;
+  });
 
   // 勘定科目別内訳（累積円→千円に最終丸め）
   const breakdown = Object.entries(acctBreakdown)
