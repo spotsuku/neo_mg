@@ -180,15 +180,16 @@ async function fetchAllJournals(token, periodsInfo, options = {}) {
   const perPage = 500;
 
   // MFの各会計期間ごとに仕訳を取得
-  // /offices は accounting period に id を返さず fiscal_year (整数) のみのため、
-  // /journals API には fiscal_year を渡して期間を切り替える。
-  // 6月決算→3月決算切替などで現年度と過去期にまたがるケースに対応。
+  // /offices は accounting period に id を返さず fiscal_year のみだが、
+  // /journals は fiscal_year パラメータを受け付けない (unsupported_query_parameter)。
+  // よって start_date / end_date のみで取得し、後段の date フィルターで絞る。
+  // 期間ごとの取得件数を _periodCounts に記録（旧期から取れているか診断用）。
+  const periodCounts = [];
   for (const period of periodsInfo.periods) {
-    console.log(`[mf-sync] fetching journals for period ${period.start} ~ ${period.end}${period.fiscal_year?' (fiscal_year='+period.fiscal_year+')':''}`);
+    console.log(`[mf-sync] fetching journals for period ${period.start} ~ ${period.end}`);
+    let beforeCount = allJournals.length;
     for (let page = 1; page <= 100; page++) {
       const params = { start_date: period.start, end_date: period.end, page, per_page: perPage };
-      if (period.fiscal_year != null) params.fiscal_year = period.fiscal_year;
-      if (period.id) params.accounting_period_id = period.id;
       const data = await mfFetch(token, '/journals', params);
       const journals = data.journals || data.data || [];
       allJournals.push(...journals);
@@ -203,6 +204,9 @@ async function fetchAllJournals(token, periodsInfo, options = {}) {
       if (totalCount && allJournals.length >= totalCount) break;
       if (journals.length < perPage) break;
     }
+    const periodCount = allJournals.length - beforeCount;
+    periodCounts.push({ start: period.start, end: period.end, count: periodCount });
+    console.log(`[mf-sync] period ${period.start}~${period.end}: fetched ${periodCount} journals`);
   }
 
   // 御社の4月〜3月でフィルター（MF期間が広い場合に必要）
@@ -222,9 +226,9 @@ async function fetchAllJournals(token, periodsInfo, options = {}) {
     const beforeCount = filtered.length;
     filtered = filtered.filter(j => j.is_realized !== false);
     console.log(`[mf-sync] realized filter: ${beforeCount} → ${filtered.length} (excluded ${beforeCount - filtered.length} unrealized)`);
-    return { journals: filtered, totalFetched: allJournals.length, excludedUnrealized: beforeCount - filtered.length };
+    return { journals: filtered, totalFetched: allJournals.length, excludedUnrealized: beforeCount - filtered.length, periodCounts };
   }
-  return { journals: filtered, totalFetched: allJournals.length, excludedUnrealized: 0 };
+  return { journals: filtered, totalFetched: allJournals.length, excludedUnrealized: 0, periodCounts };
 }
 
 function buildFromJournals(journals, fiscalYear, options = {}) {
@@ -618,6 +622,7 @@ export default async function handler(req, res) {
         journal_count: result.journalCount,
         total_fetched: fetchResult.totalFetched,
         excluded_unrealized: fetchResult.excludedUnrealized,
+        period_counts: fetchResult.periodCounts, // 期間ごとの取得件数（旧期から取れているか診断用）
         method: 'journals',
         breakdown: result.breakdown,
       };
