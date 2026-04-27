@@ -1859,14 +1859,16 @@ const DEFAULT_BS = {
     other_nca:  { label: 'その他非流動資産', budget: 0,     actual: 0 },
   },
   liabilities: {
-    payable:    { label: '買掛金・未払金',   budget: 0,     actual: 0 },
-    borrowing:  { label: '借入金',           budget: 15000, actual: 15000 },
-    other_cl:   { label: 'その他流動負債',   budget: 0,     actual: 0 },
-    other_ncl:  { label: 'その他固定負債',   budget: 0,     actual: 0 },
+    payable:         { label: '買掛金・未払金',   budget: 0,     actual: 0 },
+    borrowing_short: { label: '短期借入金',       budget: 0,     actual: 0 },
+    borrowing:       { label: '長期借入金',       budget: 15000, actual: 15000 },
+    other_cl:        { label: 'その他流動負債',   budget: 0,     actual: 0 },
+    other_ncl:       { label: 'その他固定負債',   budget: 0,     actual: 0 },
   },
   equity: {
     capital:    { label: '資本金・資本剰余金', budget: 3200, actual: 3200 },
     retained:   { label: '利益剰余金（累積）', budget: -71710, actual: -71710 },
+    warrant:    { label: '新株予約権',         budget: 0,    actual: 0 },
     other_eq:   { label: 'その他純資産',       budget: 0,    actual: 0 },
   }
 };
@@ -2199,6 +2201,15 @@ function renderAnnualBS() {
   ];
   const inputStyle = 'width:100%;padding:3px 5px;border:none;background:transparent;color:var(--tc-blue);font-size:11px;font-weight:600;text-align:right;font-family:inherit;outline:none';
 
+  // 月次BS (DB[currentYear].bs.actual) の最終月をサマリーの実績ソースとする
+  // — BS_DATA は予算と編集状態を保持、実績は月次データから派生させる
+  const _d = (typeof DB !== 'undefined') ? DB[currentYear] : null;
+  const _bsActual = _d?.bs?.actual || {};
+  const _idxs = Object.keys(_bsActual).map(Number).filter(n => !isNaN(n));
+  const _lastIdx = _idxs.length ? Math.max(..._idxs) : -1;
+  const _monthRow = _lastIdx >= 0 ? (_bsActual[_lastIdx] || {}) : {};
+  const _hasMonthly = _lastIdx >= 0 && Object.keys(_monthRow).length > 0;
+
   let html = `<table class="dt" style="width:100%;font-size:11px;border-collapse:separate;border-spacing:0">
     <thead><tr>
       <th class="l" style="min-width:110px;font-size:10px;position:sticky;top:0;z-index:2;background:var(--bg2)">科目</th>
@@ -2211,15 +2222,19 @@ function renderAnnualBS() {
     html += `<tr><td colspan="4" style="background:var(--bg3);font-size:10px;font-weight:700;color:var(--text3);padding:4px 8px">${sec.label}</td></tr>`;
     let secTotB = 0, secTotA = 0;
     Object.entries(BS_DATA[sec.key]).forEach(([key, row]) => {
-      const diff = (row.actual - row.budget) * sec.sign;
+      // 月次BSにデータがあればそれを優先、無ければ BS_DATA の値にフォールバック
+      const actualVal = (_hasMonthly && _monthRow[key] !== undefined && _monthRow[key] !== null)
+        ? Number(_monthRow[key]) || 0
+        : row.actual;
+      const diff = (actualVal - row.budget) * sec.sign;
       const diffStr = diff > 0 ? `<span class="g">+${Math.round(diff).toLocaleString()}</span>`
                     : diff < 0 ? `<span class="r">▲${Math.round(Math.abs(diff)).toLocaleString()}</span>`
                     : '─';
-      secTotB += row.budget; secTotA += row.actual;
+      secTotB += row.budget; secTotA += actualVal;
       html += `<tr>
         <td class="l" style="font-size:11px;padding-left:14px">${row.label}</td>
         <td class="budget editable-cell" onclick="editBSCell(this,'${sec.key}','${key}','budget')">${row.budget?Math.round(row.budget).toLocaleString():'─'}</td>
-        <td class="actual editable-cell" onclick="editBSCell(this,'${sec.key}','${key}','actual')">${row.actual?Math.round(row.actual).toLocaleString():'─'}</td>
+        <td class="actual editable-cell" onclick="editBSCell(this,'${sec.key}','${key}','actual')">${actualVal?Math.round(actualVal).toLocaleString():'─'}</td>
         <td style="background:rgba(55,138,221,0.08);border-left:2px solid rgba(55,138,221,0.2);font-size:11px;text-align:right;padding:4px 6px">${diffStr}</td>
       </tr>`;
     });
@@ -2236,6 +2251,22 @@ function renderAnnualBS() {
 
   html += '</tbody></table>';
   document.getElementById('annual-bs-table').innerHTML = html;
+}
+
+// サマリーBSの actual 編集を月次BS最終月にも反映
+// （renderAnnualBS が db.bs.actual[lastIdx] を優先して読むため、ここで同期しないと編集が描画で打ち消される）
+function _bsSummarySetActual(section, key, val) {
+  BS_DATA[section][key].actual = val;
+  if (typeof DB === 'undefined') return;
+  const d = DB[currentYear];
+  if (!d?.bs?.actual) return;
+  const idxs = Object.keys(d.bs.actual).map(Number).filter(n => !isNaN(n));
+  if (!idxs.length) return;
+  const lastIdx = Math.max(...idxs);
+  if (!d.bs.actual[lastIdx] || typeof d.bs.actual[lastIdx] !== 'object') {
+    d.bs.actual[lastIdx] = {};
+  }
+  d.bs.actual[lastIdx][key] = val;
 }
 
 function editBSCell(td, section, key, kind) {
@@ -2255,7 +2286,12 @@ function editBSCell(td, section, key, kind) {
     if (committed) return;
     committed = true;
     const val = inp.value === '' ? 0 : Number(inp.value) || 0;
-    BS_DATA[section][key][kind] = val;
+    if (kind === 'actual') {
+      _bsSummarySetActual(section, key, val);
+    } else {
+      BS_DATA[section][key][kind] = val;
+    }
+    if (typeof saveDB === 'function') saveDB();
     renderAnnualBS();
   }
   function moveTo(step) {
@@ -2278,8 +2314,15 @@ function editBSCell(td, section, key, kind) {
       const target = cells[curPos + i];
       if (!target) return;
       const m = target.getAttribute('onclick')?.match(/editBSCell\(this,'([^']+)','([^']+)','([^']+)'\)/);
-      if (m) BS_DATA[m[1]][m[2]][m[3]] = val === '' ? 0 : val;
+      if (!m) return;
+      const v = val === '' ? 0 : val;
+      if (m[3] === 'actual') {
+        _bsSummarySetActual(m[1], m[2], v);
+      } else {
+        BS_DATA[m[1]][m[2]][m[3]] = v;
+      }
     });
+    if (typeof saveDB === 'function') saveDB();
     renderAnnualBS();
   });
 
@@ -6237,13 +6280,17 @@ async function commitCSVResult() {
       d.bs[kind][idx] = bs_sec;
       // BS_DATAも更新（年次サマリー用）
       if (typeof BS_DATA !== 'undefined' && kind === 'actual') {
-        if (bs_sec.cash      !== undefined) BS_DATA.assets.cash.actual      = bs_sec.cash;
-        if (bs_sec.receivable!== undefined) BS_DATA.assets.receivable.actual = bs_sec.receivable;
-        if (bs_sec.fixed     !== undefined) BS_DATA.assets.fixed.actual      = bs_sec.fixed;
-        if (bs_sec.payable   !== undefined) BS_DATA.liabilities.payable.actual = bs_sec.payable;
-        if (bs_sec.borrowing !== undefined) BS_DATA.liabilities.borrowing.actual = bs_sec.borrowing;
-        if (bs_sec.capital   !== undefined) BS_DATA.equity.capital.actual   = bs_sec.capital;
-        if (bs_sec.retained  !== undefined) BS_DATA.equity.retained.actual  = bs_sec.retained;
+        if (bs_sec.cash             !== undefined) BS_DATA.assets.cash.actual              = bs_sec.cash;
+        if (bs_sec.receivable       !== undefined) BS_DATA.assets.receivable.actual        = bs_sec.receivable;
+        if (bs_sec.other_ca         !== undefined) BS_DATA.assets.other_ca.actual          = bs_sec.other_ca;
+        if (bs_sec.fixed            !== undefined) BS_DATA.assets.fixed.actual             = bs_sec.fixed;
+        if (bs_sec.payable          !== undefined) BS_DATA.liabilities.payable.actual         = bs_sec.payable;
+        if (bs_sec.borrowing_short  !== undefined) BS_DATA.liabilities.borrowing_short.actual = bs_sec.borrowing_short;
+        if (bs_sec.borrowing        !== undefined) BS_DATA.liabilities.borrowing.actual       = bs_sec.borrowing;
+        if (bs_sec.other_cl         !== undefined) BS_DATA.liabilities.other_cl.actual        = bs_sec.other_cl;
+        if (bs_sec.capital          !== undefined) BS_DATA.equity.capital.actual  = bs_sec.capital;
+        if (bs_sec.retained         !== undefined) BS_DATA.equity.retained.actual = bs_sec.retained;
+        if (bs_sec.warrant          !== undefined) BS_DATA.equity.warrant.actual  = bs_sec.warrant;
       }
     }
 
@@ -11483,15 +11530,23 @@ window.mfCommitConfirmed = async function() {
         });
         if (hasVal) { db.bs.actual[m.idx] = row; applied++; }
       });
-      if (typeof BS_DATA !== 'undefined' && p.bs?.summary) {
-        const s = p.bs.summary;
-        if (s.cash !== undefined) BS_DATA.assets.cash.actual = s.cash;
-        if (s.receivable !== undefined) BS_DATA.assets.receivable.actual = s.receivable;
-        if (s.fixed !== undefined) BS_DATA.assets.fixed.actual = s.fixed;
-        if (s.payable !== undefined) BS_DATA.liabilities.payable.actual = s.payable;
-        if (s.borrowing !== undefined) BS_DATA.liabilities.borrowing.actual = s.borrowing;
-        if (s.capital !== undefined) BS_DATA.equity.capital.actual = s.capital;
-        if (s.retained !== undefined) BS_DATA.equity.retained.actual = s.retained;
+      if (typeof BS_DATA !== 'undefined' && p.bs?.monthly) {
+        // p.bs.summary は期首=0 起点の期中累計（デルタ）。期首残高を加算して絶対残高に変換する
+        // （月次BS表示と同じ式: delta + opening — 上の db.bs.actual 書込み参照）
+        const monthly = p.bs.monthly;
+        const lastIdx = (monthly.cash || []).length - 1;
+        const bal = (k) => ((monthly[k] && monthly[k][lastIdx]) || 0) + (Number(opening[k]) || 0);
+        BS_DATA.assets.cash.actual              = bal('cash');
+        BS_DATA.assets.receivable.actual        = bal('receivable');
+        BS_DATA.assets.other_ca.actual          = bal('other_ca');
+        BS_DATA.assets.fixed.actual             = bal('fixed');
+        BS_DATA.liabilities.payable.actual         = bal('payable');
+        BS_DATA.liabilities.borrowing_short.actual = bal('borrowing_short');
+        BS_DATA.liabilities.borrowing.actual       = bal('borrowing');
+        BS_DATA.liabilities.other_cl.actual        = bal('other_cl');
+        BS_DATA.equity.capital.actual  = bal('capital');
+        BS_DATA.equity.retained.actual = bal('retained');
+        BS_DATA.equity.warrant.actual  = bal('warrant');
       }
 
     } else if (p.type === 'journals') {
