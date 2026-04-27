@@ -38,9 +38,13 @@ function buildMonthIndex(fiscalYear) {
 // 会計期間: MFの会計期間を取得し、御社の4月〜3月に該当する期間を特定
 //
 // MFの会計期間と御社FY(4-3月)が一致しない場合、御社FYは複数のMF期間にまたがる。
-// それらを単純合算するとMF期境界の決算/期首振替仕訳が累積残高を破壊するため、
-// 「御社FY末を含むMF期間」(= anchor 期) のみを使用する。
-// anchor 期に含まれない月は仕訳ゼロとなり、サマリーBSは anchor 期内の累積として正しく描画される。
+//
+// PL/CF: 月次集計のみで累積を持たないため、全期間の仕訳を使う
+// BS:    累積残高を作るため anchor 期 (御社FY末を含むMF期間) のみを使う
+//        — 期境界の決算/期首振替仕訳が累積残高を破壊するのを避ける
+//
+// この関数は重複する全期間 (`periods`) と anchor 期 (`anchor`) の両方を返す。
+// 仕訳の取得は `periods` 全体で行い、BS集計時に `anchor` でフィルタする。
 async function resolveFiscalPeriods(token, fiscalYear) {
   const fy = parseInt(fiscalYear);
   const ourStart = new Date(`${fy}-04-01`);
@@ -50,7 +54,7 @@ async function resolveFiscalPeriods(token, fiscalYear) {
     const data = await mfFetch(token, '/offices');
     const periods = data?.accounting_periods || [];
 
-    // 御社FYと重複する全期間（診断用に把握しておく）
+    // 御社FYと重複する全期間
     const overlapping = periods.filter(p => {
       const pStart = new Date(p.start_date);
       const pEnd   = new Date(p.end_date);
@@ -77,18 +81,18 @@ async function resolveFiscalPeriods(token, fiscalYear) {
         .sort((a, b) => b.overlapDays - a.overlapDays)[0]?.p;
     }
 
-    if (anchor) {
-      const skipped = overlapping.filter(p => p !== anchor);
-      console.log(`[mf-sync] FY${fy}: anchor period ${anchor.start}〜${anchor.end}${anchor.id?'(id='+anchor.id+')':''}`);
-      if (skipped.length > 0) {
-        console.log(`[mf-sync] FY${fy}: skipped ${skipped.length} pre-period(s):`,
-          skipped.map(p => `${p.start}〜${p.end}`).join(', '),
-          '— 期またぎ累積崩壊を防ぐため anchor 期以外は使用しない');
+    if (overlapping.length > 0) {
+      const nonAnchor = overlapping.filter(p => p !== anchor);
+      console.log(`[mf-sync] FY${fy}: fetching from ${overlapping.length} period(s):`,
+        overlapping.map(p => `${p.start}〜${p.end}${p === anchor ? '(anchor)' : ''}`).join(', '));
+      if (nonAnchor.length > 0) {
+        console.log(`[mf-sync] FY${fy}: BSはanchor期のみで集計、PL/CFは全期間で集計します`);
       }
       return {
-        periods: [anchor],
-        anchor,
-        skippedPeriods: skipped,
+        periods: overlapping,        // PL/CF/取得用: 全期間
+        anchor,                      // BS集計用: anchor期のみ
+        nonAnchorPeriods: nonAnchor, // 診断/UI表示用
+        skippedPeriods: nonAnchor,   // 後方互換 (UIノートが参照)
         filterStart: `${fy}-04-01`,
         filterEnd: `${fy + 1}-03-31`,
       };
@@ -101,6 +105,7 @@ async function resolveFiscalPeriods(token, fiscalYear) {
   return {
     periods: [{ start: `${fy}-04-01`, end: `${fy + 1}-03-31`, id: null }],
     anchor: null,
+    nonAnchorPeriods: [],
     skippedPeriods: [],
     filterStart: `${fy}-04-01`,
     filterEnd: `${fy + 1}-03-31`,
@@ -245,6 +250,9 @@ async function fetchAllJournals(token, periodsInfo, options = {}) {
         const params = { start_date: chunk.start, end_date: chunk.end, page, per_page: perPage };
         const data = await mfFetch(token, '/journals', params);
         const journals = data.journals || data.data || [];
+        // 仕訳に source MF 期間のタグを付与する
+        // (BS集計時に anchor 期のみフィルタするため、PL/CF は全期間使う)
+        for (const j of journals) j._mfPeriodStart = period.start;
         allJournals.push(...journals);
 
         const totalPages = data.metadata?.total_pages || data.total_pages || null;
@@ -296,7 +304,8 @@ async function fetchAllJournals(token, periodsInfo, options = {}) {
 }
 
 function buildFromJournals(journals, fiscalYear, options = {}) {
-  const { cfCategoryOverrides = {}, plCategoryOverrides = {}, bsCategoryOverrides = {} } = options;
+  const { cfCategoryOverrides = {}, plCategoryOverrides = {}, bsCategoryOverrides = {},
+          anchorPeriodStart = null } = options;
   const fyNum = parseInt(fiscalYear);
   // ユーザー上書きが最優先、次に静的マップ
   // 年度依存マッピング:
@@ -361,11 +370,16 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
     return categorizeCf(acctName, isIn);
   };
 
+  // BS集計対象判定: anchor 期が指定されていれば、その期の仕訳のみで BS 累積残高を構成する
+  // (PL/CF は月次集計なので全仕訳を使う)
+  const isAnchorJournal = (j) => !anchorPeriodStart || j._mfPeriodStart === anchorPeriodStart;
+
   journals.forEach(j => {
     const txDate = new Date(j.transaction_date || j.date || j.posted_at || '');
     if (isNaN(txDate)) return;
     const idx = monthIdx.findIndex(m => m.year === txDate.getFullYear() && m.month === txDate.getMonth() + 1);
     if (idx < 0) return;
+    const useForBs = isAnchorJournal(j);
 
     const branches = j.branches || j.entries || j.details || [];
     branches.forEach(b => {
@@ -399,18 +413,21 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
       if (plKeyCredit && pl[plKeyCredit]) plCredit[plKeyCredit][idx] += creditAmount;
 
       // ── BS計算: 借方増 / 貸方増 ──
-      const bsKeyDebit = resolveBsKey(debitAcct);
-      const bsKeyCredit = resolveBsKey(creditAcct);
-      if (bsKeyDebit && bsDelta[bsKeyDebit]) bsDelta[bsKeyDebit][idx] += debitAmount;
-      if (bsKeyCredit && bsDelta[bsKeyCredit]) bsDelta[bsKeyCredit][idx] -= creditAmount;
+      // anchor 期の仕訳のみ累積残高に反映 (期またぎでの累積崩壊を防ぐ)
+      if (useForBs) {
+        const bsKeyDebit = resolveBsKey(debitAcct);
+        const bsKeyCredit = resolveBsKey(creditAcct);
+        if (bsKeyDebit && bsDelta[bsKeyDebit]) bsDelta[bsKeyDebit][idx] += debitAmount;
+        if (bsKeyCredit && bsDelta[bsKeyCredit]) bsDelta[bsKeyCredit][idx] -= creditAmount;
 
-      // ── 消費税の取り込み（MF推移表は仕訳の tax_value から仮払/仮受消費税を集計）──
-      // value (税抜本体) とは別に MF API は branches[].debitor.tax_value / creditor.tax_value
-      // に消費税額を持つ。これを 仮払消費税(other_ca) / 仮受消費税(other_cl) に振り分ける。
-      const debitTaxYen  = Number(b.debitor?.tax_value  || 0);
-      const creditTaxYen = Number(b.creditor?.tax_value || 0);
-      if (debitTaxYen > 0)  bsDelta['other_ca'][idx] += debitTaxYen  / 1000; // 仮払消費税: 資産増加
-      if (creditTaxYen > 0) bsDelta['other_cl'][idx] -= creditTaxYen / 1000; // 仮受消費税: 負債増加（負債は -bsDelta が増加方向）
+        // ── 消費税の取り込み（MF推移表は仕訳の tax_value から仮払/仮受消費税を集計）──
+        // value (税抜本体) とは別に MF API は branches[].debitor.tax_value / creditor.tax_value
+        // に消費税額を持つ。これを 仮払消費税(other_ca) / 仮受消費税(other_cl) に振り分ける。
+        const debitTaxYen  = Number(b.debitor?.tax_value  || 0);
+        const creditTaxYen = Number(b.creditor?.tax_value || 0);
+        if (debitTaxYen > 0)  bsDelta['other_ca'][idx] += debitTaxYen  / 1000; // 仮払消費税: 資産増加
+        if (creditTaxYen > 0) bsDelta['other_cl'][idx] -= creditTaxYen / 1000; // 仮受消費税: 負債増加（負債は -bsDelta が増加方向）
+      }
 
       // ── CF計算: 現預金の借方=入金、貸方=出金 ──
       const isDebitCash = cashNames.some(c => debitAcct.includes(c));
@@ -676,7 +693,8 @@ export default async function handler(req, res) {
       const periodsInfo = await resolveFiscalPeriods(token, fiscal_year);
       const fetchResult = await fetchAllJournals(token, periodsInfo, { includeUnrealized });
       const result = buildFromJournals(fetchResult.journals, fiscal_year,
-        { cfCategoryOverrides, plCategoryOverrides, bsCategoryOverrides });
+        { cfCategoryOverrides, plCategoryOverrides, bsCategoryOverrides,
+          anchorPeriodStart: periodsInfo.anchor?.start || null });
 
       // action に応じて必要な部分だけ返す
       const response = {
