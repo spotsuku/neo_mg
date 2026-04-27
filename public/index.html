@@ -10423,8 +10423,9 @@ function mfRenderPreview() {
     const _anchor = p.period?.anchor;
     const skipNote = (_skipped.length > 0 && _anchor)
       ? `<div style="background:rgba(55,138,221,0.10);border:1px solid rgba(55,138,221,0.3);border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:10px;color:var(--tc-blue);line-height:1.5">
-          ℹ <strong>MFの会計期間が御社FYと不一致のため、anchor期 (${_anchor.start}〜${_anchor.end}) のみ集計しています。</strong><br>
-          除外: ${_skipped.map(s => `${s.start}〜${s.end}`).join(' / ')} — 期境界の決算/期首振替仕訳による累積崩壊を防ぐためです。anchor期外の月はゼロ表示になります。
+          ℹ <strong>MFの会計期間 (${_skipped.map(s => s.start.slice(0,7)+'〜'+s.end.slice(0,7)).join(' / ')} と ${_anchor.start.slice(0,7)}〜${_anchor.end.slice(0,7)}) が御社FYに2期またがっています。</strong><br>
+          BSは累積残高を作るため anchor期 (${_anchor.start}〜${_anchor.end}) の仕訳のみで集計（anchor期外の月はゼロ表示）。<br>
+          PL/CFは月次集計のため全期間の仕訳を使用しています。
         </div>`
       : '';
     const bsNote = skipNote + (hasOpening
@@ -10814,8 +10815,9 @@ window.mfOnCommitMonthChange = function() {
     const _anchor = p.period?.anchor;
     const skipNote = (_skipped.length > 0 && _anchor)
       ? `<div style="background:rgba(55,138,221,0.10);border:1px solid rgba(55,138,221,0.3);border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:10px;color:var(--tc-blue);line-height:1.5">
-          ℹ <strong>MFの会計期間が御社FYと不一致のため、anchor期 (${_anchor.start}〜${_anchor.end}) のみ集計しています。</strong><br>
-          除外: ${_skipped.map(s => `${s.start}〜${s.end}`).join(' / ')} — 期境界の決算/期首振替仕訳による累積崩壊を防ぐためです。anchor期外の月はゼロ表示になります。
+          ℹ <strong>MFの会計期間 (${_skipped.map(s => s.start.slice(0,7)+'〜'+s.end.slice(0,7)).join(' / ')} と ${_anchor.start.slice(0,7)}〜${_anchor.end.slice(0,7)}) が御社FYに2期またがっています。</strong><br>
+          BSは累積残高を作るため anchor期 (${_anchor.start}〜${_anchor.end}) の仕訳のみで集計（anchor期外の月はゼロ表示）。<br>
+          PL/CFは月次集計のため全期間の仕訳を使用しています。
         </div>`
       : '';
     const bsNote = skipNote + (hasOpening
