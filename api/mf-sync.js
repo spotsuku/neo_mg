@@ -36,6 +36,11 @@ function buildMonthIndex(fiscalYear) {
 }
 
 // 会計期間: MFの会計期間を取得し、御社の4月〜3月に該当する期間を特定
+//
+// MFの会計期間と御社FY(4-3月)が一致しない場合、御社FYは複数のMF期間にまたがる。
+// それらを単純合算するとMF期境界の決算/期首振替仕訳が累積残高を破壊するため、
+// 「御社FY末を含むMF期間」(= anchor 期) のみを使用する。
+// anchor 期に含まれない月は仕訳ゼロとなり、サマリーBSは anchor 期内の累積として正しく描画される。
 async function resolveFiscalPeriods(token, fiscalYear) {
   const fy = parseInt(fiscalYear);
   const ourStart = new Date(`${fy}-04-01`);
@@ -45,7 +50,7 @@ async function resolveFiscalPeriods(token, fiscalYear) {
     const data = await mfFetch(token, '/offices');
     const periods = data?.accounting_periods || [];
 
-    // MFの各会計期間のうち、御社の4月〜3月と重複するものを抽出
+    // 御社FYと重複する全期間（診断用に把握しておく）
     const overlapping = periods.filter(p => {
       const pStart = new Date(p.start_date);
       const pEnd   = new Date(p.end_date);
@@ -53,16 +58,37 @@ async function resolveFiscalPeriods(token, fiscalYear) {
     }).map(p => ({
       start: p.start_date,
       end: p.end_date,
-      // MFの period 識別子（API バージョンにより id / accounting_period_id / uuid の可能性があるため全て拾う）
       id: p.id || p.accounting_period_id || p.uuid || null,
-      fiscal_year: p.fiscal_year, // MFの期番号（整数）
+      fiscal_year: p.fiscal_year,
     }));
 
-    if (overlapping.length > 0) {
-      console.log(`[mf-sync] resolved ${overlapping.length} overlapping periods for FY${fy}:`,
-        overlapping.map(p => `${p.start}〜${p.end}${p.id?'(id='+p.id+')':''}`).join(', '));
+    // anchor 期 = 御社FY末を含むMF期間
+    // 同候補が無ければ、御社FYと最も重複期間が長い期を fallback として選ぶ
+    let anchor = overlapping.find(p =>
+      new Date(p.start) <= ourEnd && new Date(p.end) >= ourEnd
+    );
+    if (!anchor && overlapping.length > 0) {
+      anchor = overlapping
+        .map(p => {
+          const oStart = Math.max(new Date(p.start), ourStart);
+          const oEnd   = Math.min(new Date(p.end), ourEnd);
+          return { p, overlapDays: Math.max(0, (oEnd - oStart) / 86400000) };
+        })
+        .sort((a, b) => b.overlapDays - a.overlapDays)[0]?.p;
+    }
+
+    if (anchor) {
+      const skipped = overlapping.filter(p => p !== anchor);
+      console.log(`[mf-sync] FY${fy}: anchor period ${anchor.start}〜${anchor.end}${anchor.id?'(id='+anchor.id+')':''}`);
+      if (skipped.length > 0) {
+        console.log(`[mf-sync] FY${fy}: skipped ${skipped.length} pre-period(s):`,
+          skipped.map(p => `${p.start}〜${p.end}`).join(', '),
+          '— 期またぎ累積崩壊を防ぐため anchor 期以外は使用しない');
+      }
       return {
-        periods: overlapping,
+        periods: [anchor],
+        anchor,
+        skippedPeriods: skipped,
         filterStart: `${fy}-04-01`,
         filterEnd: `${fy + 1}-03-31`,
       };
@@ -74,6 +100,8 @@ async function resolveFiscalPeriods(token, fiscalYear) {
   // フォールバック: そのまま4月〜3月
   return {
     periods: [{ start: `${fy}-04-01`, end: `${fy + 1}-03-31`, id: null }],
+    anchor: null,
+    skippedPeriods: [],
     filterStart: `${fy}-04-01`,
     filterEnd: `${fy + 1}-03-31`,
   };

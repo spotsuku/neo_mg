@@ -10419,14 +10419,22 @@ function mfRenderPreview() {
     const monthly = p.bs.monthly || {};
     const opening = mfGetOpeningBS(p.fy);
     const hasOpening = Object.values(opening).some(v => Number(v) !== 0);
-    const bsNote = hasOpening
+    const _skipped = p.period?.skippedPeriods || [];
+    const _anchor = p.period?.anchor;
+    const skipNote = (_skipped.length > 0 && _anchor)
+      ? `<div style="background:rgba(55,138,221,0.10);border:1px solid rgba(55,138,221,0.3);border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:10px;color:var(--tc-blue);line-height:1.5">
+          ℹ <strong>MFの会計期間が御社FYと不一致のため、anchor期 (${_anchor.start}〜${_anchor.end}) のみ集計しています。</strong><br>
+          除外: ${_skipped.map(s => `${s.start}〜${s.end}`).join(' / ')} — 期境界の決算/期首振替仕訳による累積崩壊を防ぐためです。anchor期外の月はゼロ表示になります。
+        </div>`
+      : '';
+    const bsNote = skipNote + (hasOpening
       ? `<div style="background:rgba(39,174,96,0.10);border:1px solid rgba(39,174,96,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:10px;color:var(--tc-green);line-height:1.5">
           ✅ <strong>${Number(p.fy)-1}年度3月末の残高を期首として加算した実残高を表示しています。</strong>
         </div>`
       : `<div style="background:rgba(239,159,39,0.10);border:1px solid rgba(239,159,39,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:10px;color:var(--tc-amber);line-height:1.5">
           ⚠ <strong>期首残高が仕訳から取得できないため「期首=0 起点の累計残高」として表示しています。</strong><br>
           前年度（${Number(p.fy)-1}年度）BS実績を入力すると、自動で期首残高として加算されます。
-        </div>`;
+        </div>`);
     const getBS = (k, i) => ((monthly[k] && monthly[k][i]) || 0) + (Number(opening[k]) || 0);
     const sumCa = i => getBS('cash',i) + getBS('receivable',i) + getBS('other_ca',i);
     const sumFa = i => getBS('fixed',i);
@@ -10802,14 +10810,22 @@ window.mfOnCommitMonthChange = function() {
     const monthly = p.bs.monthly || {};
     const opening = mfGetOpeningBS(p.fy);
     const hasOpening = Object.values(opening).some(v => Number(v) !== 0);
-    const bsNote = hasOpening
+    const _skipped = p.period?.skippedPeriods || [];
+    const _anchor = p.period?.anchor;
+    const skipNote = (_skipped.length > 0 && _anchor)
+      ? `<div style="background:rgba(55,138,221,0.10);border:1px solid rgba(55,138,221,0.3);border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:10px;color:var(--tc-blue);line-height:1.5">
+          ℹ <strong>MFの会計期間が御社FYと不一致のため、anchor期 (${_anchor.start}〜${_anchor.end}) のみ集計しています。</strong><br>
+          除外: ${_skipped.map(s => `${s.start}〜${s.end}`).join(' / ')} — 期境界の決算/期首振替仕訳による累積崩壊を防ぐためです。anchor期外の月はゼロ表示になります。
+        </div>`
+      : '';
+    const bsNote = skipNote + (hasOpening
       ? `<div style="background:rgba(39,174,96,0.10);border:1px solid rgba(39,174,96,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:10px;color:var(--tc-green);line-height:1.5">
           ✅ <strong>${Number(p.fy)-1}年度3月末の残高を期首として加算した実残高を表示しています。</strong>
         </div>`
       : `<div style="background:rgba(239,159,39,0.10);border:1px solid rgba(239,159,39,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;font-size:10px;color:var(--tc-amber);line-height:1.5">
           ⚠ <strong>期首残高が仕訳から取得できないため「期首=0 起点の累計残高」として表示しています。</strong><br>
           前年度（${Number(p.fy)-1}年度）BS実績を入力すると、自動で期首残高として加算されます。
-        </div>`;
+        </div>`);
     const getBS = (k, i) => ((monthly[k] && monthly[k][i]) || 0) + (Number(opening[k]) || 0);
     const sumCa = i => getBS('cash',i) + getBS('receivable',i) + getBS('other_ca',i);
     const sumFa = i => getBS('fixed',i);
