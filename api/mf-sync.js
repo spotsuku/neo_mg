@@ -205,8 +205,15 @@ async function fetchAllJournals(token, periodsInfo, options = {}) {
       if (journals.length < perPage) break;
     }
     const periodCount = allJournals.length - beforeCount;
-    periodCounts.push({ start: period.start, end: period.end, count: periodCount });
-    console.log(`[mf-sync] period ${period.start}~${period.end}: fetched ${periodCount} journals`);
+    // この期間で取得した仕訳の日付範囲を抽出（実際にどの期間のデータが返って来たか診断用）
+    const periodJournals = allJournals.slice(beforeCount);
+    const dates = periodJournals.map(j => j.transaction_date || '').filter(d => d).sort();
+    periodCounts.push({
+      start: period.start, end: period.end, count: periodCount,
+      first_date: dates[0] || null,
+      last_date: dates[dates.length - 1] || null,
+    });
+    console.log(`[mf-sync] period ${period.start}~${period.end}: fetched ${periodCount} journals, dates ${dates[0] || '?'}〜${dates[dates.length-1] || '?'}`);
   }
 
   // 御社の4月〜3月でフィルター（MF期間が広い場合に必要）
