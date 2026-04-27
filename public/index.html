@@ -1859,14 +1859,16 @@ const DEFAULT_BS = {
     other_nca:  { label: 'その他非流動資産', budget: 0,     actual: 0 },
   },
   liabilities: {
-    payable:    { label: '買掛金・未払金',   budget: 0,     actual: 0 },
-    borrowing:  { label: '借入金',           budget: 15000, actual: 15000 },
-    other_cl:   { label: 'その他流動負債',   budget: 0,     actual: 0 },
-    other_ncl:  { label: 'その他固定負債',   budget: 0,     actual: 0 },
+    payable:         { label: '買掛金・未払金',   budget: 0,     actual: 0 },
+    borrowing_short: { label: '短期借入金',       budget: 0,     actual: 0 },
+    borrowing:       { label: '長期借入金',       budget: 15000, actual: 15000 },
+    other_cl:        { label: 'その他流動負債',   budget: 0,     actual: 0 },
+    other_ncl:       { label: 'その他固定負債',   budget: 0,     actual: 0 },
   },
   equity: {
     capital:    { label: '資本金・資本剰余金', budget: 3200, actual: 3200 },
     retained:   { label: '利益剰余金（累積）', budget: -71710, actual: -71710 },
+    warrant:    { label: '新株予約権',         budget: 0,    actual: 0 },
     other_eq:   { label: 'その他純資産',       budget: 0,    actual: 0 },
   }
 };
@@ -6237,13 +6239,17 @@ async function commitCSVResult() {
       d.bs[kind][idx] = bs_sec;
       // BS_DATAも更新（年次サマリー用）
       if (typeof BS_DATA !== 'undefined' && kind === 'actual') {
-        if (bs_sec.cash      !== undefined) BS_DATA.assets.cash.actual      = bs_sec.cash;
-        if (bs_sec.receivable!== undefined) BS_DATA.assets.receivable.actual = bs_sec.receivable;
-        if (bs_sec.fixed     !== undefined) BS_DATA.assets.fixed.actual      = bs_sec.fixed;
-        if (bs_sec.payable   !== undefined) BS_DATA.liabilities.payable.actual = bs_sec.payable;
-        if (bs_sec.borrowing !== undefined) BS_DATA.liabilities.borrowing.actual = bs_sec.borrowing;
-        if (bs_sec.capital   !== undefined) BS_DATA.equity.capital.actual   = bs_sec.capital;
-        if (bs_sec.retained  !== undefined) BS_DATA.equity.retained.actual  = bs_sec.retained;
+        if (bs_sec.cash             !== undefined) BS_DATA.assets.cash.actual              = bs_sec.cash;
+        if (bs_sec.receivable       !== undefined) BS_DATA.assets.receivable.actual        = bs_sec.receivable;
+        if (bs_sec.other_ca         !== undefined) BS_DATA.assets.other_ca.actual          = bs_sec.other_ca;
+        if (bs_sec.fixed            !== undefined) BS_DATA.assets.fixed.actual             = bs_sec.fixed;
+        if (bs_sec.payable          !== undefined) BS_DATA.liabilities.payable.actual         = bs_sec.payable;
+        if (bs_sec.borrowing_short  !== undefined) BS_DATA.liabilities.borrowing_short.actual = bs_sec.borrowing_short;
+        if (bs_sec.borrowing        !== undefined) BS_DATA.liabilities.borrowing.actual       = bs_sec.borrowing;
+        if (bs_sec.other_cl         !== undefined) BS_DATA.liabilities.other_cl.actual        = bs_sec.other_cl;
+        if (bs_sec.capital          !== undefined) BS_DATA.equity.capital.actual  = bs_sec.capital;
+        if (bs_sec.retained         !== undefined) BS_DATA.equity.retained.actual = bs_sec.retained;
+        if (bs_sec.warrant          !== undefined) BS_DATA.equity.warrant.actual  = bs_sec.warrant;
       }
     }
 
@@ -11483,15 +11489,23 @@ window.mfCommitConfirmed = async function() {
         });
         if (hasVal) { db.bs.actual[m.idx] = row; applied++; }
       });
-      if (typeof BS_DATA !== 'undefined' && p.bs?.summary) {
-        const s = p.bs.summary;
-        if (s.cash !== undefined) BS_DATA.assets.cash.actual = s.cash;
-        if (s.receivable !== undefined) BS_DATA.assets.receivable.actual = s.receivable;
-        if (s.fixed !== undefined) BS_DATA.assets.fixed.actual = s.fixed;
-        if (s.payable !== undefined) BS_DATA.liabilities.payable.actual = s.payable;
-        if (s.borrowing !== undefined) BS_DATA.liabilities.borrowing.actual = s.borrowing;
-        if (s.capital !== undefined) BS_DATA.equity.capital.actual = s.capital;
-        if (s.retained !== undefined) BS_DATA.equity.retained.actual = s.retained;
+      if (typeof BS_DATA !== 'undefined' && p.bs?.monthly) {
+        // p.bs.summary は期首=0 起点の期中累計（デルタ）。期首残高を加算して絶対残高に変換する
+        // （月次BS表示と同じ式: delta + opening — 上の db.bs.actual 書込み参照）
+        const monthly = p.bs.monthly;
+        const lastIdx = (monthly.cash || []).length - 1;
+        const bal = (k) => ((monthly[k] && monthly[k][lastIdx]) || 0) + (Number(opening[k]) || 0);
+        BS_DATA.assets.cash.actual              = bal('cash');
+        BS_DATA.assets.receivable.actual        = bal('receivable');
+        BS_DATA.assets.other_ca.actual          = bal('other_ca');
+        BS_DATA.assets.fixed.actual             = bal('fixed');
+        BS_DATA.liabilities.payable.actual         = bal('payable');
+        BS_DATA.liabilities.borrowing_short.actual = bal('borrowing_short');
+        BS_DATA.liabilities.borrowing.actual       = bal('borrowing');
+        BS_DATA.liabilities.other_cl.actual        = bal('other_cl');
+        BS_DATA.equity.capital.actual  = bal('capital');
+        BS_DATA.equity.retained.actual = bal('retained');
+        BS_DATA.equity.warrant.actual  = bal('warrant');
       }
 
     } else if (p.type === 'journals') {
