@@ -2201,6 +2201,15 @@ function renderAnnualBS() {
   ];
   const inputStyle = 'width:100%;padding:3px 5px;border:none;background:transparent;color:var(--tc-blue);font-size:11px;font-weight:600;text-align:right;font-family:inherit;outline:none';
 
+  // 月次BS (DB[currentYear].bs.actual) の最終月をサマリーの実績ソースとする
+  // — BS_DATA は予算と編集状態を保持、実績は月次データから派生させる
+  const _d = (typeof DB !== 'undefined') ? DB[currentYear] : null;
+  const _bsActual = _d?.bs?.actual || {};
+  const _idxs = Object.keys(_bsActual).map(Number).filter(n => !isNaN(n));
+  const _lastIdx = _idxs.length ? Math.max(..._idxs) : -1;
+  const _monthRow = _lastIdx >= 0 ? (_bsActual[_lastIdx] || {}) : {};
+  const _hasMonthly = _lastIdx >= 0 && Object.keys(_monthRow).length > 0;
+
   let html = `<table class="dt" style="width:100%;font-size:11px;border-collapse:separate;border-spacing:0">
     <thead><tr>
       <th class="l" style="min-width:110px;font-size:10px;position:sticky;top:0;z-index:2;background:var(--bg2)">科目</th>
@@ -2213,15 +2222,19 @@ function renderAnnualBS() {
     html += `<tr><td colspan="4" style="background:var(--bg3);font-size:10px;font-weight:700;color:var(--text3);padding:4px 8px">${sec.label}</td></tr>`;
     let secTotB = 0, secTotA = 0;
     Object.entries(BS_DATA[sec.key]).forEach(([key, row]) => {
-      const diff = (row.actual - row.budget) * sec.sign;
+      // 月次BSにデータがあればそれを優先、無ければ BS_DATA の値にフォールバック
+      const actualVal = (_hasMonthly && _monthRow[key] !== undefined && _monthRow[key] !== null)
+        ? Number(_monthRow[key]) || 0
+        : row.actual;
+      const diff = (actualVal - row.budget) * sec.sign;
       const diffStr = diff > 0 ? `<span class="g">+${Math.round(diff).toLocaleString()}</span>`
                     : diff < 0 ? `<span class="r">▲${Math.round(Math.abs(diff)).toLocaleString()}</span>`
                     : '─';
-      secTotB += row.budget; secTotA += row.actual;
+      secTotB += row.budget; secTotA += actualVal;
       html += `<tr>
         <td class="l" style="font-size:11px;padding-left:14px">${row.label}</td>
         <td class="budget editable-cell" onclick="editBSCell(this,'${sec.key}','${key}','budget')">${row.budget?Math.round(row.budget).toLocaleString():'─'}</td>
-        <td class="actual editable-cell" onclick="editBSCell(this,'${sec.key}','${key}','actual')">${row.actual?Math.round(row.actual).toLocaleString():'─'}</td>
+        <td class="actual editable-cell" onclick="editBSCell(this,'${sec.key}','${key}','actual')">${actualVal?Math.round(actualVal).toLocaleString():'─'}</td>
         <td style="background:rgba(55,138,221,0.08);border-left:2px solid rgba(55,138,221,0.2);font-size:11px;text-align:right;padding:4px 6px">${diffStr}</td>
       </tr>`;
     });
@@ -2238,6 +2251,22 @@ function renderAnnualBS() {
 
   html += '</tbody></table>';
   document.getElementById('annual-bs-table').innerHTML = html;
+}
+
+// サマリーBSの actual 編集を月次BS最終月にも反映
+// （renderAnnualBS が db.bs.actual[lastIdx] を優先して読むため、ここで同期しないと編集が描画で打ち消される）
+function _bsSummarySetActual(section, key, val) {
+  BS_DATA[section][key].actual = val;
+  if (typeof DB === 'undefined') return;
+  const d = DB[currentYear];
+  if (!d?.bs?.actual) return;
+  const idxs = Object.keys(d.bs.actual).map(Number).filter(n => !isNaN(n));
+  if (!idxs.length) return;
+  const lastIdx = Math.max(...idxs);
+  if (!d.bs.actual[lastIdx] || typeof d.bs.actual[lastIdx] !== 'object') {
+    d.bs.actual[lastIdx] = {};
+  }
+  d.bs.actual[lastIdx][key] = val;
 }
 
 function editBSCell(td, section, key, kind) {
@@ -2257,7 +2286,12 @@ function editBSCell(td, section, key, kind) {
     if (committed) return;
     committed = true;
     const val = inp.value === '' ? 0 : Number(inp.value) || 0;
-    BS_DATA[section][key][kind] = val;
+    if (kind === 'actual') {
+      _bsSummarySetActual(section, key, val);
+    } else {
+      BS_DATA[section][key][kind] = val;
+    }
+    if (typeof saveDB === 'function') saveDB();
     renderAnnualBS();
   }
   function moveTo(step) {
@@ -2280,8 +2314,15 @@ function editBSCell(td, section, key, kind) {
       const target = cells[curPos + i];
       if (!target) return;
       const m = target.getAttribute('onclick')?.match(/editBSCell\(this,'([^']+)','([^']+)','([^']+)'\)/);
-      if (m) BS_DATA[m[1]][m[2]][m[3]] = val === '' ? 0 : val;
+      if (!m) return;
+      const v = val === '' ? 0 : val;
+      if (m[3] === 'actual') {
+        _bsSummarySetActual(m[1], m[2], v);
+      } else {
+        BS_DATA[m[1]][m[2]][m[3]] = v;
+      }
     });
+    if (typeof saveDB === 'function') saveDB();
     renderAnnualBS();
   });
 
