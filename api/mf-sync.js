@@ -538,13 +538,26 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
   // MF推移表は「繰越利益剰余金 + 当期純利益」を BS の利益剰余金として表示する仕様。
   // ※ 丸め前の plCredit/plDebit から直接計算し円単位の精度を保つ。
   //    pl[k].actual は各月で千円丸め済なので使わない。
+  //
+  // ※ anchor 期外（例: 4-6月 = MF前期分）は BS仕訳もゼロのため、
+  //    cumNetIncome も加算しない。anchor 期の繰越利益剰余金 期首値が
+  //    既に「前期(=anchor期外)の累計損益」を内包しているため、
+  //    pre-anchor 月の PL 純利益を加算すると 二重計上 になる。
+  const isAnchorMonth = (i) => {
+    if (!anchorPeriodStart) return true;
+    const m = monthIdx[i];
+    const monthFirst = `${m.year}-${String(m.month).padStart(2,'0')}-01`;
+    return monthFirst >= anchorPeriodStart;
+  };
   let cumNetIncome = 0;
   for (let i = 0; i < n; i++) {
-    const rev = (plCredit.rev[i]       - plDebit.rev[i]) +
-                (plCredit.rev_other[i] - plDebit.rev_other[i]);
-    const expKeys = ['cogs','labor','outsource','adv','gaichu','other','non_op'];
-    const exp = expKeys.reduce((t, k) => t + (plDebit[k][i] - plCredit[k][i]), 0);
-    cumNetIncome += rev - exp;
+    if (isAnchorMonth(i)) {
+      const rev = (plCredit.rev[i]       - plDebit.rev[i]) +
+                  (plCredit.rev_other[i] - plDebit.rev_other[i]);
+      const expKeys = ['cogs','labor','outsource','adv','gaichu','other','non_op'];
+      const exp = expKeys.reduce((t, k) => t + (plDebit[k][i] - plCredit[k][i]), 0);
+      cumNetIncome += rev - exp;
+    }
     bsMonthly['retained'][i] += cumNetIncome;
   }
 
