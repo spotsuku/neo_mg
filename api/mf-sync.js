@@ -184,25 +184,53 @@ async function fetchAllJournals(token, periodsInfo, options = {}) {
   // /journals は fiscal_year パラメータを受け付けない (unsupported_query_parameter)。
   // よって start_date / end_date のみで取得し、後段の date フィルターで絞る。
   // 期間ごとの取得件数を _periodCounts に記録（旧期から取れているか診断用）。
+  // ※ MF /journals は1リクエストあたりの返却上限がある模様（実測 約1000件で打ち切り）。
+  //   各 accounting_period を月単位のチャンクに分割して取得することで上限を回避する。
   const periodCounts = [];
+
+  // 期間を月単位にチャンク分割するヘルパー
+  function splitMonthly(startStr, endStr) {
+    const chunks = [];
+    const [sy, sm] = startStr.split('-').map(Number);
+    const [ey, em] = endStr.split('-').map(Number);
+    let y = sy, m = sm;
+    while (y < ey || (y === ey && m <= em)) {
+      const monthStart = `${y}-${String(m).padStart(2,'0')}-01`;
+      // その月の末日
+      const lastDay = new Date(y, m, 0).getDate();
+      const monthEnd = `${y}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+      // 期間の境界を超えないように clip
+      const cs = monthStart < startStr ? startStr : monthStart;
+      const ce = monthEnd  > endStr   ? endStr   : monthEnd;
+      chunks.push({ start: cs, end: ce });
+      m++; if (m > 12) { m = 1; y++; }
+    }
+    return chunks;
+  }
+
   for (const period of periodsInfo.periods) {
-    console.log(`[mf-sync] fetching journals for period ${period.start} ~ ${period.end}`);
+    console.log(`[mf-sync] fetching journals for period ${period.start} ~ ${period.end} (split into monthly chunks)`);
     let beforeCount = allJournals.length;
-    for (let page = 1; page <= 100; page++) {
-      const params = { start_date: period.start, end_date: period.end, page, per_page: perPage };
-      const data = await mfFetch(token, '/journals', params);
-      const journals = data.journals || data.data || [];
-      allJournals.push(...journals);
+    const chunks = splitMonthly(period.start, period.end);
+    for (const chunk of chunks) {
+      for (let page = 1; page <= 100; page++) {
+        const params = { start_date: chunk.start, end_date: chunk.end, page, per_page: perPage };
+        const data = await mfFetch(token, '/journals', params);
+        const journals = data.journals || data.data || [];
+        allJournals.push(...journals);
 
-      const totalPages = data.metadata?.total_pages || data.total_pages || null;
-      const totalCount = data.metadata?.total_count || data.total_count || null;
+        const totalPages = data.metadata?.total_pages || data.total_pages || null;
+        const totalCount = data.metadata?.total_count || data.total_count || null;
 
-      console.log(`[mf-sync] page ${page}: got ${journals.length}, total so far: ${allJournals.length}`);
+        if (page === 1 || journals.length > 0) {
+          console.log(`[mf-sync] chunk ${chunk.start}~${chunk.end} page ${page}: got ${journals.length}`);
+        }
 
-      if (journals.length === 0) break;
-      if (totalPages && page >= totalPages) break;
-      if (totalCount && allJournals.length >= totalCount) break;
-      if (journals.length < perPage) break;
+        if (journals.length === 0) break;
+        if (totalPages && page >= totalPages) break;
+        if (totalCount && allJournals.length >= totalCount) break;
+        if (journals.length < perPage) break;
+      }
     }
     const periodCount = allJournals.length - beforeCount;
     // この期間で取得した仕訳の日付範囲を抽出（実際にどの期間のデータが返って来たか診断用）
@@ -212,8 +240,9 @@ async function fetchAllJournals(token, periodsInfo, options = {}) {
       start: period.start, end: period.end, count: periodCount,
       first_date: dates[0] || null,
       last_date: dates[dates.length - 1] || null,
+      chunks: chunks.length,
     });
-    console.log(`[mf-sync] period ${period.start}~${period.end}: fetched ${periodCount} journals, dates ${dates[0] || '?'}〜${dates[dates.length-1] || '?'}`);
+    console.log(`[mf-sync] period ${period.start}~${period.end}: fetched ${periodCount} journals across ${chunks.length} chunks, dates ${dates[0] || '?'}〜${dates[dates.length-1] || '?'}`);
   }
 
   // 御社の4月〜3月でフィルター（MF期間が広い場合に必要）
