@@ -31,6 +31,7 @@ export default async function handler(req, res) {
             months: row.months,
             pl: row.pl,
             cf: row.cf,
+            bs: row.bs || null,             // BSデータ (列が無い既存スキーマでは undefined)
             reportData: row.report_data || {}
           };
         }
@@ -39,17 +40,29 @@ export default async function handler(req, res) {
 
       // ── 財務データ 保存（年度ごと upsert）──
       case 'save_fiscal': {
-        const { fiscal_year, months, pl, cf, reportData } = req.body;
-        const { error } = await supabase
+        const { fiscal_year, months, pl, cf, bs, reportData } = req.body;
+        const payload = {
+          fiscal_year,
+          months,
+          pl,
+          cf,
+          report_data: reportData,
+          updated_at: new Date().toISOString()
+        };
+        // bs 列が存在する Supabase スキーマでのみ書き込み
+        // 古いスキーマの場合は最初の試行が失敗するので、再試行で bs 抜きで保存
+        if (bs !== undefined && bs !== null) payload.bs = bs;
+        let { error } = await supabase
           .from('fiscal_data')
-          .upsert({
-            fiscal_year,
-            months,
-            pl,
-            cf,
-            report_data: reportData,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'fiscal_year' });
+          .upsert(payload, { onConflict: 'fiscal_year' });
+        if (error && /column.*"?bs"?.*does not exist/i.test(error.message || '')) {
+          console.warn('[save_fiscal] bs column missing, retrying without bs');
+          delete payload.bs;
+          const retry = await supabase
+            .from('fiscal_data')
+            .upsert(payload, { onConflict: 'fiscal_year' });
+          error = retry.error;
+        }
         if (error) throw error;
         return res.status(200).json({ ok: true });
       }
