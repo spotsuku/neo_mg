@@ -850,17 +850,15 @@ export default async function handler(req, res) {
     }
 
     // ── 全データ取得（仕訳ベース: PL + BS + CF を一括計算） ──
-    // ── 旧 CSV取込 (現状維持): boundaryAware 無し ──
-    // ── 新 MF連携 (v2): boundaryAware 有り（境界仕訳除外 + pre期月のBS逆算） ──
-    const isV2 = (action === 'all_for_dashboard_v2' || action === 'pl_for_dashboard_v2'
-               || action === 'bs_for_dashboard_v2' || action === 'cf_for_dashboard_v2');
-    const isLegacy = (action === 'all_for_dashboard' || action === 'pl_for_dashboard'
-                   || action === 'bs_for_dashboard' || action === 'cf_for_dashboard');
-    if (isV2 || isLegacy) {
+    // boundaryAware モード（境界仕訳除外 + pre期月のBS逆算）が常時有効。
+    // 旧 action 名 (*_for_dashboard) は後方互換のため残しているが、内部的に
+    // *_for_dashboard_v2 と同じ挙動をする（boundaryAware = true）。
+    const isDashboardAction = /^(all|pl|bs|cf)_for_dashboard(_v2)?$/.test(action);
+    if (isDashboardAction) {
       if (!fiscal_year) return res.status(400).json({ error: 'fiscal_year が必要です' });
-      const wantsPl = /^(all_for_dashboard|pl_for_dashboard)(_v2)?$/.test(action);
-      const wantsBs = /^(all_for_dashboard|bs_for_dashboard)(_v2)?$/.test(action);
-      const wantsCf = /^(all_for_dashboard|cf_for_dashboard)(_v2)?$/.test(action);
+      const wantsPl = /^(all|pl)_for_dashboard(_v2)?$/.test(action);
+      const wantsBs = /^(all|bs)_for_dashboard(_v2)?$/.test(action);
+      const wantsCf = /^(all|cf)_for_dashboard(_v2)?$/.test(action);
 
       const includeUnrealized = req.query.include_unrealized === 'true';
       // 科目分類の上書き: フロントエンドから localStorage の内容を送信
@@ -883,11 +881,11 @@ export default async function handler(req, res) {
       const result = buildFromJournals(fetchResult.journals, fiscal_year,
         { cfCategoryOverrides, plCategoryOverrides, bsCategoryOverrides,
           anchorPeriodStart: periodsInfo.anchor?.start || null,
-          boundaryAware: isV2,
-          periodsInfo: isV2 ? periodsInfo : null });
+          boundaryAware: true,
+          periodsInfo });
 
-      // v2 モードで BS 逆算が失敗した場合はエラーを返す（4-6月をエラー表示）
-      if (isV2 && wantsBs && result.boundary?.error) {
+      // BS 逆算が失敗した場合はエラーを返す（4-6月をエラー表示）
+      if (wantsBs && result.boundary?.error) {
         return res.status(200).json({
           ok: false,
           error: `BS pre期月の逆算失敗: ${result.boundary.error}`,
