@@ -162,6 +162,8 @@ td.actual { color: var(--text) !important; }
 .risk-lbl{font-size:11px;color:var(--text2);min-width:64px}
 .risk-track{flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
 .risk-fill{height:100%;border-radius:3px}
+#risk-detail-card[open] .risk-chevron{transform:rotate(90deg)}
+#risk-detail-card summary::-webkit-details-marker{display:none}
 
 /* ── OKR ── */
 .okr-row{display:flex;gap:6px;align-items:flex-start;margin-bottom:7px}
@@ -425,13 +427,13 @@ input.cells-edit-input {
      WEEKLY KPI
 ────────────────────────────────────── -->
 <div class="sec on" id="sec-weekly">
-  <div class="metrics">
+  <div class="metrics" style="grid-template-columns:repeat(6,minmax(0,1fr))">
     <div class="mc"><div class="mc-l">現金残高</div><div class="mc-v" id="kpi-cash">—</div><div class="mc-s" id="kpi-cash-s"></div></div>
-    <div class="mc"><div class="mc-l">累積売上</div><div class="mc-v" id="kpi-rev">—</div><div class="mc-s" id="kpi-rev-s"></div></div>
-    <div class="mc"><div class="mc-l">累積粗利</div><div class="mc-v" id="kpi-gp">—</div><div class="mc-s" id="kpi-gp-s"></div></div>
-    <div class="mc"><div class="mc-l">累積販管費</div><div class="mc-v" id="kpi-opex">—</div><div class="mc-s" id="kpi-opex-s"></div></div>
-    <div class="mc"><div class="mc-l">営業損益（累積）</div><div class="mc-v" id="kpi-op">—</div><div class="mc-s" id="kpi-op-s"></div></div>
-    <div class="mc"><div class="mc-l">資金ショートリスク</div><div class="mc-v" id="kpi-risk">—</div><div class="mc-s" id="kpi-risk-s"></div></div>
+    <div class="mc"><div class="mc-l">売上（累積）</div><div class="mc-v" id="kpi-rev">—</div><div class="mc-s" id="kpi-rev-s"></div></div>
+    <div class="mc"><div class="mc-l">粗利（累積）</div><div class="mc-v" id="kpi-gp">—</div><div class="mc-s" id="kpi-gp-s"></div></div>
+    <div class="mc"><div class="mc-l">販管費（累積）</div><div class="mc-v" id="kpi-opex">—</div><div class="mc-s" id="kpi-opex-s"></div></div>
+    <div class="mc"><div class="mc-l">営業利益（累積）</div><div class="mc-v" id="kpi-op">—</div><div class="mc-s" id="kpi-op-s"></div></div>
+    <div class="mc" title="最終BS月の純資産（資本金・資本剰余金 + 利益剰余金 + 新株予約権）"><div class="mc-l">純資産</div><div class="mc-v" id="kpi-equity">—</div><div class="mc-s" id="kpi-equity-s"></div></div>
   </div>
 
   <div class="g2">
@@ -451,36 +453,6 @@ input.cells-edit-input {
       <div id="wk-cost-note" style="font-size:10px;color:var(--text3);margin-top:4px"></div>
     </div>
   </div>
-
-  <div class="g2">
-    <div class="card">
-      <div class="ct">資金ショートリスク判定</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <span style="font-weight:600;font-size:13px">現在のリスクレベル</span>
-        <span id="risk-badge" class="badge ba">🟡 注意</span>
-      </div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:12px">残りキャッシュ期間：<strong id="runway-val" style="color:var(--text)">—</strong>（バーンレート <span id="burnrate-val">—</span>千円/月）</div>
-      <div class="risk-row"><div class="risk-lbl">🔴 危険</div><div class="risk-track"><div class="risk-fill" style="width:25%;background:#E24B4A"></div></div><div style="font-size:10px;color:var(--text3)">3ヶ月未満</div></div>
-      <div class="risk-row"><div class="risk-lbl">🟠 警戒</div><div class="risk-track"><div class="risk-fill" style="width:50%;background:#EF9F27"></div></div><div style="font-size:10px;color:var(--text3)">3〜6ヶ月</div></div>
-      <div class="risk-row"><div class="risk-lbl">🟡 注意</div><div class="risk-track"><div class="risk-fill" style="width:75%;background:#EF9F27;opacity:.6"></div></div><div style="font-size:10px;color:var(--text3)">6〜12ヶ月</div></div>
-      <div class="risk-row"><div class="risk-lbl">🟢 安全</div><div class="risk-track"><div class="risk-fill" style="width:100%;background:#639922;opacity:.5"></div></div><div style="font-size:10px;color:var(--text3)">12ヶ月以上</div></div>
-    </div>
-    <div class="card">
-      <div class="ct">🎯 OKR達成状況</div>
-      <div style="display:flex;gap:16px;align-items:center;margin-bottom:12px">
-        <div style="text-align:center"><div style="font-size:28px;font-weight:700" class="g" id="okr-count">8/10</div><div style="font-size:10px;color:var(--text3)">KR完了</div></div>
-        <div style="flex:1"><div class="pb" style="height:8px"><div class="pf g" id="okr-bar" style="width:80%;background:#639922"></div></div><div style="font-size:10px;color:var(--text3);margin-top:4px">達成率 <span id="okr-rate">80</span>%</div></div>
-      </div>
-      <div id="okr-list">
-        <div class="okr-row"><span class="okr-s okr-done">完了</span><span class="okr-k">KR3</span><span class="okr-t">ヒーロー人材4名の輩出</span></div>
-        <div class="okr-row"><span class="okr-s okr-done">完了</span><span class="okr-k">KR2</span><span class="okr-t">AI研修45名・粗利500万円達成</span></div>
-        <div class="okr-row"><span class="okr-s okr-done">完了</span><span class="okr-k">KR8</span><span class="okr-t">商工中金1,500万円着金・評議会開始</span></div>
-        <div class="okr-row"><span class="okr-s okr-pend">進行中</span><span class="okr-k">KR5</span><span class="okr-t">圧倒的な経営人材の採用実施</span></div>
-        <div class="okr-row"><span class="okr-s okr-pend">進行中</span><span class="okr-k">KR—</span><span class="okr-t">研修商品・NEOカリキュラムの最終化</span></div>
-      </div>
-    </div>
-  </div>
-
 
   <!-- ── 資金繰り予測（直近12ヶ月） ── -->
   <div class="card" id="cf-forecast-card">
@@ -563,6 +535,21 @@ input.cells-edit-input {
     <div class="ai-box" id="weekly-ai-box"><div class="ai-loading">「AIブリーフィングを生成」を押すと今週の経営状況をAIが分析します</div></div>
     <button class="btn btn-p" onclick="genAI('weekly')">🤖 AIブリーフィングを生成</button>
   </div>
+
+  <!-- ── 資金ショートリスク判定（折りたたみ・既定で閉じる） ── -->
+  <details class="card" id="risk-detail-card" style="padding:0;overflow:hidden">
+    <summary style="cursor:pointer;list-style:none;padding:.875rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:700;color:var(--text2)">
+      <span style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text3);transition:transform .2s" class="risk-chevron">▶</span>資金ショートリスク判定の基準</span>
+      <span id="risk-badge" class="badge ba">🟡 注意</span>
+    </summary>
+    <div style="padding:0 1rem 1rem">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px">残りキャッシュ期間：<strong id="runway-val" style="color:var(--text)">—</strong>（バーンレート <span id="burnrate-val">—</span>千円/月）</div>
+      <div class="risk-row"><div class="risk-lbl">🔴 危険</div><div class="risk-track"><div class="risk-fill" style="width:25%;background:#E24B4A"></div></div><div style="font-size:10px;color:var(--text3)">3ヶ月未満</div></div>
+      <div class="risk-row"><div class="risk-lbl">🟠 警戒</div><div class="risk-track"><div class="risk-fill" style="width:50%;background:#EF9F27"></div></div><div style="font-size:10px;color:var(--text3)">3〜6ヶ月</div></div>
+      <div class="risk-row"><div class="risk-lbl">🟡 注意</div><div class="risk-track"><div class="risk-fill" style="width:75%;background:#EF9F27;opacity:.6"></div></div><div style="font-size:10px;color:var(--text3)">6〜12ヶ月</div></div>
+      <div class="risk-row"><div class="risk-lbl">🟢 安全</div><div class="risk-track"><div class="risk-fill" style="width:100%;background:#639922;opacity:.5"></div></div><div style="font-size:10px;color:var(--text3)">12ヶ月以上</div></div>
+    </div>
+  </details>
 </div>
 
 <!-- ──────────────────────────────────────
@@ -1554,19 +1541,15 @@ function updateWeeklyKPIs() {
 
   // cash
   // 優先順位:
-  //   1. 当年度 cfClose の最新非ゼロ値
+  //   1. 最終実績月 (lastActualIdx) 以前の cfClose 最新非ゼロ値
+  //      → 未actualな翌月以降（例: 月初3月 = BS同期値）を拾わないよう lastActualIdx でスコープ
   //   2. 当年度 cf.budget.open[0]（予算期初残高）
   //   3. 前年度 cfClose の最終非ゼロ値（前年度末残高を引き継ぎ）
   let lastCash = null;
-  if (cf.actual.cfClose) {
-    const cv = cf.actual.cfClose[lastActualIdx];
-    if (cv && Number(cv) > 0) {
-      lastCash = Number(cv);
-    } else {
-      for (let i = n - 1; i >= 0; i--) {
-        const v = cf.actual.cfClose[i];
-        if (v && Number(v) > 0) { lastCash = Number(v); break; }
-      }
+  if (cf.actual.cfClose && lastActualIdx >= 0) {
+    for (let i = lastActualIdx; i >= 0; i--) {
+      const v = cf.actual.cfClose[i];
+      if (v && Number(v) > 0) { lastCash = Number(v); break; }
     }
   }
   // 当年度に残高がない場合、前年度末残高を引き継ぎ
@@ -1630,16 +1613,52 @@ function updateWeeklyKPIs() {
   document.getElementById('kpi-op-s').innerHTML = hasActual
     ? `<span class="badge ${cumOp >= 0 ? 'bg' : 'ba'}">累積損益</span>` : '';
 
-  // ランウェイ・リスク（実績なしの場合はCF残高ベースで判定）
+  // ── 純資産: 最終BS月の (capital + retained + warrant) ──
+  let netEquity = null;
+  let netEquityMonth = null;
+  const _bsActualEq = d.bs?.actual || {};
+  const _bsIdxsEq = Object.keys(_bsActualEq).map(Number).filter(n => !isNaN(n));
+  if (_bsIdxsEq.length) {
+    const _lastEqIdx = Math.max(..._bsIdxsEq);
+    const _row = _bsActualEq[_lastEqIdx] || {};
+    const _eq = (Number(_row.capital) || 0) + (Number(_row.retained) || 0) + (Number(_row.warrant) || 0)
+              + (Number(_row.other_eq) || 0);
+    if (_eq !== 0) {
+      netEquity = _eq;
+      netEquityMonth = MONTH_LABELS[d.months[_lastEqIdx]] || d.months[_lastEqIdx] || '';
+    }
+  }
+  const eqEl = document.getElementById('kpi-equity');
+  if (eqEl) {
+    if (netEquity == null) {
+      eqEl.innerHTML = '—';
+    } else {
+      eqEl.innerHTML = netEquity >= 0
+        ? `<span class="g">${fmt万(netEquity)}千円</span>`
+        : `<span class="r">▲${fmt万(Math.abs(netEquity))}千円</span>`;
+    }
+  }
+  const eqSubEl = document.getElementById('kpi-equity-s');
+  if (eqSubEl) {
+    eqSubEl.innerHTML = netEquityMonth
+      ? `<span style="color:var(--text3)">${netEquityMonth}末</span>`
+      : '';
+  }
+
+  // ランウェイ・リスク（折りたたみカードに表示）
   const rwy = lastCash ? parseFloat(runway) : null;
   const riskTxt = !rwy ? '⚪ データなし'
     : rwy >= 12 ? '🟢 安全' : rwy >= 6 ? '🟡 注意' : rwy >= 3 ? '🟠 警戒' : '🔴 危険';
   const riskCls = !rwy ? 'ba' : rwy >= 12 ? 'bg' : rwy >= 6 ? 'ba' : 'br';
-  document.getElementById('kpi-risk').textContent = riskTxt;
-  document.getElementById('risk-badge').textContent = riskTxt;
-  document.getElementById('risk-badge').className = `badge ${riskCls}`;
-  document.getElementById('runway-val').textContent = rwy ? `約${rwy}ヶ月` : '—';
-  document.getElementById('burnrate-val').textContent = hasActual ? burnrate.toLocaleString() : '─';
+  const riskBadgeEl = document.getElementById('risk-badge');
+  if (riskBadgeEl) {
+    riskBadgeEl.textContent = riskTxt;
+    riskBadgeEl.className = `badge ${riskCls}`;
+  }
+  const runwayValEl = document.getElementById('runway-val');
+  if (runwayValEl) runwayValEl.textContent = rwy ? `約${rwy}ヶ月` : '—';
+  const burnrateValEl = document.getElementById('burnrate-val');
+  if (burnrateValEl) burnrateValEl.textContent = hasActual ? burnrate.toLocaleString() : '─';
 
   // charts
   initWeeklyCharts(d, lastActualIdx);
