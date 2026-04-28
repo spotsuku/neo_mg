@@ -13247,6 +13247,203 @@ document.addEventListener('DOMContentLoaded', function() {
     renderVersionUI();
   }
 
+  // ─── 差分比較 ───
+  function computeDiffHtml(va, vb){
+    const sa = va.snapshot || {};
+    const sb = vb.snapshot || {};
+    let html = `<div class="card" style="margin-bottom:12px">
+      <div class="ct">📊 差分: <span style="color:#af52de">${escapeHtml(va.name)}</span> → <span style="color:#f0a060">${escapeHtml(vb.name)}</span></div>`;
+
+    // メンバー差分
+    const aMembers = sa.members || [];
+    const bMembers = sb.members || [];
+    const aNames = new Set(aMembers.map(m => m.name));
+    const bNames = new Set(bMembers.map(m => m.name));
+    const removed = aMembers.filter(m => !bNames.has(m.name));
+    const added   = bMembers.filter(m => !aNames.has(m.name));
+
+    let memberRows = '';
+    added.forEach(m => {
+      memberRows += `<tr class="wf-diff-add"><td>＋ 追加</td><td>${escapeHtml(m.name)}</td><td colspan="2">人件費 ${fmtJPY(m.cost)} / 能力 ${m.ability||1.0}</td></tr>`;
+    });
+    removed.forEach(m => {
+      memberRows += `<tr class="wf-diff-remove"><td>− 削除</td><td>${escapeHtml(m.name)}</td><td colspan="2">人件費 ${fmtJPY(m.cost)} / 能力 ${m.ability||1.0}</td></tr>`;
+    });
+    bMembers.forEach(bm => {
+      const am = aMembers.find(x => x.name === bm.name);
+      if (!am) return;
+      const changes = [];
+      if (am.cost !== bm.cost){
+        changes.push(`人件費 <span class="wf-diff-old">${fmtJPY(am.cost)}</span><span class="wf-diff-arrow">→</span><span class="wf-diff-new">${fmtJPY(bm.cost)}</span>`);
+      }
+      if ((am.ability||1.0) !== (bm.ability||1.0)){
+        changes.push(`能力 <span class="wf-diff-old">${am.ability||1.0}</span><span class="wf-diff-arrow">→</span><span class="wf-diff-new">${bm.ability||1.0}</span>`);
+      }
+      const allocChanges = [];
+      BIZ.forEach(biz => ROLES.forEach(role => {
+        const av = (am.allocMatrix?.[biz]?.[role]) || 0;
+        const bv = (bm.allocMatrix?.[biz]?.[role]) || 0;
+        if (av !== bv){
+          allocChanges.push(`${BIZ_SHORT[biz]}×${role}: <span class="wf-diff-old">${av}%</span><span class="wf-diff-arrow">→</span><span class="wf-diff-new">${bv}%</span>`);
+        }
+      }));
+      if (allocChanges.length) changes.push(allocChanges.join('、'));
+      if (changes.length){
+        memberRows += `<tr class="wf-diff-change"><td>変更</td><td>${escapeHtml(bm.name)}</td><td colspan="2">${changes.join('<br>')}</td></tr>`;
+      }
+    });
+    if (memberRows){
+      html += `<h4 style="margin:10px 0 6px;font-size:12px">👥 メンバー</h4>
+        <table class="wf-diff-tbl">
+          <thead><tr><th style="width:80px">種別</th><th style="width:140px">名前</th><th colspan="2">変更内容</th></tr></thead>
+          <tbody>${memberRows}</tbody>
+        </table>`;
+    }
+
+    // プログラム別売上差分
+    let progRows = '';
+    BIZ.forEach(biz => {
+      const ap = sa.bizPrograms?.[biz] || [];
+      const bp = sb.bizPrograms?.[biz] || [];
+      const aSet = new Set(ap.map(p => p.name));
+      const bSet = new Set(bp.map(p => p.name));
+      bp.forEach(p => {
+        if (!aSet.has(p.name)){
+          progRows += `<tr class="wf-diff-add"><td>＋</td><td>${biz}</td><td>${escapeHtml(p.name)}</td><td>${fmtJPY(p.amount)}</td></tr>`;
+        } else {
+          const old = ap.find(x => x.name === p.name);
+          if (old.amount !== p.amount){
+            progRows += `<tr class="wf-diff-change"><td>変更</td><td>${biz}</td><td>${escapeHtml(p.name)}</td><td><span class="wf-diff-old">${fmtJPY(old.amount)}</span><span class="wf-diff-arrow">→</span><span class="wf-diff-new">${fmtJPY(p.amount)}</span></td></tr>`;
+          }
+        }
+      });
+      ap.forEach(p => {
+        if (!bSet.has(p.name)){
+          progRows += `<tr class="wf-diff-remove"><td>−</td><td>${biz}</td><td>${escapeHtml(p.name)}</td><td>${fmtJPY(p.amount)}</td></tr>`;
+        }
+      });
+    });
+    if (progRows){
+      html += `<h4 style="margin:10px 0 6px;font-size:12px">💰 プログラム売上</h4>
+        <table class="wf-diff-tbl">
+          <thead><tr><th style="width:80px">種別</th><th style="width:120px">事業</th><th>プログラム</th><th>金額</th></tr></thead>
+          <tbody>${progRows}</tbody>
+        </table>`;
+    }
+
+    // 原価項目差分
+    let costRows = '';
+    BIZ.forEach(biz => {
+      const ac = sa.bizCosts?.[biz] || [];
+      const bc = sb.bizCosts?.[biz] || [];
+      const aSet = new Set(ac.map(p => p.name));
+      const bSet = new Set(bc.map(p => p.name));
+      bc.forEach(p => {
+        if (!aSet.has(p.name)){
+          costRows += `<tr class="wf-diff-add"><td>＋</td><td>${biz}</td><td>${escapeHtml(p.name)}</td><td>${fmtJPY(p.amount)}</td></tr>`;
+        } else {
+          const old = ac.find(x => x.name === p.name);
+          if (old.amount !== p.amount){
+            costRows += `<tr class="wf-diff-change"><td>変更</td><td>${biz}</td><td>${escapeHtml(p.name)}</td><td><span class="wf-diff-old">${fmtJPY(old.amount)}</span><span class="wf-diff-arrow">→</span><span class="wf-diff-new">${fmtJPY(p.amount)}</span></td></tr>`;
+          }
+        }
+      });
+      ac.forEach(p => {
+        if (!bSet.has(p.name)){
+          costRows += `<tr class="wf-diff-remove"><td>−</td><td>${biz}</td><td>${escapeHtml(p.name)}</td><td>${fmtJPY(p.amount)}</td></tr>`;
+        }
+      });
+    });
+    if (costRows){
+      html += `<h4 style="margin:10px 0 6px;font-size:12px">📦 原価項目</h4>
+        <table class="wf-diff-tbl">
+          <thead><tr><th style="width:80px">種別</th><th style="width:120px">事業</th><th>項目</th><th>金額</th></tr></thead>
+          <tbody>${costRows}</tbody>
+        </table>`;
+    }
+
+    // 販管費差分
+    let sgaRows = '';
+    const aSga = sa.sgaItems || [];
+    const bSga = sb.sgaItems || [];
+    const aSgaSet = new Set(aSga.map(p => p.name));
+    const bSgaSet = new Set(bSga.map(p => p.name));
+    bSga.forEach(p => {
+      if (!aSgaSet.has(p.name)){
+        sgaRows += `<tr class="wf-diff-add"><td>＋</td><td>${escapeHtml(p.name)}</td><td>${fmtJPY(p.amount)}</td></tr>`;
+      } else {
+        const old = aSga.find(x => x.name === p.name);
+        if (old.amount !== p.amount){
+          sgaRows += `<tr class="wf-diff-change"><td>変更</td><td>${escapeHtml(p.name)}</td><td><span class="wf-diff-old">${fmtJPY(old.amount)}</span><span class="wf-diff-arrow">→</span><span class="wf-diff-new">${fmtJPY(p.amount)}</span></td></tr>`;
+        }
+      }
+    });
+    aSga.forEach(p => {
+      if (!bSgaSet.has(p.name)){
+        sgaRows += `<tr class="wf-diff-remove"><td>−</td><td>${escapeHtml(p.name)}</td><td>${fmtJPY(p.amount)}</td></tr>`;
+      }
+    });
+    if (sgaRows){
+      html += `<h4 style="margin:10px 0 6px;font-size:12px">🏢 本部費用（販管費）</h4>
+        <table class="wf-diff-tbl">
+          <thead><tr><th style="width:80px">種別</th><th>項目</th><th>金額</th></tr></thead>
+          <tbody>${sgaRows}</tbody>
+        </table>`;
+    }
+
+    // 必要月工数差分
+    let fteRows = '';
+    BIZ.forEach(biz => ROLES.forEach(role => {
+      const av = sa.requiredFTE?.[biz]?.[role] || 0;
+      const bv = sb.requiredFTE?.[biz]?.[role] || 0;
+      if (av !== bv){
+        fteRows += `<tr class="wf-diff-change"><td>${biz}</td><td>${role}</td><td><span class="wf-diff-old">${av}</span><span class="wf-diff-arrow">→</span><span class="wf-diff-new">${bv}</span></td></tr>`;
+      }
+    }));
+    if (fteRows){
+      html += `<h4 style="margin:10px 0 6px;font-size:12px">🎯 必要月工数</h4>
+        <table class="wf-diff-tbl">
+          <thead><tr><th style="width:120px">事業</th><th style="width:80px">役割</th><th>変更</th></tr></thead>
+          <tbody>${fteRows}</tbody>
+        </table>`;
+    }
+
+    // 役割ウェイト差分
+    let weightRows = '';
+    BIZ.forEach(biz => ROLES.forEach(role => {
+      const av = sa.roleWeights?.[biz]?.[role] || 0;
+      const bv = sb.roleWeights?.[biz]?.[role] || 0;
+      if (av !== bv){
+        weightRows += `<tr class="wf-diff-change"><td>${biz}</td><td>${role}</td><td><span class="wf-diff-old">${av}%</span><span class="wf-diff-arrow">→</span><span class="wf-diff-new">${bv}%</span></td></tr>`;
+      }
+    }));
+    if (weightRows){
+      html += `<h4 style="margin:10px 0 6px;font-size:12px">⚖ 役割ウェイト</h4>
+        <table class="wf-diff-tbl">
+          <thead><tr><th style="width:120px">事業</th><th style="width:80px">役割</th><th>変更</th></tr></thead>
+          <tbody>${weightRows}</tbody>
+        </table>`;
+    }
+
+    if (!memberRows && !progRows && !costRows && !sgaRows && !fteRows && !weightRows){
+      html += '<div style="text-align:center;padding:20px;color:var(--text3);font-size:11px">変更点はありません</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function showDiff(){
+    if (state.compareSel.length !== 2){
+      alert('比較するには2つのバージョンを選択してください');
+      return;
+    }
+    const va = state.versions.find(x => x.version_id === state.compareSel[0]);
+    const vb = state.versions.find(x => x.version_id === state.compareSel[1]);
+    if (!va || !vb) return;
+    $('wf-diff-result').innerHTML = computeDiffHtml(va, vb);
+  }
+
   // ─── メンバー追加モーダル ───
   function openAddModal(){
     $('wf-add-modal').classList.add('show');
@@ -13328,7 +13525,7 @@ document.addEventListener('DOMContentLoaded', function() {
     makeVersionCurrent: makeVersionCurrent,
     toggleCompare:      toggleCompare,
     clearCompare:       clearCompare,
-    showDiff:           function(){ alert('差分表示は次コミット (B5) で実装します'); },
+    showDiff:           showDiff,
     addSGA: function(){ state.sgaItems.push({name:'新規販管費', amount:0}); state.collapsed.sga = false; renderPL(); },
     resetToInitial: function(){ if (!confirm('初期値に戻しますか？')) return; restoreSnapshot({ members: DEFAULT_MEMBERS, bizPrograms: DEFAULT_BIZ_PROGRAMS, bizCosts: DEFAULT_BIZ_COSTS, sgaItems: DEFAULT_SGA_ITEMS, roleWeights: DEFAULT_ROLE_WEIGHTS, requiredFTE: DEFAULT_REQUIRED_FTE }); renderAll(); },
     resetAllAbility: function(){ if (!confirm('全メンバーの能力係数を1にリセットしますか？')) return; state.members.forEach(m => m.ability = 1.0); renderAll(); },
@@ -13354,6 +13551,14 @@ document.addEventListener('DOMContentLoaded', function() {
     updateWeight: function(biz, role, val){ state.roleWeights[biz][role] = parseInt(val) || 0; renderAll(); },
   };
   window.WF = WF;
+
+  // モーダルの外側クリックで閉じる
+  document.addEventListener('DOMContentLoaded', function(){
+    const am = $('wf-add-modal');
+    if (am) am.addEventListener('click', e => { if (e.target.id === 'wf-add-modal') am.classList.remove('show'); });
+    const sm = $('wf-save-modal');
+    if (sm) sm.addEventListener('click', e => { if (e.target.id === 'wf-save-modal') sm.classList.remove('show'); });
+  });
 })();
     </script>
 </body>
