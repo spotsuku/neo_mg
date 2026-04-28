@@ -1389,6 +1389,9 @@ input.cells-edit-input {
         <button class="btn btn-g" onclick="WF.openAddModal()" style="font-size:10px;padding:3px 10px;margin-left:auto">＋ メンバー追加</button>
         <button class="btn" onclick="WF.resetToInitial()" style="font-size:10px;padding:3px 10px">初期値に戻す</button>
         <button class="btn" onclick="WF.resetAllAbility()" style="font-size:10px;padding:3px 10px">能力係数を全部1に</button>
+        <button class="btn" onclick="WF.exportJSON()" style="font-size:10px;padding:3px 10px" title="現在の状態を JSON でダウンロード">⬇ JSON出力</button>
+        <button class="btn" onclick="document.getElementById('wf-import-file').click()" style="font-size:10px;padding:3px 10px" title="JSON ファイルから読込">⬆ JSON取込</button>
+        <input type="file" id="wf-import-file" accept=".json" style="display:none" onchange="WF.importJSON(event)">
       </div>
       <div class="wf-legend">
         <span>役割色:</span>
@@ -13597,6 +13600,36 @@ document.addEventListener('DOMContentLoaded', function() {
     deleteSGA: function(i){ if (!confirm(`「${state.sgaItems[i].name}」を削除しますか？`)) return; state.sgaItems.splice(i, 1); renderAll(); },
     updateFTE:    function(biz, role, val){ state.requiredFTE[biz][role] = parseFloat(val) || 0; renderAll(); },
     updateWeight: function(biz, role, val){ state.roleWeights[biz][role] = parseInt(val) || 0; renderAll(); },
+    // JSON 入出力（ローカルバックアップ）
+    exportJSON: function(){
+      const data = { snapshot: takeSnapshot(), exportedAt: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `workforce_${Date.now()}.json`; a.click();
+      URL.revokeObjectURL(url);
+      showWfStatus('JSONをダウンロードしました');
+    },
+    importJSON: function(ev){
+      const file = ev.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          const snap = data.snapshot || data;
+          if (!snap || !snap.members){ alert('JSONフォーマットが不正です'); return; }
+          if (!confirm('現在の状態に上書きしますか？（未保存の編集は失われます）')) return;
+          restoreSnapshot(snap);
+          renderAll();
+          showWfStatus('JSONを取込みました');
+        } catch (err){
+          alert('読込みに失敗しました: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+      ev.target.value = '';
+    },
   };
   window.WF = WF;
 
