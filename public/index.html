@@ -387,8 +387,8 @@ input.cells-edit-input {
     </div>
     <div class="tabs">
       <button class="tab active" onclick="sw('weekly',this)">📊 サマリー</button>
-      <button class="tab" onclick="sw('pl-cf',this)">📈 月次PL/CF</button>
-      <button class="tab" onclick="sw('import',this)">📂 CSV取込</button>
+      <button class="tab" onclick="sw('pl-cf',this)">📈 月次財務</button>
+      <button class="tab" onclick="sw('import',this)">🔗 MF連携</button>
       <button class="tab" onclick="sw('sim',this)">🔮 シミュレーション</button>
       <button class="tab" onclick="sw('report',this)">📋 月次レポート</button>
       <button class="tab" onclick="sw('pdf',this)">📄 役員PDF</button>
@@ -677,15 +677,19 @@ input.cells-edit-input {
     </div>
   </div>
 
-  <!-- BS 月次表示（読み取り専用、CSV取込から自動反映） -->
+  <!-- BS 月次表示（読み取り専用、MF連携から自動反映） -->
   <div id="view-bs" style="display:none">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="ct">月次BS推移（累積残高） — <span id="bs-chart-year-label">2025年度</span></div>
+      <div class="ch" style="height:220px"><canvas id="bs-chart"></canvas></div>
+    </div>
     <div class="card" style="margin-bottom:1rem">
       <div class="ct" style="display:flex;align-items:center;justify-content:space-between">
         <span id="bs-year-label">— 年度 月次BS（千円）</span>
-        <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none">CSV取込から自動反映 / 月末残高（累計）</span>
+        <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none">MF連携から自動反映 / 月末残高（累計）</span>
       </div>
       <div class="scroll-x" id="bs-table-wrap">
-        <div style="padding:24px;text-align:center;color:var(--text3);font-size:11px">CSV取込タブから BS 試算表を取得して反映してください</div>
+        <div style="padding:24px;text-align:center;color:var(--text3);font-size:11px">MF連携タブから BS 試算表を取得して反映してください</div>
       </div>
     </div>
   </div>
@@ -861,7 +865,7 @@ input.cells-edit-input {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
         <div>
           <div class="ct" style="margin-bottom:2px"><span id="il-year-badge">取込済みデータ一覧</span></div>
-          <div style="font-size:10px;color:var(--text3)">DBに保存されている実績データ（千円単位）。<strong style="color:var(--tc-amber)">確認後「本番に反映」</strong>で月次PL/CFに即反映されます。<br>反映時は<strong>自動でバックアップ</strong>が作成されます（バージョン履歴から元に戻せます）。</div>
+          <div style="font-size:10px;color:var(--text3)">DBに保存されている実績データ（千円単位）。<strong style="color:var(--tc-amber)">確認後「本番に反映」</strong>で月次財務に即反映されます。<br>反映時は<strong>自動でバックアップ</strong>が作成されます（バージョン履歴から元に戻せます）。</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-p" style="font-weight:700;font-size:11px;padding:7px 14px;border:1px solid var(--tc-amber)" onclick="openVersionPanel()" title="本番反映前に手動でバックアップを作成">🕐 今すぐバックアップ</button>
@@ -2381,7 +2385,7 @@ function buildAnnualTable(rows, unit) {
 }
 
 // ───────────────────────────────────────────
-//  インライン編集ヘルパー（月次PL/CF）
+//  インライン編集ヘルパー（月次財務）
 // ───────────────────────────────────────────
 let _plCfDirty = false;
 
@@ -3631,17 +3635,20 @@ function renderPLView(d) {
   });
 }
 
-// 月次BS表示（読み取り専用 - CSV取込から自動反映）
-// 各月の月末残高（累計）を表示し、小計・合計も自動算出。
-// PL/CFと同じく月次PL/CFタブからアクセス。
+// 月次BS表示（読み取り専用 - MF連携から自動反映）
+// 各月の月末残高（累計）をチャート＋表で表示し、小計・合計も自動算出。
+// PL/CFと同じく月次財務タブからアクセス。
 function renderBSView(d) {
   const yearLabel = document.getElementById('bs-year-label');
   if (yearLabel) yearLabel.textContent = `${currentYear}年度 月次BS（千円）— 月末残高（累計）`;
+  const chartLabel = document.getElementById('bs-chart-year-label');
+  if (chartLabel) chartLabel.textContent = currentYear + '年度';
   const wrap = document.getElementById('bs-table-wrap');
   if (!wrap) return;
   const months = d.months || [];
   if (!d.bs || !d.bs.actual) {
-    wrap.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:11px">BSデータがありません。CSV取込タブから BS 試算表を取得して反映してください。</div>';
+    wrap.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:11px">BSデータがありません。MF連携タブから BS 試算表を取得して反映してください。</div>';
+    destroyChart('bs-chart');
     return;
   }
   const get = (key, i) => {
@@ -3653,6 +3660,52 @@ function renderBSView(d) {
   const sumCl = i => get('payable',i) + get('borrowing_short',i) + get('other_cl',i);
   const sumFl = i => get('borrowing',i);
   const sumEq = i => get('capital',i) + get('retained',i) + get('warrant',i);
+
+  // ── BSチャート: 月末残高（累積）の推移 ──
+  // 資産は正、負債は負（下方向）、純資産は折れ線で表示
+  const N = months.length;
+  const monthLabels = months.map(m => MONTH_LABELS[m] || m);
+  const arrCa = Array.from({length:N}, (_,i) => sumCa(i));     // 流動資産
+  const arrFa = Array.from({length:N}, (_,i) => sumFa(i));     // 固定資産
+  const arrClN = Array.from({length:N}, (_,i) => -sumCl(i));   // 流動負債（下向き）
+  const arrFlN = Array.from({length:N}, (_,i) => -sumFl(i));   // 固定負債（下向き）
+  const arrEq = Array.from({length:N}, (_,i) => sumEq(i));     // 純資産
+  const arrAssetTot = Array.from({length:N}, (_,i) => sumCa(i)+sumFa(i));
+  const hasAny = [...arrCa, ...arrFa, ...arrClN, ...arrFlN, ...arrEq].some(v => v !== 0);
+  destroyChart('bs-chart');
+  if (hasAny && document.getElementById('bs-chart')) {
+    const _bsAll = [...arrCa, ...arrFa, ...arrClN, ...arrFlN, ...arrEq, ...arrAssetTot, 0];
+    const _bsMin = Math.min(..._bsAll);
+    const _bsMax = Math.max(..._bsAll);
+    const _bsPad = (_bsMax - _bsMin) * 0.1 || 1000;
+    charts['bs-chart'] = new Chart(document.getElementById('bs-chart'), {
+      type: 'bar',
+      data: {
+        labels: monthLabels,
+        datasets: [
+          { label: '流動資産',     data: arrCa,  backgroundColor: 'rgba(55,138,221,0.50)',  stack: 'asset',     borderRadius: 3, order: 3 },
+          { label: '固定資産',     data: arrFa,  backgroundColor: 'rgba(55,138,221,0.20)',  stack: 'asset',     borderRadius: 3, order: 3 },
+          { label: '流動負債',     data: arrClN, backgroundColor: 'rgba(226,75,74,0.50)',   stack: 'liability', borderRadius: 3, order: 3 },
+          { label: '固定負債',     data: arrFlN, backgroundColor: 'rgba(226,75,74,0.20)',   stack: 'liability', borderRadius: 3, order: 3 },
+          { type: 'line', label: '純資産', data: arrEq, borderColor: '#3B6D11', borderWidth: 2, pointRadius: 3, tension: 0.25, order: 0 },
+          { type: 'line', label: '資産合計', data: arrAssetTot, borderColor: '#378ADD', borderDash: [4,3], borderWidth: 1.5, pointRadius: 2, tension: 0.25, order: 1 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12, padding: 8 } },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${Math.round(Math.abs(ctx.parsed.y)).toLocaleString()}千円${ctx.parsed.y < 0 ? '（負債）' : ''}` } },
+        },
+        scales: {
+          x: { stacked: true, ticks: { font: { size: 10 } } },
+          y: { stacked: true, beginAtZero: false,
+               min: Math.floor(_bsMin - _bsPad), max: Math.ceil(_bsMax + _bsPad),
+               ticks: { font: { size: 10 }, callback: (v) => fmtAxisJPY(v) } },
+        },
+      },
+    });
+  }
 
   const rows = [
     { label:'【資産の部】', isHeader:true },
@@ -6432,7 +6485,7 @@ function showApplyConfirmModal(filledMonths, monthLabels, d) {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
         <div>
           <div style="font-size:14px;font-weight:700">✓ 本番に反映 — ${currentYear}年度</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">以下のデータを月次PL/CFに反映します（単位: 千円）</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">以下のデータを月次財務に反映します（単位: 千円）</div>
         </div>
         <button class="btn" onclick="document.getElementById('apply-prod-modal').remove()" style="font-size:11px">✕</button>
       </div>
@@ -6454,7 +6507,7 @@ function showApplyConfirmModal(filledMonths, monthLabels, d) {
         ✅ <strong>反映時に自動でバックアップが作成されます。</strong>万が一元に戻したい場合は「バージョン履歴」から復元できます。
       </div>
       <div style="background:rgba(239,159,39,0.12);border:1px solid rgba(239,159,39,0.3);border-radius:var(--r);padding:8px 12px;font-size:10px;color:var(--tc-amber);margin-bottom:1rem">
-        ⚠ 反映すると月次PL/CFの該当月の実績データが上書きされます。<br>
+        ⚠ 反映すると月次財務の該当月の実績データが上書きされます。<br>
         より手動で管理したい場合は下の「🕐 先に手動バックアップ」を押してからご確認ください。
       </div>
 
@@ -6557,19 +6610,19 @@ async function commitImportedToProd() {
   const modal = document.getElementById('apply-prod-modal');
   if (modal) modal.remove();
 
-  // 月次PL/CFタブを強制再描画
+  // 月次財務タブを強制再描画
   renderPLCF();
   updateWeeklyKPIs();
   renderAnnualSummary();
 
-  // 月次PL/CFタブに自動遷移（見やすくする）
+  // 月次財務タブに自動遷移（見やすくする）
   const plcfBtn = document.querySelector('[onclick*="pl-cf"]');
   if (plcfBtn) plcfBtn.click();
 
   // 完了トースト
   const toast = document.createElement('div');
   toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--bg-green);color:var(--tc-green);border:1px solid var(--tc-green);border-radius:var(--rl);padding:12px 20px;font-size:13px;font-weight:700;z-index:9999';
-  toast.textContent = `✓ ${filledMonths.length}ヶ月分のデータを月次PL/CFに反映しました`;
+  toast.textContent = `✓ ${filledMonths.length}ヶ月分のデータを月次財務に反映しました`;
   document.body.appendChild(toast);
   setTimeout(() => { toast.style.opacity='0'; toast.style.transition='opacity .4s'; setTimeout(()=>toast.remove(),500); }, 3000);
 
@@ -8705,7 +8758,7 @@ async function commitBudget() {
     updateWeeklyKPIs();
     renderPLCF();
 
-    // 月次PL/CFタブへ自動遷移して反映を確認しやすくする
+    // 月次財務タブへ自動遷移して反映を確認しやすくする
     const plcfTab = document.querySelector('[onclick*="pl-cf"]');
     if (plcfTab) plcfTab.click();
 
@@ -9190,7 +9243,7 @@ function renderReportMonth(month, el) {
     document.getElementById('report-content').innerHTML = `
       <div class="card">
         <div class="ct">${MONTH_LABELS[month]}月 ｜ データ未入力</div>
-        <div style="color:var(--text3);font-size:12px;padding:.5rem 0">この月のレポートデータはまだ入力されていません。<br>「月次PL/CF」タブから数値を入力するか、「CSV取込」タブからマネーフォワードCSVを取り込んでください。</div>
+        <div style="color:var(--text3);font-size:12px;padding:.5rem 0">この月のレポートデータはまだ入力されていません。<br>「月次財務」タブから数値を入力するか、「MF連携」タブからマネーフォワードのデータを取り込んでください。</div>
         <div style="margin-top:1rem">${reportInputForm(month)}</div>
       </div>`;
     return;
@@ -9998,11 +10051,6 @@ function mfInit() {
           <input type="checkbox" id="mf-include-unrealized" style="margin:0">
           未実現仕訳を含める（MF既定：除く）
         </label>
-        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;background:rgba(55,138,221,0.12);border:1px solid rgba(55,138,221,0.35);border-radius:4px;padding:3px 8px">
-          <input type="checkbox" id="mf-boundary-aware" style="margin:0" checked>
-          <span style="color:var(--tc-blue);font-weight:700">🆕 期境界認識モード (β)</span>
-          <span title="MF会計期間の境界仕訳（決算振替・期首振替・1年内振替）を自動検出して PL/CF から除外し、anchor期 opening journal を起点に pre期月 (4-6月) のBSを逆算します。&#10;OFF にすると旧来の挙動になります。" style="cursor:help;color:var(--text3)">ⓘ</span>
-        </label>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
         <button id="mf-btn-trial_pl" onclick="mfFetch('trial_pl')" style="background:#7c3aed;color:#fff;border:none;padding:10px 4px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700">
@@ -10280,13 +10328,11 @@ window.mfFetch = async function(type) {
   log.textContent = `${fy}年度 ${labels[type]} を取得中...`;
 
   try {
-    // 期境界認識モード (v2) では action に '_v2' サフィックスを付与
-    const useV2 = document.getElementById('mf-boundary-aware')?.checked ?? false;
-    const suffix = useV2 ? '_v2' : '';
+    // 期境界認識モードは常に有効 (v2 エンドポイントを使用)
     const actionMap = {
-      journals: 'cf_for_dashboard' + suffix,
-      trial_pl: 'pl_for_dashboard' + suffix,
-      trial_bs: 'bs_for_dashboard' + suffix,
+      journals: 'cf_for_dashboard_v2',
+      trial_pl: 'pl_for_dashboard_v2',
+      trial_bs: 'bs_for_dashboard_v2',
     };
     const incUn = document.getElementById('mf-include-unrealized')?.checked ?? false;
     // 科目分類の上書き（localStorage から読込 — CF / PL / BS）
@@ -10442,14 +10488,10 @@ function mfRenderPreview() {
     const _skipped = p.period?.skippedPeriods || [];
     const _anchor = p.period?.anchor;
     const _boundary = p.boundary;
-    const _bv2 = _boundary?.enabled;
     const skipNote = (_skipped.length > 0 && _anchor)
       ? `<div style="background:rgba(55,138,221,0.10);border:1px solid rgba(55,138,221,0.3);border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:10px;color:var(--tc-blue);line-height:1.5">
           ℹ <strong>MFの会計期間 (${_skipped.map(s => s.start.slice(0,7)+'〜'+s.end.slice(0,7)).join(' / ')} と ${_anchor.start.slice(0,7)}〜${_anchor.end.slice(0,7)}) が御社FYに2期またがっています。</strong><br>
-          ${_bv2
-            ? `🆕 期境界認識モード: 境界仕訳 ${_boundary.stats?.total || 0}件を検出して PL/CF から除外し、anchor期 opening journal を起点に pre期月 (4-6月) のBSを逆算しています。${_boundary.stats?.byReason ? '<br>内訳: ' + Object.entries(_boundary.stats.byReason).map(([k,v])=>`${k}=${v}`).join(' / ') : ''}`
-            : `BSは累積残高を作るため anchor期 (${_anchor.start}〜${_anchor.end}) の仕訳のみで集計（anchor期外の月はゼロ表示）。<br>PL/CFは月次集計のため全期間の仕訳を使用しています。`
-          }
+          境界仕訳 ${_boundary?.stats?.total || 0}件 を検出して PL/CF から除外し、anchor期 opening journal を起点に pre期月 (4-6月) のBSを逆算しています。${_boundary?.stats?.byReason ? '<br>内訳: ' + Object.entries(_boundary.stats.byReason).map(([k,v])=>`${k}=${v}`).join(' / ') : ''}
         </div>`
       : '';
     const bsNote = skipNote + (hasOpening
@@ -10838,14 +10880,10 @@ window.mfOnCommitMonthChange = function() {
     const _skipped = p.period?.skippedPeriods || [];
     const _anchor = p.period?.anchor;
     const _boundary = p.boundary;
-    const _bv2 = _boundary?.enabled;
     const skipNote = (_skipped.length > 0 && _anchor)
       ? `<div style="background:rgba(55,138,221,0.10);border:1px solid rgba(55,138,221,0.3);border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:10px;color:var(--tc-blue);line-height:1.5">
           ℹ <strong>MFの会計期間 (${_skipped.map(s => s.start.slice(0,7)+'〜'+s.end.slice(0,7)).join(' / ')} と ${_anchor.start.slice(0,7)}〜${_anchor.end.slice(0,7)}) が御社FYに2期またがっています。</strong><br>
-          ${_bv2
-            ? `🆕 期境界認識モード: 境界仕訳 ${_boundary.stats?.total || 0}件を検出して PL/CF から除外し、anchor期 opening journal を起点に pre期月 (4-6月) のBSを逆算しています。${_boundary.stats?.byReason ? '<br>内訳: ' + Object.entries(_boundary.stats.byReason).map(([k,v])=>`${k}=${v}`).join(' / ') : ''}`
-            : `BSは累積残高を作るため anchor期 (${_anchor.start}〜${_anchor.end}) の仕訳のみで集計（anchor期外の月はゼロ表示）。<br>PL/CFは月次集計のため全期間の仕訳を使用しています。`
-          }
+          境界仕訳 ${_boundary?.stats?.total || 0}件 を検出して PL/CF から除外し、anchor期 opening journal を起点に pre期月 (4-6月) のBSを逆算しています。${_boundary?.stats?.byReason ? '<br>内訳: ' + Object.entries(_boundary.stats.byReason).map(([k,v])=>`${k}=${v}`).join(' / ') : ''}
         </div>`
       : '';
     const bsNote = skipNote + (hasOpening
@@ -11514,7 +11552,7 @@ window.mfShowCommitConfirmModal = function(p, commitMonths, db) {
       </div>
 
       <div style="background:rgba(239,159,39,0.12);border:1px solid rgba(239,159,39,0.3);border-radius:var(--r);padding:8px 12px;font-size:10px;color:var(--tc-amber);margin-bottom:1rem">
-        ⚠ 反映後は月次PL/CFの実績が上書きされます。反映前に自動でバックアップが作成されます。
+        ⚠ 反映後は月次財務の実績が上書きされます。反映前に自動でバックアップが作成されます。
       </div>
 
       <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -11658,7 +11696,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // OAuth コールバック後
   if (location.search.includes('mf_connected=1')) {
     setTimeout(function() {
-      const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('CSV取込') || x.textContent.includes('取込'));
+      const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('MF連携') || x.textContent.includes('CSV取込') || x.textContent.includes('取込'));
       if (b) b.click();
       mfCheckStatus();
     }, 500);
