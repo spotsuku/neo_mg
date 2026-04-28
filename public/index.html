@@ -376,10 +376,16 @@ input.cells-edit-input {
 
 <!-- ── TOP NAV ── -->
 <div class="topnav">
-  <!-- 左: タイトル + サブタイトル -->
+  <!-- 左: タイトル + サブタイトル + 月次財務サブタブ（PL/CF/BS） -->
   <div class="nav-title">
     <div class="logo">NEO福岡 ｜ 経営ダッシュボード</div>
     <div class="logo-sub" id="nav-sub">2025年度 ｜ 最終更新：2026年2月末</div>
+    <!-- 月次財務サブタブ：常時スロット確保で高さ固定、月次財務時のみ可視 -->
+    <div class="pa-toggle" id="pa-header-toggle" style="margin-top:8px;margin-bottom:0;visibility:hidden">
+      <button class="pa-btn active" onclick="setPaView('pl',this)">PL（損益）</button>
+      <button class="pa-btn" onclick="setPaView('cf',this)">CF（資金繰り）</button>
+      <button class="pa-btn" onclick="setPaView('bs',this)">BS（貸借対照表）</button>
+    </div>
   </div>
   <!-- 右: 上段=アクション、下段=年度/タブ/サブタブ -->
   <div class="nav-right">
@@ -563,16 +569,9 @@ input.cells-edit-input {
      月次 PL / CF 予実管理
 ────────────────────────────────────── -->
 <div class="sec" id="sec-pl-cf">
-  <!-- PL/CF/BS サブタブ + レジェンド（ヘッダー高さを サマリー と揃えるためセクション内に配置） -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
-    <div class="pa-toggle">
-      <button class="pa-btn active" onclick="setPaView('pl',this)">PL（損益）</button>
-      <button class="pa-btn" onclick="setPaView('cf',this)">CF（資金繰り）</button>
-      <button class="pa-btn" onclick="setPaView('bs',this)">BS（貸借対照表）</button>
-    </div>
-    <div style="display:flex;gap:7px;align-items:center">
-      <div class="legend"><div class="li"><div class="ld" style="background:#378ADD;opacity:.5"></div>予算</div><div class="li"><div class="ld" style="background:#378ADD"></div>実績</div><div class="li"><div class="ld" style="background:#3B6D11"></div>予実差</div></div>
-    </div>
+  <!-- レジェンド（PL/CF/BSサブタブはヘッダーへ移動） -->
+  <div style="display:flex;justify-content:flex-end;margin-bottom:.75rem">
+    <div class="legend"><div class="li"><div class="ld" style="background:#378ADD;opacity:.5"></div>予算</div><div class="li"><div class="ld" style="background:#378ADD"></div>実績</div><div class="li"><div class="ld" style="background:#3B6D11"></div>予実差</div></div>
   </div>
 
   <!-- PL 予実 -->
@@ -1443,6 +1442,8 @@ function sw(id, el) {
   document.getElementById('sec-' + id).classList.add('on');
   if (el) el.classList.add('active');
   try { localStorage.setItem('neo_active_tab', id); } catch(e) {}
+  const headerSubtabs = document.getElementById('pa-header-toggle');
+  if (headerSubtabs) headerSubtabs.style.visibility = (id === 'pl-cf') ? 'visible' : 'hidden';
   if (id === 'pl-cf') renderPLCF();
   if (id === 'sim') {
     // タブ切替時に現在の年度に同期
