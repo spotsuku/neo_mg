@@ -461,7 +461,11 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
     if (isNaN(txDate)) return;
     const idx = monthIdx.findIndex(m => m.year === txDate.getFullYear() && m.month === txDate.getMonth() + 1);
     if (idx < 0) return;
-    const useForBs = isAnchorJournal(j);
+    // BS集計対象判定
+    // - 通常モード(boundaryAware=false): anchor 期の仕訳のみ → pre期は0表示
+    // - 期境界モード(boundaryAware=true): anchor + pre 全ての非境界仕訳を BS に反映
+    //   (pre期の bsDelta は逆算で月末残高を導く際に必要)
+    const useForBs = boundaryAware ? true : isAnchorJournal(j);
 
     // 境界仕訳の判定（boundaryAware モード時）
     let boundaryReason = null;
@@ -631,15 +635,59 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
 
   // BS: 借方-貸方の純額を月次デルタとして算出し、累計して期中残高を作る
   // 資産: 借方+貸方− / 負債・純資産: 貸方+借方−
-  // 期首残高は仕訳からは取得できないため期首=0 起点の累計残高として表示
   // ※ 丸めは最後にまとめて行う（途中で千円丸めすると累計時に円単位の誤差が累積するため）
+  //
+  // boundaryAware モード:
+  //   anchor 期 opening journal の合計 = anchor 期初日時点 BS = pre 期末月の月末残高
+  //   - forward: anchorIdx 以降は anchor opening を起点に bsDelta を順方向累積
+  //   - reverse: anchorIdx-1 以前は anchor opening から逆方向に bsDelta を引いて算出
+  //   - bsDelta は pre 期通常仕訳も含まれる前提（useForBs=true で pre 期もカウント）
+  //
+  // 通常モード（boundaryAware=false）:
+  //   既存挙動: 期首=0 起点で全月 forward 累積（pre 期 bsDelta は 0 のまま）
+  let bsBoundaryError = null;
+  let anchorIdx = -1;
+  if (boundaryAware && periodsInfo?.anchor?.start) {
+    const anchorStartDate = new Date(periodsInfo.anchor.start);
+    anchorIdx = monthIdx.findIndex(m =>
+      m.year === anchorStartDate.getFullYear() && m.month === anchorStartDate.getMonth() + 1
+    );
+    // anchorIdx == 0 (御社FY初月 = anchor期初月) なら pre 期は無いので逆算不要
+    // anchorIdx > 0 のとき anchor opening が必須
+    if (anchorIdx > 0 && Object.keys(anchorOpeningRunning).length === 0) {
+      bsBoundaryError = 'anchor期の期首仕訳が検出できなかったため pre期月のBSを逆算できません';
+    }
+  }
   BS_KEYS.forEach(k => {
     const isLiabOrEq = ['payable', 'borrowing', 'borrowing_short', 'other_cl', 'capital', 'retained', 'warrant'].includes(k);
-    let running = 0;
-    for (let i = 0; i < n; i++) {
-      const monthlyDelta = isLiabOrEq ? -bsDelta[k][i] : bsDelta[k][i];
-      running += monthlyDelta;
-      bsMonthly[k][i] = running; // 千円(小数含む) - 後で一括 round
+    if (boundaryAware && anchorIdx > 0 && !bsBoundaryError) {
+      // anchor opening (= 6月末残高) を起点として forward + reverse 計算
+      const opening = anchorOpeningRunning[k] || 0;
+      // anchorOpeningRunning は仕訳の借方+/貸方- で累積している
+      // 負債・純資産は貸方が増加方向なので符号反転して残高に揃える
+      const sixEndBalance = isLiabOrEq ? -opening : opening;
+      bsMonthly[k][anchorIdx - 1] = sixEndBalance;
+      // forward: anchorIdx 以降は sixEndBalance + 月次デルタ累積
+      let running = sixEndBalance;
+      for (let i = anchorIdx; i < n; i++) {
+        const monthlyDelta = isLiabOrEq ? -bsDelta[k][i] : bsDelta[k][i];
+        running += monthlyDelta;
+        bsMonthly[k][i] = running;
+      }
+      // reverse: anchorIdx-1 以前は sixEndBalance から逆方向にデルタを引く
+      // 月末[i-1] = 月末[i] − 月[i]の活動
+      for (let i = anchorIdx - 1; i >= 1; i--) {
+        const monthlyDelta = isLiabOrEq ? -bsDelta[k][i] : bsDelta[k][i];
+        bsMonthly[k][i - 1] = bsMonthly[k][i] - monthlyDelta;
+      }
+    } else {
+      // 通常モード: 期首=0 から全月 forward 累積
+      let running = 0;
+      for (let i = 0; i < n; i++) {
+        const monthlyDelta = isLiabOrEq ? -bsDelta[k][i] : bsDelta[k][i];
+        running += monthlyDelta;
+        bsMonthly[k][i] = running;
+      }
     }
   });
 
@@ -648,10 +696,10 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
   // ※ 丸め前の plCredit/plDebit から直接計算し円単位の精度を保つ。
   //    pl[k].actual は各月で千円丸め済なので使わない。
   //
-  // ※ anchor 期外（例: 4-6月 = MF前期分）は BS仕訳もゼロのため、
-  //    cumNetIncome も加算しない。anchor 期の繰越利益剰余金 期首値が
-  //    既に「前期(=anchor期外)の累計損益」を内包しているため、
+  // ※ anchor 期外（例: 4-6月 = MF前期分）は anchor opening retained に
+  //    既に「前期(=anchor期外)の累計損益」が内包されているため、
   //    pre-anchor 月の PL 純利益を加算すると 二重計上 になる。
+  //    cumNetIncome は anchor 期の月のみ累積する。
   const isAnchorMonth = (i) => {
     if (!anchorPeriodStart) return true;
     const m = monthIdx[i];
@@ -668,53 +716,6 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
       cumNetIncome += rev - exp;
     }
     bsMonthly['retained'][i] += cumNetIncome;
-  }
-
-  // ── pre期月の BS 逆算（boundaryAware モードのみ） ──
-  // anchor 期 opening journal の合計 = 期初日時点の BS = pre期 末月の月末残高
-  // pre期の各月末残高を逆算: 月末[i-1] = 月末[i] − その月の純活動
-  // 「その月の純活動」 = bsDelta[k][i] (pre期の通常仕訳のみ)
-  let bsBoundaryError = null;
-  if (boundaryAware) {
-    if (!periodsInfo?.anchor?.start) {
-      bsBoundaryError = 'anchor期が特定できないため pre期月のBSを逆算できません';
-    } else {
-      // anchor 期 start が御社FYの何月か特定 (例: 2025-07-01 → idx 3)
-      const anchorStart = new Date(periodsInfo.anchor.start);
-      const anchorIdx = monthIdx.findIndex(m =>
-        m.year === anchorStart.getFullYear() && m.month === anchorStart.getMonth() + 1
-      );
-      // anchorIdx > 0 のときだけ pre期月の逆算が必要
-      if (anchorIdx > 0) {
-        // anchor 期 opening journal が検出できなかった場合はエラー
-        const hasOpening = Object.keys(anchorOpeningRunning).length > 0;
-        if (!hasOpening) {
-          bsBoundaryError = 'anchor期の期首仕訳が検出できなかったため pre期月のBSを逆算できません';
-        } else {
-          // pre 期月のBS逆算: pre期の通常仕訳の bsDelta を使う
-          // 注: anchor 期 BS journal の running cumulative を一旦巻き戻す必要がある
-          //     bsMonthly[k][i] (i < anchorIdx) は現在 0 (pre期は anchor フィルタで除外されている)
-          //     なので、ここで bsDelta[k][i] (pre期の通常仕訳分) を使って逆算する
-          //
-          // 開始点: bsMonthly[k][anchorIdx-1] = anchorOpeningRunning[k] (anchor期 opening journal の合計)
-          // ただし isLiabOrEq のキーは符号反転が必要
-          BS_KEYS.forEach(k => {
-            const isLiabOrEq = ['payable', 'borrowing', 'borrowing_short', 'other_cl', 'capital', 'retained', 'warrant'].includes(k);
-            const opening = anchorOpeningRunning[k] || 0;
-            // 期首仕訳の符号を BS_KEYS の累計符号に揃える
-            const sixEndBalance = isLiabOrEq ? -opening : opening;
-            bsMonthly[k][anchorIdx - 1] = sixEndBalance;
-            // pre期の各月末残高を逆順に算出
-            // 月末[i-1] = 月末[i] − 月[i]の活動
-            // 月[i]の活動 = pre期の通常仕訳の bsDelta[k][i] (符号調整済み)
-            for (let i = anchorIdx - 1; i >= 1; i--) {
-              const monthlyDelta = isLiabOrEq ? -bsDelta[k][i] : bsDelta[k][i];
-              bsMonthly[k][i - 1] = bsMonthly[k][i] - monthlyDelta;
-            }
-          });
-        }
-      }
-    }
   }
 
   // 全 BS 値を最後に千円に丸める（累計後の値で一回だけ round → 累積誤差ゼロ）
