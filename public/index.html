@@ -1372,7 +1372,7 @@ input.cells-edit-input {
   </div>
 
   <!-- ① メイン: PL + グリッド -->
-  <div class="wf-panel" id="wf-panel-main">
+  <div class="wf-panel" id="wf-panel-main" style="display:block">
     <div class="card">
       <div class="ct">事業別 PL（プログラム別売上 → 原価 → 人件費 → 販管費 → 営業利益）</div>
       <div style="overflow-x:auto"><table class="wf-pl-table" id="wf-pl-table"></table></div>
@@ -12574,7 +12574,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function renderPL(){
     const tbl = $('wf-pl-table');
-    if (!tbl) return;
+    if (!tbl){ console.warn('[WF] renderPL: #wf-pl-table not found'); return; }
+    console.log('[WF] renderPL', { members: state.members.length });
     const fmtCol = (n) => fmtJPY(n);
     let h = '<thead><tr><th style="min-width:230px">項目</th>';
     BIZ.forEach(b => h += `<th style="min-width:120px">${b}</th>`);
@@ -12738,7 +12739,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function renderGrid(){
     const tbl = $('wf-grid-table');
-    if (!tbl) return;
+    if (!tbl){ console.warn('[WF] renderGrid: #wf-grid-table not found'); return; }
+    console.log('[WF] renderGrid', { members: state.members.length });
     let thead = '<thead>';
     thead += '<tr class="lv1">';
     thead += '<th class="wf-col-name" rowspan="2">メンバー</th>';
@@ -13478,6 +13480,10 @@ document.addEventListener('DOMContentLoaded', function() {
     totalCost, totalTargetRevenue, totalRealizedRev, totalCostsAll, totalOperatingProfit,
     renderAll,
     init: async function(){
+      console.log('[WF] init called, initialized=', state.initialized);
+      // 確実に PL+グリッド panel を表示
+      const main = $('wf-panel-main');
+      if (main) main.style.display = 'block';
       if (state.initialized) { renderAll(); return; }
       state.initialized = true;
       // Supabase からバージョン一覧を読み込み、is_current があれば自動復元
@@ -13490,13 +13496,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }
       renderAll();
+      console.log('[WF] init done, members=', state.members.length, 'wf-panel-main display=', main ? main.style.display : 'NULL');
     },
     toggleSection: function(key){ state.collapsed[key] = !state.collapsed[key]; renderPL(); },
     switchSubtab: function(name, btn){
       state.subtab = name;
       ['main','versions','fulfill','settings'].forEach(k => {
         const el = $('wf-panel-' + k);
-        if (el) el.style.display = (k === name) ? '' : 'none';
+        if (el) el.style.display = (k === name) ? 'block' : 'none';
       });
       const tabs = document.querySelectorAll('#sec-workforce > .pa-toggle .pa-btn');
       tabs.forEach(b => b.classList.remove('active'));
