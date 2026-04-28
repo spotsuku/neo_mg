@@ -12256,5 +12256,339 @@ document.addEventListener('DOMContentLoaded', function() {
 
 })();
     </script>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         工数管理 (Workforce) — 配分シミュレーター
+         独立 IIFE / グローバル window.WF にエントリーポイントを公開
+         ════════════════════════════════════════════════════════════════ -->
+    <script>
+(function(){
+  // ─── 定数 ───
+  const BIZ = ['NEOアカデミア','イベント','研修','事業開発'];
+  const BIZ_SHORT = {'NEOアカデミア':'アカデミア','イベント':'イベント','研修':'研修','事業開発':'事業開発'};
+  const ROLES = ['営業','納品','CS','企画'];
+
+  // ─── デフォルト値（プロトタイプ v14 と一致） ───
+  const DEFAULT_BIZ_PROGRAMS = {
+    'NEOアカデミア': [
+      {name:'会員 リーダー育成', amount:30800000},
+      {name:'会員 評議会',       amount:20000000},
+      {name:'ユース選抜',         amount:3600000},
+      {name:'入会金',             amount:2640000},
+      {name:'OP 長崎ツアー',      amount:5500000},
+    ],
+    'イベント': [
+      {name:'評議会 食事',  amount:4800000},
+      {name:'キックオフ',   amount:2400000},
+      {name:'アワード',     amount:2400000},
+      {name:'イヤーエンド', amount:2400000},
+    ],
+    '研修': [
+      {name:'NEO AI研修(人)', amount:64000000},
+      {name:'Playful 研修',    amount:40000000},
+    ],
+    '事業開発': [
+      {name:'会員 プロジェクト', amount:17600000},
+    ],
+  };
+
+  const DEFAULT_BIZ_COSTS = {
+    'NEOアカデミア': [
+      {name:'クリエイティブ',         amount:300000},
+      {name:'外注費(設備、講師など)', amount:6000000},
+      {name:'広告宣伝費',             amount:6100000},
+      {name:'旅費交通費',             amount:2077500},
+      {name:'通信費',                 amount:500000},
+      {name:'会場費',                 amount:1512000},
+      {name:'諸経費',                 amount:2500000},
+    ],
+    'イベント': [
+      {name:'クリエイティブ', amount:2400000},
+      {name:'外注費',         amount:9000000},
+      {name:'会場費',         amount:3528000},
+    ],
+    '研修': [
+      {name:'インセンティブ',  amount:10400000},
+      {name:'クリエイティブ',  amount:300000},
+      {name:'会場費',          amount:1008000},
+    ],
+    '事業開発': [],
+  };
+
+  const DEFAULT_SGA_ITEMS = [
+    {name:'経営戦略 国本',                   amount:2400000},
+    {name:'コミュニティ設計 加藤',           amount:2400000},
+    {name:'財務・法務 太田',                 amount:2400000},
+    {name:'広報 野呂',                       amount:1200000},
+    {name:'デザイナー 久保木',               amount:1200000},
+    {name:'バックオフィス 和泉、池内',       amount:1680000},
+    {name:'旅費交通費',                      amount:2400000},
+    {name:'通信費',                          amount:2400000},
+    {name:'会議費',                          amount:2400000},
+    {name:'家賃',                            amount:2400000},
+    {name:'専門家',                          amount:2400000},
+    {name:'その他',                          amount:2400000},
+  ];
+
+  const DEFAULT_ROLE_WEIGHTS = {
+    'NEOアカデミア': {'営業': 30, '納品': 25, 'CS': 35, '企画': 10},
+    'イベント':     {'営業': 10, '納品': 60, 'CS': 20, '企画': 10},
+    '研修':         {'営業': 40, '納品': 30, 'CS': 20, '企画': 10},
+    '事業開発':     {'営業': 30, '納品': 10, 'CS': 10, '企画': 50},
+  };
+
+  const DEFAULT_REQUIRED_FTE = {
+    'NEOアカデミア': {'営業': 1.0, '納品': 1.5, 'CS': 2.0, '企画': 1.0},
+    'イベント':     {'営業': 0.3, '納品': 1.5, 'CS': 0.5, '企画': 0.5},
+    '研修':         {'営業': 2.0, '納品': 2.0, 'CS': 1.0, '企画': 0.5},
+    '事業開発':     {'営業': 1.0, '納品': 0.3, 'CS': 0.3, '企画': 1.0},
+  };
+
+  function makeAllocMatrix(setter){
+    const m = {};
+    BIZ.forEach(b => { m[b] = {}; ROLES.forEach(r => m[b][r] = 0); });
+    if (setter) setter(m);
+    return m;
+  }
+
+  const DEFAULT_MEMBERS = [
+    {name:'三木 智弘', role:'代表', cost:9600000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
+      m['NEOアカデミア']['企画'] = 20; m['NEOアカデミア']['CS'] = 30;
+      m['イベント']['企画'] = 10;
+      m['研修']['企画'] = 10; m['研修']['営業'] = 10;
+    })},
+    {name:'三木 浩江', role:'',       cost:5460000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
+      m['NEOアカデミア']['CS'] = 50;
+      m['イベント']['納品'] = 20;
+    })},
+    {name:'副事務局長', role:'未稼働', cost:0,       ability:1.0, allocMatrix: makeAllocMatrix()},
+    {name:'CS/SL MG', role:'カスタマーサクセス', cost:3000000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
+      m['NEOアカデミア']['CS'] = 20;
+      m['事業開発']['企画'] = 30;
+    })},
+    {name:'SL担当', role:'',         cost:2400000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
+      m['NEOアカデミア']['CS'] = 100;
+    })},
+    {name:'佐藤',   role:'営業',     cost:2400000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
+      m['研修']['営業'] = 50;
+    })},
+    {name:'古野',   role:'営業/納品', cost:3360000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
+      m['NEOアカデミア']['納品'] = 30;
+      m['研修']['営業'] = 25; m['研修']['納品'] = 25;
+    })},
+    {name:'國武',   role:'',         cost:1800000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
+      m['NEOアカデミア']['CS'] = 100;
+    })},
+    {name:'森',     role:'',         cost:5400000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
+      m['NEOアカデミア']['納品'] = 50;
+      m['イベント']['納品'] = 30;
+      m['研修']['納品'] = 20;
+    })},
+    {name:'面川',   role:'',         cost:4200000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
+      m['NEOアカデミア']['納品'] = 40;
+      m['イベント']['納品'] = 30;
+      m['研修']['納品'] = 30;
+    })},
+    {name:'中島',   role:'',         cost:3600000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
+      m['NEOアカデミア']['納品'] = 100;
+    })},
+    {name:'増田',   role:'',         cost:5400000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
+      m['NEOアカデミア']['納品'] = 60;
+      m['イベント']['納品'] = 40;
+    })},
+    {name:'イベント外注', role:'', cost:4000000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
+      m['NEOアカデミア']['納品'] = 20;
+      m['イベント']['納品'] = 80;
+    })},
+    {name:'エリア担当', role:'各県1名', cost:25200000, ability:1.0, allocMatrix: makeAllocMatrix()},
+    {name:'エリアCM',   role:'各県1名', cost:10800000, ability:1.0, allocMatrix: makeAllocMatrix()},
+    {name:'菅', role:'', cost:1200000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
+      m['NEOアカデミア']['納品'] = 100;
+    })},
+    {name:'研修事務',         role:'', cost:3600000, ability:1.0, allocMatrix: makeAllocMatrix(m => { m['研修']['納品'] = 100; })},
+    {name:'ファシリテーター', role:'', cost:2400000, ability:1.0, allocMatrix: makeAllocMatrix(m => { m['研修']['納品'] = 100; })},
+  ];
+
+  // ─── 状態 ───
+  const state = {
+    members:     JSON.parse(JSON.stringify(DEFAULT_MEMBERS)),
+    bizPrograms: JSON.parse(JSON.stringify(DEFAULT_BIZ_PROGRAMS)),
+    bizCosts:    JSON.parse(JSON.stringify(DEFAULT_BIZ_COSTS)),
+    sgaItems:    JSON.parse(JSON.stringify(DEFAULT_SGA_ITEMS)),
+    roleWeights: JSON.parse(JSON.stringify(DEFAULT_ROLE_WEIGHTS)),
+    requiredFTE: JSON.parse(JSON.stringify(DEFAULT_REQUIRED_FTE)),
+    collapsed:   { sales: true, costs: true, sga: true },
+    versions:    [],          // [{ version_id, name, memo, snapshot, saved_at, is_current }]
+    currentVersionId: null,   // 現在編集中のバージョン (BIGINT)
+    isDirty:     false,
+    compareSel:  [],          // [version_id, version_id]
+    subtab:      'main',
+    initialized: false,
+  };
+
+  // ─── ユーティリティ ───
+  function fmtJPY(n){
+    const a = Math.abs(n);
+    if (a >= 100000000) return (n>=0?'¥':'¥▲') + (a/100000000).toFixed(2) + '億';
+    if (a >= 10000000)  return (n>=0?'¥':'¥▲') + (a/1000000).toFixed(1) + 'M';
+    if (a >= 10000)     return (n>=0?'¥':'¥▲') + (a/10000).toFixed(0) + '万';
+    if (a >= 1)         return (n>=0?'¥':'¥▲') + Math.round(a).toLocaleString();
+    return '¥0';
+  }
+  const $ = (id) => document.getElementById(id);
+  const cloneDeep = (x) => JSON.parse(JSON.stringify(x));
+
+  // ─── 計算関数 (プロトタイプ v14 と一致) ───
+  function bizRevenue(biz){ return state.bizPrograms[biz].reduce((s,p) => s + (p.amount||0), 0); }
+  function bizCostTotal(biz){ return state.bizCosts[biz].reduce((s,c) => s + (c.amount||0), 0); }
+  function sgaTotal(){ return state.sgaItems.reduce((s,x) => s + (x.amount||0), 0); }
+  function sgaPerBiz(){ return sgaTotal() / BIZ.length; }
+
+  function memberAllocCost(idx, biz, role){
+    return state.members[idx].cost * (state.members[idx].allocMatrix[biz][role]||0) / 100;
+  }
+  function memberAllocFTE(idx, biz, role){
+    const m = state.members[idx];
+    return (m.allocMatrix[biz][role]||0) / 100 * (m.ability||1.0);
+  }
+  function bizRoleInvestedFTE(biz, role){
+    return state.members.reduce((s,_,i) => s + memberAllocFTE(i, biz, role), 0);
+  }
+  function bizRoleFulfillment(biz, role){
+    const required = state.requiredFTE[biz][role] || 0;
+    if (required === 0) return null;
+    return bizRoleInvestedFTE(biz, role) / required;
+  }
+  function bizRoleRevCoef(biz, role){
+    const f = bizRoleFulfillment(biz, role);
+    if (f === null) return 0;
+    return Math.min(f, 1.0);
+  }
+  function bizRoleCost(biz, role){
+    return state.members.reduce((s,_,i) => s + memberAllocCost(i, biz, role), 0);
+  }
+  function bizPersonnelCost(biz){
+    return ROLES.reduce((s,r) => s + bizRoleCost(biz, r), 0);
+  }
+  // 必要月工数=0 の役割は売上ウェイトを再配分（残りの役割に按分）
+  function effectiveWeight(biz, role){
+    const w = state.roleWeights[biz];
+    let active = 0;
+    ROLES.forEach(r => { if ((state.requiredFTE[biz][r]||0) > 0) active += (w[r]||0); });
+    if (active === 0) return 0;
+    if ((state.requiredFTE[biz][role]||0) === 0) return 0;
+    return (w[role]||0) / active;
+  }
+  function roleRealizedRev(biz, role){
+    return bizRevenue(biz) * effectiveWeight(biz, role) * bizRoleRevCoef(biz, role);
+  }
+  function bizRealizedRev(biz){
+    return ROLES.reduce((s,r) => s + roleRealizedRev(biz, r), 0);
+  }
+  function bizGrossProfit(biz){ return bizRealizedRev(biz) - bizCostTotal(biz); }
+  function bizOperatingProfit(biz){ return bizGrossProfit(biz) - bizPersonnelCost(biz) - sgaPerBiz(); }
+
+  function memberRevenue(idx){
+    const m = state.members[idx];
+    const myAbility = m.ability || 1.0;
+    let total = 0;
+    BIZ.forEach(biz => ROLES.forEach(role => {
+      const myCost = memberAllocCost(idx, biz, role);
+      if (myCost === 0) return;
+      const myWeighted = myCost * myAbility;
+      let totalWeighted = 0;
+      state.members.forEach((mm, ii) => {
+        const cc = memberAllocCost(ii, biz, role);
+        if (cc === 0) return;
+        totalWeighted += cc * (mm.ability || 1.0);
+      });
+      if (totalWeighted === 0) return;
+      total += roleRealizedRev(biz, role) * myWeighted / totalWeighted;
+    }));
+    return total;
+  }
+  function memberRatio(idx){
+    const m = state.members[idx];
+    if (m.cost === 0) return 0;
+    return memberRevenue(idx) / m.cost;
+  }
+  function memberTotalPct(idx){
+    let s = 0;
+    BIZ.forEach(b => ROLES.forEach(r => s += (state.members[idx].allocMatrix[b][r]||0)));
+    return s;
+  }
+  function totalCost(){ return state.members.reduce((s,m) => s + m.cost, 0); }
+  function totalTargetRevenue(){ return BIZ.reduce((s,b) => s + bizRevenue(b), 0); }
+  function totalRealizedRev(){ return BIZ.reduce((s,b) => s + bizRealizedRev(b), 0); }
+  function totalCostsAll(){ return BIZ.reduce((s,b) => s + bizCostTotal(b), 0); }
+  function totalOperatingProfit(){ return BIZ.reduce((s,b) => s + bizOperatingProfit(b), 0); }
+
+  // ─── スナップショット ───
+  function takeSnapshot(){
+    return {
+      members:     cloneDeep(state.members),
+      bizPrograms: cloneDeep(state.bizPrograms),
+      bizCosts:    cloneDeep(state.bizCosts),
+      sgaItems:    cloneDeep(state.sgaItems),
+      roleWeights: cloneDeep(state.roleWeights),
+      requiredFTE: cloneDeep(state.requiredFTE),
+    };
+  }
+  function restoreSnapshot(snap){
+    if (!snap) return;
+    state.members     = cloneDeep(snap.members || DEFAULT_MEMBERS);
+    state.bizPrograms = cloneDeep(snap.bizPrograms || DEFAULT_BIZ_PROGRAMS);
+    state.bizCosts    = cloneDeep(snap.bizCosts || DEFAULT_BIZ_COSTS);
+    state.sgaItems    = cloneDeep(snap.sgaItems || DEFAULT_SGA_ITEMS);
+    state.roleWeights = cloneDeep(snap.roleWeights || DEFAULT_ROLE_WEIGHTS);
+    state.requiredFTE = cloneDeep(snap.requiredFTE || DEFAULT_REQUIRED_FTE);
+  }
+
+  // ─── レンダリングは次コミットで実装 ───
+  function renderAll(){ /* TODO: 次コミットで実装 */ }
+
+  // ─── window.WF: 外部から呼び出すエントリーポイント ───
+  // タブ切り替え時に呼ばれる init は次コミットで実装
+  const WF = {
+    state, BIZ, ROLES, BIZ_SHORT,
+    fmtJPY, takeSnapshot, restoreSnapshot,
+    bizRevenue, bizCostTotal, sgaTotal, sgaPerBiz,
+    memberAllocCost, memberAllocFTE, bizRoleInvestedFTE,
+    bizRoleFulfillment, bizRoleRevCoef, bizRoleCost, bizPersonnelCost,
+    effectiveWeight, roleRealizedRev, bizRealizedRev,
+    bizGrossProfit, bizOperatingProfit,
+    memberRevenue, memberRatio, memberTotalPct,
+    totalCost, totalTargetRevenue, totalRealizedRev, totalCostsAll, totalOperatingProfit,
+    renderAll,
+    // UI ハンドラのプレースホルダ（次コミットで上書き）
+    init: function(){ console.log('[WF] init pending'); },
+    switchSubtab: function(name, btn){
+      state.subtab = name;
+      ['main','versions','fulfill','settings'].forEach(k => {
+        const el = $('wf-panel-' + k);
+        if (el) el.style.display = (k === name) ? '' : 'none';
+      });
+      // サブタブのアクティブ状態
+      const tabs = document.querySelectorAll('#sec-workforce > .pa-toggle .pa-btn');
+      tabs.forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+    },
+    saveAsNew: function(){ alert('保存機能は次コミットで実装します'); },
+    overwriteCurrent: function(){ alert('上書き保存は次コミットで実装します'); },
+    setCurrentVersion: function(){ alert('採用設定は次コミットで実装します'); },
+    closeAddModal: function(){ const el = $('wf-add-modal'); if (el) el.classList.remove('show'); },
+    closeSaveModal: function(){ const el = $('wf-save-modal'); if (el) el.classList.remove('show'); },
+    openAddModal: function(){ alert('追加は次コミットで実装します'); },
+    addMember: function(){},
+    confirmSaveVersion: function(){},
+    showDiff: function(){},
+    clearCompare: function(){},
+    addSGA: function(){},
+    resetToInitial: function(){ if (!confirm('初期値に戻しますか？')) return; restoreSnapshot({ members: DEFAULT_MEMBERS, bizPrograms: DEFAULT_BIZ_PROGRAMS, bizCosts: DEFAULT_BIZ_COSTS, sgaItems: DEFAULT_SGA_ITEMS, roleWeights: DEFAULT_ROLE_WEIGHTS, requiredFTE: DEFAULT_REQUIRED_FTE }); renderAll(); },
+    resetAllAbility: function(){ if (!confirm('全メンバーの能力係数を1にリセットしますか？')) return; state.members.forEach(m => m.ability = 1.0); renderAll(); },
+  };
+  window.WF = WF;
+})();
+    </script>
 </body>
 </html>
