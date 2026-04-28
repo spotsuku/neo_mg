@@ -1777,6 +1777,7 @@ function sw(id, el) {
   }
   if (id === 'report') renderReportTabs();
   if (id === 'weekly') updateWeeklyKPIs();
+  if (id === 'workforce' && window.WF) setTimeout(() => window.WF.init(), 30);
 }
 
 function setYear(y, el) {
@@ -12544,11 +12545,314 @@ document.addEventListener('DOMContentLoaded', function() {
     state.requiredFTE = cloneDeep(snap.requiredFTE || DEFAULT_REQUIRED_FTE);
   }
 
-  // ─── レンダリングは次コミットで実装 ───
-  function renderAll(){ /* TODO: 次コミットで実装 */ }
+  // ═══════════════════════════════════════════════════════════
+  //  レンダリング: KPI / PL表 / グリッド
+  // ═══════════════════════════════════════════════════════════
+
+  function renderKPI(){
+    const cost      = totalCost();
+    const targetRev = totalTargetRevenue();
+    const realRev   = totalRealizedRev();
+    const ratio     = cost > 0 ? realRev / cost : 0;
+    const profit    = totalOperatingProfit();
+    if ($('wf-kpi-cost'))         $('wf-kpi-cost').textContent = fmtJPY(cost);
+    if ($('wf-kpi-member-count')) $('wf-kpi-member-count').textContent = state.members.length + '名';
+    if ($('wf-kpi-target-rev'))   $('wf-kpi-target-rev').textContent = fmtJPY(targetRev);
+    if ($('wf-kpi-rev'))          $('wf-kpi-rev').textContent = fmtJPY(realRev);
+    const lossRate = targetRev > 0 ? (1 - realRev / targetRev) * 100 : 0;
+    if ($('wf-kpi-rev-sub'))      $('wf-kpi-rev-sub').textContent = `機会損失 ${lossRate.toFixed(1)}%`;
+    const ratioEl = $('wf-kpi-ratio');
+    if (ratioEl){
+      ratioEl.textContent = ratio.toFixed(2) + '倍';
+      ratioEl.style.color = ratio >= 3 ? 'var(--tc-green)' : ratio >= 1.5 ? 'var(--tc-amber)' : 'var(--tc-red)';
+    }
+    const profitEl = $('wf-kpi-profit');
+    if (profitEl){
+      profitEl.textContent = fmtJPY(profit);
+      profitEl.style.color = profit > 0 ? 'var(--tc-green)' : 'var(--tc-red)';
+    }
+  }
+
+  function renderPL(){
+    const tbl = $('wf-pl-table');
+    if (!tbl) return;
+    const fmtCol = (n) => fmtJPY(n);
+    let h = '<thead><tr><th style="min-width:230px">項目</th>';
+    BIZ.forEach(b => h += `<th style="min-width:120px">${b}</th>`);
+    h += `<th style="min-width:120px">合計</th></tr></thead><tbody>`;
+
+    // 売上カテゴリ行
+    h += `<tr class="row-cat ${state.collapsed.sales ? 'collapsed' : ''}" onclick="WF.toggleSection('sales')">
+      <td>売上</td>`;
+    BIZ.forEach(b => h += `<td class="num">${fmtCol(bizRevenue(b))}</td>`);
+    h += `<td class="num">${fmtCol(totalTargetRevenue())}</td></tr>`;
+
+    if (!state.collapsed.sales){
+      const maxProgs = Math.max(...BIZ.map(b => state.bizPrograms[b].length), 0);
+      for (let i = 0; i < maxProgs; i++){
+        h += `<tr class="row-detail"><td>　└ プログラム${i+1}</td>`;
+        BIZ.forEach(b => {
+          const p = state.bizPrograms[b][i];
+          if (p){
+            h += `<td class="num"><div style="display:flex;align-items:center;gap:4px">
+              <input type="text" class="wf-pl-input" style="text-align:left;flex:1" value="${escapeHtml(p.name)}" onchange="WF.updateProgramName('${b}',${i},this.value)">
+              <input type="number" class="wf-pl-input" style="width:80px" value="${p.amount}" step="100000" onchange="WF.updateProgramAmount('${b}',${i},this.value)">
+              <button class="wf-del-row-btn" onclick="WF.deleteProgram('${b}',${i})" title="削除">×</button>
+            </div></td>`;
+          } else {
+            h += `<td></td>`;
+          }
+        });
+        h += `<td></td></tr>`;
+      }
+      h += `<tr class="row-detail"><td></td>`;
+      BIZ.forEach(b => h += `<td><button class="wf-add-row-btn" onclick="WF.addProgram('${b}')">+ プログラム追加</button></td>`);
+      h += `<td></td></tr>`;
+    }
+
+    // 実現売上
+    h += `<tr class="row-section"><td>実現売上（充足度反映後）</td>`;
+    BIZ.forEach(b => {
+      const real = bizRealizedRev(b);
+      const target = bizRevenue(b);
+      const lossRate = target > 0 ? (1 - real/target)*100 : 0;
+      h += `<td class="num">${fmtCol(real)}<br><span style="font-size:9px;font-weight:400;color:${lossRate>0?'var(--tc-amber)':'var(--text3)'}">損失${lossRate.toFixed(1)}%</span></td>`;
+    });
+    h += `<td class="num">${fmtCol(totalRealizedRev())}</td></tr>`;
+
+    // 原価
+    h += `<tr class="row-cat ${state.collapsed.costs ? 'collapsed' : ''}" onclick="WF.toggleSection('costs')"><td>原価</td>`;
+    BIZ.forEach(b => h += `<td class="num">${fmtCol(bizCostTotal(b))}</td>`);
+    h += `<td class="num">${fmtCol(totalCostsAll())}</td></tr>`;
+
+    if (!state.collapsed.costs){
+      const maxCosts = Math.max(...BIZ.map(b => state.bizCosts[b].length), 0);
+      for (let i = 0; i < maxCosts; i++){
+        h += `<tr class="row-cost"><td>　└ 原価項目${i+1}</td>`;
+        BIZ.forEach(b => {
+          const c = state.bizCosts[b][i];
+          if (c){
+            h += `<td class="num"><div style="display:flex;align-items:center;gap:4px">
+              <input type="text" class="wf-pl-input" style="text-align:left;flex:1" value="${escapeHtml(c.name)}" onchange="WF.updateCostName('${b}',${i},this.value)">
+              <input type="number" class="wf-pl-input" style="width:80px" value="${c.amount}" step="100000" onchange="WF.updateCostAmount('${b}',${i},this.value)">
+              <button class="wf-del-row-btn" onclick="WF.deleteCost('${b}',${i})" title="削除">×</button>
+            </div></td>`;
+          } else { h += `<td></td>`; }
+        });
+        h += `<td></td></tr>`;
+      }
+      h += `<tr class="row-cost"><td></td>`;
+      BIZ.forEach(b => h += `<td><button class="wf-add-row-btn" onclick="WF.addCost('${b}')">+ 原価項目追加</button></td>`);
+      h += `<td></td></tr>`;
+    }
+
+    // 粗利
+    h += `<tr class="row-section"><td>粗利</td>`;
+    BIZ.forEach(b => {
+      const gp = bizGrossProfit(b);
+      h += `<td class="num" style="color:${gp>=0?'var(--tc-green)':'var(--tc-red)'}">${fmtCol(gp)}</td>`;
+    });
+    const totalGP = BIZ.reduce((s,b) => s + bizGrossProfit(b), 0);
+    h += `<td class="num" style="color:${totalGP>=0?'var(--tc-green)':'var(--tc-red)'}">${fmtCol(totalGP)}</td></tr>`;
+
+    // 人件費
+    h += `<tr class="row-cat" style="cursor:default"><td style="cursor:default">人件費（自動計算）</td>`;
+    BIZ.forEach(b => h += `<td class="num">${fmtCol(bizPersonnelCost(b))}</td>`);
+    const totalPersonnel = BIZ.reduce((s,b) => s + bizPersonnelCost(b), 0);
+    h += `<td class="num">${fmtCol(totalPersonnel)}</td></tr>`;
+
+    // 人件費比率
+    h += `<tr class="row-detail"><td>　└ 人件費比率（実現売上比）</td>`;
+    BIZ.forEach(b => {
+      const real = bizRealizedRev(b);
+      const ratio = real > 0 ? (bizPersonnelCost(b) / real * 100) : 0;
+      let cls = 'good'; if (ratio > 80) cls = 'bad'; else if (ratio > 50) cls = 'warn';
+      h += `<td class="num wf-ratio-cell ${cls}">${ratio.toFixed(1)}%</td>`;
+    });
+    const totalReal = totalRealizedRev();
+    const totalRatio = totalReal > 0 ? (totalPersonnel / totalReal * 100) : 0;
+    let totalRatioCls = 'good'; if (totalRatio > 80) totalRatioCls = 'bad'; else if (totalRatio > 50) totalRatioCls = 'warn';
+    h += `<td class="num wf-ratio-cell ${totalRatioCls}">${totalRatio.toFixed(1)}%</td></tr>`;
+
+    // 販管費
+    h += `<tr class="row-cat ${state.collapsed.sga ? 'collapsed' : ''}" onclick="WF.toggleSection('sga')"><td>販管費（4事業に均等按分）</td>`;
+    BIZ.forEach(b => h += `<td class="num">${fmtCol(sgaPerBiz())}</td>`);
+    h += `<td class="num">${fmtCol(sgaTotal())}</td></tr>`;
+
+    if (!state.collapsed.sga){
+      state.sgaItems.forEach((item, i) => {
+        h += `<tr class="row-detail"><td>　└ <input type="text" class="wf-pl-input" style="text-align:left;width:200px" value="${escapeHtml(item.name)}" onchange="WF.updateSGAName(${i},this.value)"></td>`;
+        const perBiz = (item.amount||0) / BIZ.length;
+        BIZ.forEach(b => h += `<td class="num">${fmtCol(perBiz)}</td>`);
+        h += `<td class="num"><div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
+          <input type="number" class="wf-pl-input" style="width:90px" value="${item.amount}" step="100000" onchange="WF.updateSGAAmount(${i},this.value)">
+          <button class="wf-del-row-btn" onclick="WF.deleteSGA(${i})" title="削除">×</button>
+        </div></td></tr>`;
+      });
+      h += `<tr class="row-detail"><td></td>`;
+      BIZ.forEach(() => h += `<td></td>`);
+      h += `<td><button class="wf-add-row-btn" onclick="WF.addSGA()">+ 販管費項目追加</button></td></tr>`;
+    }
+
+    // 営業利益
+    h += `<tr class="row-summary"><td>営業利益</td>`;
+    BIZ.forEach(b => {
+      const op = bizOperatingProfit(b);
+      h += `<td class="num" style="color:${op>=0?'#5dbd7e':'#ff8a8a'}">${fmtCol(op)}</td>`;
+    });
+    const totalOP = totalOperatingProfit();
+    h += `<td class="num" style="color:${totalOP>=0?'#5dbd7e':'#ff8a8a'}">${fmtCol(totalOP)}</td></tr>`;
+
+    // 営業利益率
+    h += `<tr class="row-detail"><td>　└ 営業利益率（実現売上比）</td>`;
+    BIZ.forEach(b => {
+      const op = bizOperatingProfit(b);
+      const real = bizRealizedRev(b);
+      const m = real > 0 ? (op / real * 100) : 0;
+      h += `<td class="num" style="color:${op>=0?'var(--tc-green)':'var(--tc-red)'}">${m.toFixed(1)}%</td>`;
+    });
+    const totalMargin = totalReal > 0 ? (totalOP / totalReal * 100) : 0;
+    h += `<td class="num" style="color:${totalOP>=0?'var(--tc-green)':'var(--tc-red)'}">${totalMargin.toFixed(1)}%</td></tr>`;
+
+    // 生産性倍率
+    h += `<tr class="row-detail"><td>　└ 生産性倍率（実現売上÷人件費）</td>`;
+    BIZ.forEach(b => {
+      const real = bizRealizedRev(b);
+      const personnel = bizPersonnelCost(b);
+      const r = personnel > 0 ? real / personnel : 0;
+      let cls = 'bad'; if (r >= 3) cls = 'good'; else if (r >= 1) cls = 'warn';
+      h += `<td class="num wf-ratio-cell ${cls}">${r.toFixed(2)}倍</td>`;
+    });
+    const totalR = totalPersonnel > 0 ? totalReal / totalPersonnel : 0;
+    let totalRCls = 'bad'; if (totalR >= 3) totalRCls = 'good'; else if (totalR >= 1) totalRCls = 'warn';
+    h += `<td class="num wf-ratio-cell ${totalRCls}">${totalR.toFixed(2)}倍</td></tr>`;
+
+    h += '</tbody>';
+    tbl.innerHTML = h;
+  }
+
+  function escapeHtml(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function renderGrid(){
+    const tbl = $('wf-grid-table');
+    if (!tbl) return;
+    let thead = '<thead>';
+    thead += '<tr class="lv1">';
+    thead += '<th class="wf-col-name" rowspan="2">メンバー</th>';
+    thead += '<th class="wf-col-cost" rowspan="2">人件費</th>';
+    thead += '<th class="wf-col-ability" rowspan="2">能力</th>';
+    BIZ.forEach((b, bi) => {
+      thead += `<th colspan="4" class="${bi < BIZ.length-1 ? 'wf-biz-end' : ''}">${BIZ_SHORT[b]}</th>`;
+    });
+    thead += '<th rowspan="2" class="wf-col-total">配分計</th>';
+    thead += '<th rowspan="2" class="wf-col-rev">売上貢献</th>';
+    thead += '<th rowspan="2" class="wf-col-ratio">倍率</th>';
+    thead += '<th rowspan="2" class="wf-col-del"></th>';
+    thead += '</tr>';
+    thead += '<tr class="lv2">';
+    BIZ.forEach((b, bi) => ROLES.forEach((r, ri) => {
+      const isLast = (ri === ROLES.length-1) && (bi < BIZ.length-1);
+      thead += `<th class="${isLast ? 'wf-biz-end' : ''}"><span class="wf-rb wf-r-${r}">${r}</span></th>`;
+    }));
+    thead += '</tr>';
+
+    // 必要月工数
+    thead += '<tr class="summary-row sr-required"><th class="wf-col-name" style="text-align:right;font-weight:600">必要月工数 →</th><td class="wf-col-cost"></td><td class="wf-col-ability"></td>';
+    BIZ.forEach((b, bi) => ROLES.forEach((r, ri) => {
+      const required = state.requiredFTE[b][r] || 0;
+      const isLast = (ri === ROLES.length-1) && (bi < BIZ.length-1);
+      thead += `<td class="${isLast ? 'wf-biz-end' : ''}" style="font-size:10px;color:var(--text2);font-weight:600">${required.toFixed(1)}</td>`;
+    }));
+    thead += '<td class="wf-col-total"></td><td class="wf-col-rev"></td><td class="wf-col-ratio"></td><td class="wf-col-del"></td></tr>';
+
+    // 投入月工数
+    thead += '<tr class="summary-row sr-invested"><th class="wf-col-name" style="text-align:right;font-weight:600">投入月工数 →</th><td class="wf-col-cost"></td><td class="wf-col-ability"></td>';
+    BIZ.forEach((b, bi) => ROLES.forEach((r, ri) => {
+      const invested = bizRoleInvestedFTE(b, r);
+      const isLast = (ri === ROLES.length-1) && (bi < BIZ.length-1);
+      thead += `<td class="${isLast ? 'wf-biz-end' : ''}" style="font-size:10px;font-weight:600">${invested.toFixed(2)}</td>`;
+    }));
+    thead += '<td class="wf-col-total"></td><td class="wf-col-rev"></td><td class="wf-col-ratio"></td><td class="wf-col-del"></td></tr>';
+
+    // 充足度
+    thead += '<tr class="summary-row sr-fulfill"><th class="wf-col-name" style="text-align:right;font-weight:600">充足度 →</th><td class="wf-col-cost"></td><td class="wf-col-ability"></td>';
+    BIZ.forEach((b, bi) => ROLES.forEach((r, ri) => {
+      const required = state.requiredFTE[b][r] || 0;
+      const invested = bizRoleInvestedFTE(b, r);
+      const isLast = (ri === ROLES.length-1) && (bi < BIZ.length-1);
+      if (required === 0 && invested === 0){
+        thead += `<td class="${isLast ? 'wf-biz-end' : ''}" style="font-size:10px;color:var(--text3)">—</td>`;
+        return;
+      }
+      const f = required > 0 ? invested / required : Infinity;
+      const fPct = f === Infinity ? '∞' : (f*100).toFixed(0) + '%';
+      let cls = 'good';
+      if (required === 0) cls = 'over';
+      else if (f < 0.8) cls = 'low';
+      else if (f > 1.2) cls = 'over';
+      thead += `<td class="${isLast ? 'wf-biz-end' : ''} wf-ful-cell ${cls}"><div class="pct">${fPct}</div></td>`;
+    }));
+    thead += '<td class="wf-col-total"></td><td class="wf-col-rev"></td><td class="wf-col-ratio"></td><td class="wf-col-del"></td></tr>';
+
+    thead += '</thead>';
+
+    // 行
+    let tbody = '<tbody>';
+    state.members.forEach((m, idx) => {
+      const totalPct = memberTotalPct(idx);
+      const rev      = memberRevenue(idx);
+      const ratio    = memberRatio(idx);
+      const ability  = m.ability || 1.0;
+      let totalCls = 'ok';
+      if (totalPct === 0) totalCls = 'warn';
+      else if (totalPct > 100) totalCls = 'err';
+      else if (totalPct < 100) totalCls = 'warn';
+      const ratioCls = ratio >= 3 ? 'good' : ratio >= 1 ? 'warn' : 'bad';
+      let abilityCls = '';
+      if (ability > 1) abilityCls = 'high'; else if (ability < 1) abilityCls = 'low';
+
+      tbody += '<tr>';
+      tbody += `<td class="wf-col-name">
+        <input type="text" class="wf-name-input" value="${escapeHtml(m.name)}" onchange="WF.updateName(${idx}, this.value)">
+        <input type="text" class="wf-role-input" value="${escapeHtml(m.role||'')}" onchange="WF.updateRole(${idx}, this.value)" placeholder="役職">
+      </td>`;
+      tbody += `<td class="wf-col-cost"><input type="number" class="wf-cost-input" value="${m.cost}" oninput="WF.updateCost(${idx}, this.value)" step="100000"></td>`;
+      tbody += `<td class="wf-col-ability"><input type="number" class="wf-ability-input ${abilityCls}" value="${ability}" onchange="WF.updateAbility(${idx}, this.value)" step="0.1" min="0.1" max="5"></td>`;
+      BIZ.forEach((b, bi) => ROLES.forEach((r, ri) => {
+        const v = m.allocMatrix[b][r] || 0;
+        const isLast = (ri === ROLES.length-1) && (bi < BIZ.length-1);
+        tbody += `<td class="wf-role-${r} ${isLast ? 'wf-biz-end' : ''}">
+          <input type="number" class="wf-grid-cell-input ${v>0?'has-val':'zero'}" value="${v}" min="0" max="100" onchange="WF.updateAllocPct(${idx},'${b}','${r}',this.value)">
+        </td>`;
+      }));
+      tbody += `<td class="wf-col-total"><span class="wf-total-pct ${totalCls}">${totalPct}%</span></td>`;
+      tbody += `<td class="wf-col-rev">${fmtJPY(rev)}</td>`;
+      tbody += `<td class="wf-col-ratio"><span class="wf-ratio-num ${ratioCls}">${ratio.toFixed(2)}</span></td>`;
+      tbody += `<td class="wf-col-del"><button class="wf-delete-btn" onclick="WF.deleteMember(${idx})" title="削除">🗑</button></td>`;
+      tbody += '</tr>';
+    });
+    tbody += '</tbody>';
+
+    tbl.innerHTML = thead + tbody;
+  }
+
+  function renderAll(){
+    renderKPI();
+    renderPL();
+    renderGrid();
+    if (typeof renderHeatmap === 'function')    renderHeatmap();
+    if (typeof renderFulSummary === 'function') renderFulSummary();
+    if (typeof renderFTEMatrix === 'function')  renderFTEMatrix();
+    if (typeof renderWeightMatrix === 'function') renderWeightMatrix();
+    if (typeof renderSGABody === 'function')    renderSGABody();
+    if (typeof renderVersionUI === 'function')  renderVersionUI();
+  }
 
   // ─── window.WF: 外部から呼び出すエントリーポイント ───
-  // タブ切り替え時に呼ばれる init は次コミットで実装
   const WF = {
     state, BIZ, ROLES, BIZ_SHORT,
     fmtJPY, takeSnapshot, restoreSnapshot,
@@ -12560,19 +12864,23 @@ document.addEventListener('DOMContentLoaded', function() {
     memberRevenue, memberRatio, memberTotalPct,
     totalCost, totalTargetRevenue, totalRealizedRev, totalCostsAll, totalOperatingProfit,
     renderAll,
-    // UI ハンドラのプレースホルダ（次コミットで上書き）
-    init: function(){ console.log('[WF] init pending'); },
+    init: function(){
+      if (state.initialized) { renderAll(); return; }
+      state.initialized = true;
+      renderAll();
+    },
+    toggleSection: function(key){ state.collapsed[key] = !state.collapsed[key]; renderPL(); },
     switchSubtab: function(name, btn){
       state.subtab = name;
       ['main','versions','fulfill','settings'].forEach(k => {
         const el = $('wf-panel-' + k);
         if (el) el.style.display = (k === name) ? '' : 'none';
       });
-      // サブタブのアクティブ状態
       const tabs = document.querySelectorAll('#sec-workforce > .pa-toggle .pa-btn');
       tabs.forEach(b => b.classList.remove('active'));
       if (btn) btn.classList.add('active');
     },
+    // UI ハンドラ: 次コミット (B4) で実装
     saveAsNew: function(){ alert('保存機能は次コミットで実装します'); },
     overwriteCurrent: function(){ alert('上書き保存は次コミットで実装します'); },
     setCurrentVersion: function(){ alert('採用設定は次コミットで実装します'); },
@@ -12583,9 +12891,27 @@ document.addEventListener('DOMContentLoaded', function() {
     confirmSaveVersion: function(){},
     showDiff: function(){},
     clearCompare: function(){},
-    addSGA: function(){},
+    addSGA: function(){ state.sgaItems.push({name:'新規販管費', amount:0}); state.collapsed.sga = false; renderPL(); },
     resetToInitial: function(){ if (!confirm('初期値に戻しますか？')) return; restoreSnapshot({ members: DEFAULT_MEMBERS, bizPrograms: DEFAULT_BIZ_PROGRAMS, bizCosts: DEFAULT_BIZ_COSTS, sgaItems: DEFAULT_SGA_ITEMS, roleWeights: DEFAULT_ROLE_WEIGHTS, requiredFTE: DEFAULT_REQUIRED_FTE }); renderAll(); },
     resetAllAbility: function(){ if (!confirm('全メンバーの能力係数を1にリセットしますか？')) return; state.members.forEach(m => m.ability = 1.0); renderAll(); },
+    // テーブル内のインライン編集ハンドラ (簡易実装、本実装は B4)
+    updateName: function(idx, val){ state.members[idx].name = val; },
+    updateRole: function(idx, val){ state.members[idx].role = val; },
+    updateCost: function(idx, val){ state.members[idx].cost = parseInt(val) || 0; renderAll(); },
+    updateAbility: function(idx, val){ let v = parseFloat(val) || 1; v = Math.max(0.1, Math.min(5, v)); state.members[idx].ability = v; renderAll(); },
+    updateAllocPct: function(idx, biz, role, val){ let v = parseInt(val) || 0; v = Math.max(0, Math.min(100, v)); state.members[idx].allocMatrix[biz][role] = v; renderAll(); },
+    deleteMember: function(idx){ if (!confirm(`「${state.members[idx].name}」を削除しますか？`)) return; state.members.splice(idx, 1); renderAll(); },
+    updateProgramName:   function(b, i, v){ state.bizPrograms[b][i].name = v; renderAll(); },
+    updateProgramAmount: function(b, i, v){ state.bizPrograms[b][i].amount = parseInt(v) || 0; renderAll(); },
+    addProgram:    function(b){ state.bizPrograms[b].push({name:'新規プログラム', amount:0}); state.collapsed.sales = false; renderAll(); },
+    deleteProgram: function(b, i){ if (!confirm(`「${state.bizPrograms[b][i].name}」を削除しますか？`)) return; state.bizPrograms[b].splice(i, 1); renderAll(); },
+    updateCostName:   function(b, i, v){ state.bizCosts[b][i].name = v; renderAll(); },
+    updateCostAmount: function(b, i, v){ state.bizCosts[b][i].amount = parseInt(v) || 0; renderAll(); },
+    addCost:    function(b){ state.bizCosts[b].push({name:'新規原価項目', amount:0}); state.collapsed.costs = false; renderAll(); },
+    deleteCost: function(b, i){ if (!confirm(`「${state.bizCosts[b][i].name}」を削除しますか？`)) return; state.bizCosts[b].splice(i, 1); renderAll(); },
+    updateSGAName:   function(i, v){ state.sgaItems[i].name = v; renderAll(); },
+    updateSGAAmount: function(i, v){ state.sgaItems[i].amount = parseInt(v) || 0; renderAll(); },
+    deleteSGA: function(i){ if (!confirm(`「${state.sgaItems[i].name}」を削除しますか？`)) return; state.sgaItems.splice(i, 1); renderAll(); },
   };
   window.WF = WF;
 })();
