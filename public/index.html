@@ -1580,10 +1580,15 @@ function updateWeeklyKPIs() {
   // 実績なし（lastActualIdx=-1）の場合は「—」表示（ハードコードのデフォルト値を使わない）
   const hasActual = lastActualIdx >= 0;
 
+  // 現金残高は最終実績月の月末値。未actualな翌月（月初3月など）の値は拾わない。
+  const cashMonthLabel = (lastActualIdx >= 0 && d.months?.[lastActualIdx])
+    ? (MONTH_LABELS[d.months[lastActualIdx]] || '')
+    : '';
   document.getElementById('kpi-cash').textContent =
     lastCash ? fmt万(lastCash) + '千円' : '—';
-  document.getElementById('kpi-cash-s').innerHTML =
-    lastCash ? `<span class="${riskClass(runway)}">残り約${runway}ヶ月</span>` : '';
+  document.getElementById('kpi-cash-s').innerHTML = lastCash
+    ? `<span style="color:var(--text3)">${cashMonthLabel}末時点</span> ・ <span class="${riskClass(runway)}">残り約${runway}ヶ月</span>`
+    : '';
 
   document.getElementById('kpi-rev').textContent =
     hasActual ? fmt万(cumRev) + '千円' : '—';
@@ -2031,10 +2036,30 @@ function renderAnnualCF(d) {
   const fixedA = fixedKeys.reduce((t,k)=>t+sA(k),0); const fixedB = fixedKeys.reduce((t,k)=>t+sB(k),0);
   const varA   = varKeys.reduce((t,k)=>t+sA(k),0);   const varB   = varKeys.reduce((t,k)=>t+sB(k),0);
 
-  // 期間末残高（期間内最後の非ゼロ値）
+  // 期間末残高（実績）: 期間内で最後に actualized された月の cfClose を起点とし、
+  // 残月は予算CFで前進させて期末見込みを算出
+  // （未actualな翌月以降に残っている cfClose の値（= 月初3月など）を拾わないようにする）
   const closeArr = cfGet('actual','cfClose');
+  const revArr   = d.pl?.actual?.rev || [];
+  let lastActIdx = -1;
+  for (let i = end; i >= start; i--) {
+    if (Number(revArr[i]) > 0) { lastActIdx = i; break; }
+  }
   let closeA = 0;
-  for (let i = end; i >= start; i--) { if (Number(closeArr[i]) > 0) { closeA = Number(closeArr[i]); break; } }
+  if (lastActIdx >= start) {
+    for (let i = lastActIdx; i >= start; i--) {
+      if (Number(closeArr[i]) > 0) { closeA = Number(closeArr[i]); break; }
+    }
+    // 残月（lastActIdx+1 .. end）を予算CFで前進
+    const finOutKeys = ['investPay','loanOut'];
+    for (let i = lastActIdx + 1; i <= end; i++) {
+      const inB    = Number((cfGet('budget','cfIn')||[])[i])    || 0;
+      const loanB  = Number((cfGet('budget','loanIn')||[])[i])  || 0;
+      const opexB_ = opexKeys.reduce((t,k)=>t+(Number((cfGet('budget',k)||[])[i])||0),0);
+      const finB   = finOutKeys.reduce((t,k)=>t+(Number((cfGet('budget',k)||[])[i])||0),0);
+      closeA += inB + loanB - opexB_ - finB;
+    }
+  }
 
   // 予算期間末残高（期間初残高 + 期間内純CF）
   const bOpenArr = cfGet('budget','open');
