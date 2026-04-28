@@ -12840,16 +12840,133 @@ document.addEventListener('DOMContentLoaded', function() {
     tbl.innerHTML = thead + tbody;
   }
 
+  // ═══════════════════════════════════════════════════════════
+  //  充足度タブ: ヒートマップ + サマリー + 必要月工数設定
+  // ═══════════════════════════════════════════════════════════
+  function renderHeatmap(){
+    const body = $('wf-heatmap-body');
+    if (!body) return;
+    let html = '';
+    BIZ.forEach(biz => {
+      html += `<tr><td>${biz}</td>`;
+      ROLES.forEach(role => {
+        const required = state.requiredFTE[biz][role] || 0;
+        const invested = bizRoleInvestedFTE(biz, role);
+        if (required === 0 && invested === 0){
+          html += `<td class="wf-heat-cell wf-heat-zero">—<div class="wf-heat-detail">不要</div></td>`;
+          return;
+        }
+        const f = required > 0 ? invested / required : Infinity;
+        const fPct = f * 100;
+        let cls = 'wf-heat-good';
+        if (required === 0) cls = 'wf-heat-over';
+        else if (f < 0.8) cls = 'wf-heat-low';
+        else if (f > 1.2) cls = 'wf-heat-over';
+        html += `<td class="wf-heat-cell ${cls}">
+          <div class="wf-heat-pct">${required === 0 ? '過剰' : fPct.toFixed(0) + '%'}</div>
+          <div class="wf-heat-detail">投入 ${invested.toFixed(2)}人月 / 必要 ${required.toFixed(1)}人月</div>
+        </td>`;
+      });
+      html += '</tr>';
+    });
+    body.innerHTML = html;
+  }
+
+  function renderFulSummary(){
+    const container = $('wf-ful-summary');
+    if (!container) return;
+    const hireList = [], overList = [], okList = [];
+    BIZ.forEach(biz => ROLES.forEach(role => {
+      const required = state.requiredFTE[biz][role] || 0;
+      const invested = bizRoleInvestedFTE(biz, role);
+      if (required === 0 && invested === 0) return;
+      const f = required > 0 ? invested / required : Infinity;
+      const item = { biz, role, required, invested, fulfillment: f, gap: invested - required };
+      if (required === 0) overList.push(item);
+      else if (f < 0.8) hireList.push(item);
+      else if (f > 1.2) overList.push(item);
+      else okList.push(item);
+    }));
+    hireList.sort((a,b) => a.fulfillment - b.fulfillment);
+    overList.sort((a,b) => b.gap - a.gap);
+
+    const card = (cls, icon, title, list, fmtPct) => `
+      <div class="wf-ful-card ${cls}">
+        <h4><span>${icon} ${title}</span><span class="badge-count">${list.length}件</span></h4>
+        <div class="wf-ful-card-list">
+          ${list.length === 0 ? '<div style="color:var(--text3);font-size:10px">なし</div>' :
+            list.map(it => `
+              <div class="wf-ful-card-item">
+                <span>${it.biz} <span class="wf-rb wf-r-${it.role}">${it.role}</span></span>
+                <span style="font-weight:700">${fmtPct(it)}</span>
+              </div>`).join('')}
+        </div>
+      </div>`;
+    container.innerHTML =
+      card('action-hire',  '🚨', '採用 / シフトが必要', hireList, it => `<span style="color:#e87070">${(it.fulfillment*100).toFixed(0)}%</span>`) +
+      card('action-shift', '⚠️', '過剰人員（再配置検討）', overList, it => `<span style="color:#f0a060">${it.required === 0 ? '不要' : (it.fulfillment*100).toFixed(0) + '%'}</span>`) +
+      card('action-ok',    '✅', '適正配置', okList, it => `<span style="color:#5dbd7e">${(it.fulfillment*100).toFixed(0)}%</span>`);
+  }
+
+  function renderFTEMatrix(){
+    const body = $('wf-fte-body');
+    if (!body) return;
+    let html = '';
+    BIZ.forEach(biz => {
+      let total = 0;
+      html += `<tr><td>${biz}</td>`;
+      ROLES.forEach(r => {
+        const v = state.requiredFTE[biz][r] || 0;
+        total += v;
+        html += `<td><input type="number" class="wf-config-input" value="${v}" min="0" step="0.1" onchange="WF.updateFTE('${biz}','${r}',this.value)"></td>`;
+      });
+      html += `<td style="font-weight:700">${total.toFixed(1)}</td></tr>`;
+    });
+    body.innerHTML = html;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  設定タブ: 役割ウェイト + 販管費
+  // ═══════════════════════════════════════════════════════════
+  function renderWeightMatrix(){
+    const body = $('wf-weight-body');
+    if (!body) return;
+    let html = '';
+    BIZ.forEach(biz => {
+      const w = state.roleWeights[biz];
+      const total = ROLES.reduce((s,r) => s + (w[r]||0), 0);
+      const totalCls = total === 100 ? 'ok' : 'warn';
+      html += `<tr><td>${biz}</td>` +
+        ROLES.map(r => `<td><input type="number" class="wf-config-input" value="${w[r]||0}" min="0" max="100" onchange="WF.updateWeight('${biz}','${r}',this.value)">%</td>`).join('') +
+        `<td class="wf-weight-total ${totalCls}">${total}%</td></tr>`;
+    });
+    body.innerHTML = html;
+  }
+
+  function renderSGABody(){
+    const body = $('wf-sga-body');
+    if (!body) return;
+    let html = '';
+    state.sgaItems.forEach((item, i) => {
+      html += `<tr>
+        <td><input type="text" class="wf-config-input" style="width:200px;text-align:left" value="${escapeHtml(item.name)}" onchange="WF.updateSGAName(${i},this.value)"></td>
+        <td><input type="number" class="wf-config-input" style="width:120px" value="${item.amount}" step="100000" onchange="WF.updateSGAAmount(${i},this.value)"></td>
+        <td><button class="wf-del-row-btn" onclick="WF.deleteSGA(${i})">×</button></td>
+      </tr>`;
+    });
+    body.innerHTML = html;
+  }
+
   function renderAll(){
     renderKPI();
     renderPL();
     renderGrid();
-    if (typeof renderHeatmap === 'function')    renderHeatmap();
-    if (typeof renderFulSummary === 'function') renderFulSummary();
-    if (typeof renderFTEMatrix === 'function')  renderFTEMatrix();
-    if (typeof renderWeightMatrix === 'function') renderWeightMatrix();
-    if (typeof renderSGABody === 'function')    renderSGABody();
-    if (typeof renderVersionUI === 'function')  renderVersionUI();
+    renderHeatmap();
+    renderFulSummary();
+    renderFTEMatrix();
+    renderWeightMatrix();
+    renderSGABody();
+    if (typeof renderVersionUI === 'function') renderVersionUI();
   }
 
   // ─── window.WF: 外部から呼び出すエントリーポイント ───
@@ -12912,6 +13029,8 @@ document.addEventListener('DOMContentLoaded', function() {
     updateSGAName:   function(i, v){ state.sgaItems[i].name = v; renderAll(); },
     updateSGAAmount: function(i, v){ state.sgaItems[i].amount = parseInt(v) || 0; renderAll(); },
     deleteSGA: function(i){ if (!confirm(`「${state.sgaItems[i].name}」を削除しますか？`)) return; state.sgaItems.splice(i, 1); renderAll(); },
+    updateFTE:    function(biz, role, val){ state.requiredFTE[biz][role] = parseFloat(val) || 0; renderAll(); },
+    updateWeight: function(biz, role, val){ state.roleWeights[biz][role] = parseInt(val) || 0; renderAll(); },
   };
   window.WF = WF;
 })();
