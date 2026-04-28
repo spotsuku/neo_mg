@@ -303,9 +303,83 @@ async function fetchAllJournals(token, periodsInfo, options = {}) {
   return { journals: filtered, totalFetched: allJournals.length, excludedUnrealized: 0, periodCounts };
 }
 
+// ══════════════════════════════════════════
+//  境界仕訳検出（決算振替・期首振替）
+// ══════════════════════════════════════════
+//
+// MF会計期間の境界（期末日 / 期初日）には PL→retained 振替や 1年内振替、
+// 期首残高設定の自動仕訳が posted される。これらを「境界仕訳」と呼び、
+// 通常の取引仕訳と区別して扱う必要がある:
+//   - PL / CF への混入を防ぐ（決算PL→retained 振替で売上がマイナスになる等）
+//   - BS の累積残高計算で「期首仕訳の合計 = 期首残高」として活用
+//
+// 検出基準（優先順位順、一致したら BOUNDARY と判定し reason を付与）:
+//   1. 日付一致: anchor 期の start (期初日) または anchor 期 start - 1 日 (前期末日)
+//   2. 勘定科目パターン:
+//      - '損益' / '当期純利益' を含む → 決算PL振替
+//      - '繰越利益剰余金' が反対勘定で大額 → 決算 retained 振替
+//      - '1年内返済予定の長期借入金' を含む → 1年内振替（決算）
+//      - '開始残高' / '残高試算表' → 期首振替
+//   3. 摘要キーワード: 決算 / 振替 / 繰越 / 期首 / 期末 / 当期純利益 / 1年内 / 開始残高
+//
+// 戻り値: { reason: string | null }  (null = 通常仕訳)
+function classifyJournalBoundary(j, periodBoundaryDates) {
+  const txDate = (j.transaction_date || j.date || j.posted_at || '').slice(0, 10);
+  // Rule 1: 日付一致でない場合は通常仕訳
+  if (!periodBoundaryDates.has(txDate)) return null;
+
+  const branches = j.branches || j.entries || j.details || [];
+  const accountNames = [];
+  for (const b of branches) {
+    const dn = b.debitor?.account_name || b.debit_account_name || b.debit?.account_name || '';
+    const cn = b.creditor?.account_name || b.credit_account_name || b.credit?.account_name || '';
+    if (dn) accountNames.push(dn);
+    if (cn) accountNames.push(cn);
+  }
+  const acctText = accountNames.join('|');
+  const desc = (j.remark || j.description || j.memo || j.summary || '');
+
+  // Rule 2: 勘定科目パターン
+  if (/損益|当期純利益|当期純損失/.test(acctText)) return 'closing_pl_to_income';
+  if (/1年内返済予定|一年内返済予定/.test(acctText)) return 'closing_long_to_short_loan';
+  if (/開始残高|残高試算表|期首残高/.test(acctText)) return 'opening_balance';
+
+  // Rule 3: 摘要キーワード
+  if (/決算|振替|繰越|期首|期末|開始残高/.test(desc)) return 'boundary_by_description';
+
+  // Rule 2 後段: 繰越利益剰余金 が反対勘定として登場する仕訳のうち、
+  // 期境界日のものは決算振替の可能性が高い（通常の取引で繰越利益剰余金は動かない）
+  if (/繰越利益剰余金/.test(acctText)) return 'closing_retained_transfer';
+
+  return null;
+}
+
+function buildPeriodBoundaryDates(periodsInfo) {
+  // anchor 期の start (期初日) と pre 期の end (期末日)
+  const dates = new Set();
+  if (periodsInfo?.anchor?.start) dates.add(periodsInfo.anchor.start);
+  for (const p of (periodsInfo?.periods || [])) {
+    if (p.end) dates.add(p.end);
+    if (p.start) dates.add(p.start);
+  }
+  // anchor 期の前日 (= 前期末日) も含める（pre 期の end と一致するはずだが念のため）
+  if (periodsInfo?.anchor?.start) {
+    const d = new Date(periodsInfo.anchor.start);
+    d.setDate(d.getDate() - 1);
+    dates.add(d.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
 function buildFromJournals(journals, fiscalYear, options = {}) {
   const { cfCategoryOverrides = {}, plCategoryOverrides = {}, bsCategoryOverrides = {},
-          anchorPeriodStart = null } = options;
+          anchorPeriodStart = null,
+          // boundaryAware: true で「期境界仕訳の検出+除外」「pre期の逆算BS」を有効化
+          //   - PL/CF/breakdown: 境界仕訳を除外
+          //   - BS pre期月 (例: 4-6月): anchor 期 opening journal の合計を 6月末残高として逆算
+          //   - 失敗時は throw (UI でエラー表示)
+          boundaryAware = false,
+          periodsInfo = null } = options;
   const fyNum = parseInt(fiscalYear);
   // ユーザー上書きが最優先、次に静的マップ
   // 年度依存マッピング:
@@ -374,12 +448,47 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
   // (PL/CF は月次集計なので全仕訳を使う)
   const isAnchorJournal = (j) => !anchorPeriodStart || j._mfPeriodStart === anchorPeriodStart;
 
+  // ── 境界仕訳の検出（boundaryAware モードのみ） ──
+  // anchor 期 opening journal の合計を BS 逆算に使うので別途集計する
+  const boundaryDates = boundaryAware ? buildPeriodBoundaryDates(periodsInfo) : new Set();
+  const boundaryStats = { total: 0, byReason: {}, anchorOpeningBs: {} };
+  // anchor 期 opening journal による BS 残高（= 6月末残高 = 4-6月逆算の起点）
+  // BS_KEYS は下で定義済みなので nullable で初期化、後で埋める
+  const anchorOpeningRunning = {}; // { [bsKey]: 円単位の累計 }
+
   journals.forEach(j => {
     const txDate = new Date(j.transaction_date || j.date || j.posted_at || '');
     if (isNaN(txDate)) return;
     const idx = monthIdx.findIndex(m => m.year === txDate.getFullYear() && m.month === txDate.getMonth() + 1);
     if (idx < 0) return;
     const useForBs = isAnchorJournal(j);
+
+    // 境界仕訳の判定（boundaryAware モード時）
+    let boundaryReason = null;
+    if (boundaryAware) {
+      boundaryReason = classifyJournalBoundary(j, boundaryDates);
+      if (boundaryReason) {
+        boundaryStats.total++;
+        boundaryStats.byReason[boundaryReason] = (boundaryStats.byReason[boundaryReason] || 0) + 1;
+        // anchor 期 opening (期初日 = anchor.start) の仕訳は BS 逆算用に集計
+        const isAnchorOpening = periodsInfo?.anchor?.start && (j.transaction_date || '').slice(0,10) === periodsInfo.anchor.start;
+        if (isAnchorOpening) {
+          const branches2 = j.branches || j.entries || j.details || [];
+          for (const b of branches2) {
+            const dn = b.debitor?.account_name || b.debit_account_name || b.debit?.account_name || '';
+            const cn = b.creditor?.account_name || b.credit_account_name || b.credit?.account_name || '';
+            const dy = Number(b.debitor?.value || b.debit_amount || 0) / 1000;
+            const cy = Number(b.creditor?.value || 0) / 1000;
+            const bkD = resolveBsKey(dn);
+            const bkC = resolveBsKey(cn);
+            if (bkD) anchorOpeningRunning[bkD] = (anchorOpeningRunning[bkD] || 0) + dy;
+            if (bkC) anchorOpeningRunning[bkC] = (anchorOpeningRunning[bkC] || 0) - cy;
+          }
+        }
+        // 境界仕訳は PL/CF/BS いずれにも通常計上しない
+        return;
+      }
+    }
 
     const branches = j.branches || j.entries || j.details || [];
     branches.forEach(b => {
@@ -561,6 +670,53 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
     bsMonthly['retained'][i] += cumNetIncome;
   }
 
+  // ── pre期月の BS 逆算（boundaryAware モードのみ） ──
+  // anchor 期 opening journal の合計 = 期初日時点の BS = pre期 末月の月末残高
+  // pre期の各月末残高を逆算: 月末[i-1] = 月末[i] − その月の純活動
+  // 「その月の純活動」 = bsDelta[k][i] (pre期の通常仕訳のみ)
+  let bsBoundaryError = null;
+  if (boundaryAware) {
+    if (!periodsInfo?.anchor?.start) {
+      bsBoundaryError = 'anchor期が特定できないため pre期月のBSを逆算できません';
+    } else {
+      // anchor 期 start が御社FYの何月か特定 (例: 2025-07-01 → idx 3)
+      const anchorStart = new Date(periodsInfo.anchor.start);
+      const anchorIdx = monthIdx.findIndex(m =>
+        m.year === anchorStart.getFullYear() && m.month === anchorStart.getMonth() + 1
+      );
+      // anchorIdx > 0 のときだけ pre期月の逆算が必要
+      if (anchorIdx > 0) {
+        // anchor 期 opening journal が検出できなかった場合はエラー
+        const hasOpening = Object.keys(anchorOpeningRunning).length > 0;
+        if (!hasOpening) {
+          bsBoundaryError = 'anchor期の期首仕訳が検出できなかったため pre期月のBSを逆算できません';
+        } else {
+          // pre 期月のBS逆算: pre期の通常仕訳の bsDelta を使う
+          // 注: anchor 期 BS journal の running cumulative を一旦巻き戻す必要がある
+          //     bsMonthly[k][i] (i < anchorIdx) は現在 0 (pre期は anchor フィルタで除外されている)
+          //     なので、ここで bsDelta[k][i] (pre期の通常仕訳分) を使って逆算する
+          //
+          // 開始点: bsMonthly[k][anchorIdx-1] = anchorOpeningRunning[k] (anchor期 opening journal の合計)
+          // ただし isLiabOrEq のキーは符号反転が必要
+          BS_KEYS.forEach(k => {
+            const isLiabOrEq = ['payable', 'borrowing', 'borrowing_short', 'other_cl', 'capital', 'retained', 'warrant'].includes(k);
+            const opening = anchorOpeningRunning[k] || 0;
+            // 期首仕訳の符号を BS_KEYS の累計符号に揃える
+            const sixEndBalance = isLiabOrEq ? -opening : opening;
+            bsMonthly[k][anchorIdx - 1] = sixEndBalance;
+            // pre期の各月末残高を逆順に算出
+            // 月末[i-1] = 月末[i] − 月[i]の活動
+            // 月[i]の活動 = pre期の通常仕訳の bsDelta[k][i] (符号調整済み)
+            for (let i = anchorIdx - 1; i >= 1; i--) {
+              const monthlyDelta = isLiabOrEq ? -bsDelta[k][i] : bsDelta[k][i];
+              bsMonthly[k][i - 1] = bsMonthly[k][i] - monthlyDelta;
+            }
+          });
+        }
+      }
+    }
+  }
+
   // 全 BS 値を最後に千円に丸める（累計後の値で一回だけ round → 累積誤差ゼロ）
   BS_KEYS.forEach(k => {
     for (let i = 0; i < n; i++) bsMonthly[k][i] = Math.round(bsMonthly[k][i]);
@@ -609,6 +765,15 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
     },
     journalCount: journals.length,
     breakdown,
+    // boundaryAware モード時の診断情報
+    boundary: boundaryAware ? {
+      enabled: true,
+      stats: boundaryStats,         // {total, byReason, anchorOpeningBs}
+      error: bsBoundaryError,       // pre期逆算失敗時のエラーメッセージ (null = 成功)
+      anchorOpeningBs: Object.fromEntries(
+        Object.entries(anchorOpeningRunning).map(([k, v]) => [k, Math.round(v)])
+      ),
+    } : { enabled: false },
   };
 }
 
@@ -684,8 +849,17 @@ export default async function handler(req, res) {
     }
 
     // ── 全データ取得（仕訳ベース: PL + BS + CF を一括計算） ──
-    if (action === 'all_for_dashboard' || action === 'pl_for_dashboard' || action === 'bs_for_dashboard' || action === 'cf_for_dashboard') {
+    // ── 旧 CSV取込 (現状維持): boundaryAware 無し ──
+    // ── 新 MF連携 (v2): boundaryAware 有り（境界仕訳除外 + pre期月のBS逆算） ──
+    const isV2 = (action === 'all_for_dashboard_v2' || action === 'pl_for_dashboard_v2'
+               || action === 'bs_for_dashboard_v2' || action === 'cf_for_dashboard_v2');
+    const isLegacy = (action === 'all_for_dashboard' || action === 'pl_for_dashboard'
+                   || action === 'bs_for_dashboard' || action === 'cf_for_dashboard');
+    if (isV2 || isLegacy) {
       if (!fiscal_year) return res.status(400).json({ error: 'fiscal_year が必要です' });
+      const wantsPl = /^(all_for_dashboard|pl_for_dashboard)(_v2)?$/.test(action);
+      const wantsBs = /^(all_for_dashboard|bs_for_dashboard)(_v2)?$/.test(action);
+      const wantsCf = /^(all_for_dashboard|cf_for_dashboard)(_v2)?$/.test(action);
 
       const includeUnrealized = req.query.include_unrealized === 'true';
       // 科目分類の上書き: フロントエンドから localStorage の内容を送信
@@ -707,9 +881,24 @@ export default async function handler(req, res) {
       const fetchResult = await fetchAllJournals(token, periodsInfo, { includeUnrealized });
       const result = buildFromJournals(fetchResult.journals, fiscal_year,
         { cfCategoryOverrides, plCategoryOverrides, bsCategoryOverrides,
-          anchorPeriodStart: periodsInfo.anchor?.start || null });
+          anchorPeriodStart: periodsInfo.anchor?.start || null,
+          boundaryAware: isV2,
+          periodsInfo: isV2 ? periodsInfo : null });
 
-      // action に応じて必要な部分だけ返す
+      // v2 モードで BS 逆算が失敗した場合はエラーを返す（4-6月をエラー表示）
+      if (isV2 && wantsBs && result.boundary?.error) {
+        return res.status(200).json({
+          ok: false,
+          error: `BS pre期月の逆算失敗: ${result.boundary.error}`,
+          fiscal_year,
+          period: periodsInfo,
+          boundary: result.boundary,
+          // 失敗時もPL/CFは返す（boundary除外で正しい値）
+          pl: wantsPl ? result.pl : undefined,
+          cf: wantsCf ? result.cf : undefined,
+        });
+      }
+
       const response = {
         ok: true,
         fiscal_year,
@@ -717,20 +906,15 @@ export default async function handler(req, res) {
         journal_count: result.journalCount,
         total_fetched: fetchResult.totalFetched,
         excluded_unrealized: fetchResult.excludedUnrealized,
-        period_counts: fetchResult.periodCounts, // 期間ごとの取得件数（旧期から取れているか診断用）
+        period_counts: fetchResult.periodCounts,
         method: 'journals',
         breakdown: result.breakdown,
+        boundary: result.boundary,
       };
 
-      if (action === 'all_for_dashboard' || action === 'pl_for_dashboard') {
-        response.pl = result.pl;
-      }
-      if (action === 'all_for_dashboard' || action === 'bs_for_dashboard') {
-        response.bs = result.bs;
-      }
-      if (action === 'all_for_dashboard' || action === 'cf_for_dashboard') {
-        response.cf = result.cf;
-      }
+      if (wantsPl) response.pl = result.pl;
+      if (wantsBs) response.bs = result.bs;
+      if (wantsCf) response.cf = result.cf;
 
       return res.status(200).json(response);
     }

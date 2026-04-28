@@ -9993,10 +9993,15 @@ function mfInit() {
     <!-- ステップ2: データ取得 -->
     <div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:10px">
       <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:8px">② データ取得（Chromeで連携したAPIから取得）</div>
-      <div style="display:flex;gap:12px;font-size:10px;color:var(--text3);margin-bottom:8px;flex-wrap:wrap">
+      <div style="display:flex;gap:12px;font-size:10px;color:var(--text3);margin-bottom:8px;flex-wrap:wrap;align-items:center">
         <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
           <input type="checkbox" id="mf-include-unrealized" style="margin:0">
           未実現仕訳を含める（MF既定：除く）
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;background:rgba(55,138,221,0.12);border:1px solid rgba(55,138,221,0.35);border-radius:4px;padding:3px 8px">
+          <input type="checkbox" id="mf-boundary-aware" style="margin:0" checked>
+          <span style="color:var(--tc-blue);font-weight:700">🆕 期境界認識モード (β)</span>
+          <span title="MF会計期間の境界仕訳（決算振替・期首振替・1年内振替）を自動検出して PL/CF から除外し、anchor期 opening journal を起点に pre期月 (4-6月) のBSを逆算します。&#10;OFF にすると旧来の挙動になります。" style="cursor:help;color:var(--text3)">ⓘ</span>
         </label>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
@@ -10275,7 +10280,14 @@ window.mfFetch = async function(type) {
   log.textContent = `${fy}年度 ${labels[type]} を取得中...`;
 
   try {
-    const actionMap = { journals: 'cf_for_dashboard', trial_pl: 'pl_for_dashboard', trial_bs: 'bs_for_dashboard' };
+    // 期境界認識モード (v2) では action に '_v2' サフィックスを付与
+    const useV2 = document.getElementById('mf-boundary-aware')?.checked ?? false;
+    const suffix = useV2 ? '_v2' : '';
+    const actionMap = {
+      journals: 'cf_for_dashboard' + suffix,
+      trial_pl: 'pl_for_dashboard' + suffix,
+      trial_bs: 'bs_for_dashboard' + suffix,
+    };
     const incUn = document.getElementById('mf-include-unrealized')?.checked ?? false;
     // 科目分類の上書き（localStorage から読込 — CF / PL / BS）
     let cfOverrides = {}, plOverrides = {}, bsOverrides = {};
@@ -10290,9 +10302,15 @@ window.mfFetch = async function(type) {
     const url = `/api/mf-sync?action=${actionMap[type]}&fiscal_year=${fy}&include_unrealized=${incUn}${ovQuery}`;
     const r = await fetch(url);
     const d = await r.json();
-    if (!d.ok) throw new Error(d.error || '取得失敗');
+    // v2モードでBS逆算失敗時は ok:false で詳細を返してくる → エラー表示
+    if (!d.ok) {
+      const detail = d.boundary?.error ? `\n\n[期境界認識モード] ${d.boundary.error}` : '';
+      const stats = d.boundary?.stats?.total
+        ? `\n境界仕訳検出数: ${d.boundary.stats.total}件 (${Object.entries(d.boundary.stats.byReason||{}).map(([k,v])=>`${k}:${v}`).join(', ')})`
+        : '';
+      throw new Error((d.error || '取得失敗') + detail + stats);
+    }
 
-    // プレビュー表示
     // プレビュー表示
     // バックエンドの新旧レスポンス形式に対応
     const converted = d.converted || {};
@@ -10308,6 +10326,8 @@ window.mfFetch = async function(type) {
       totalJournals: d.journal_count || d.total_journals || 0,
       method: d.method || 'unknown',
       breakdown: d.breakdown || [],
+      period: d.period || null,
+      boundary: d.boundary || null,
     };
     mfRenderPreview();
 
@@ -10421,11 +10441,15 @@ function mfRenderPreview() {
     const hasOpening = Object.values(opening).some(v => Number(v) !== 0);
     const _skipped = p.period?.skippedPeriods || [];
     const _anchor = p.period?.anchor;
+    const _boundary = p.boundary;
+    const _bv2 = _boundary?.enabled;
     const skipNote = (_skipped.length > 0 && _anchor)
       ? `<div style="background:rgba(55,138,221,0.10);border:1px solid rgba(55,138,221,0.3);border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:10px;color:var(--tc-blue);line-height:1.5">
           ℹ <strong>MFの会計期間 (${_skipped.map(s => s.start.slice(0,7)+'〜'+s.end.slice(0,7)).join(' / ')} と ${_anchor.start.slice(0,7)}〜${_anchor.end.slice(0,7)}) が御社FYに2期またがっています。</strong><br>
-          BSは累積残高を作るため anchor期 (${_anchor.start}〜${_anchor.end}) の仕訳のみで集計（anchor期外の月はゼロ表示）。<br>
-          PL/CFは月次集計のため全期間の仕訳を使用しています。
+          ${_bv2
+            ? `🆕 期境界認識モード: 境界仕訳 ${_boundary.stats?.total || 0}件を検出して PL/CF から除外し、anchor期 opening journal を起点に pre期月 (4-6月) のBSを逆算しています。${_boundary.stats?.byReason ? '<br>内訳: ' + Object.entries(_boundary.stats.byReason).map(([k,v])=>`${k}=${v}`).join(' / ') : ''}`
+            : `BSは累積残高を作るため anchor期 (${_anchor.start}〜${_anchor.end}) の仕訳のみで集計（anchor期外の月はゼロ表示）。<br>PL/CFは月次集計のため全期間の仕訳を使用しています。`
+          }
         </div>`
       : '';
     const bsNote = skipNote + (hasOpening
@@ -10813,11 +10837,15 @@ window.mfOnCommitMonthChange = function() {
     const hasOpening = Object.values(opening).some(v => Number(v) !== 0);
     const _skipped = p.period?.skippedPeriods || [];
     const _anchor = p.period?.anchor;
+    const _boundary = p.boundary;
+    const _bv2 = _boundary?.enabled;
     const skipNote = (_skipped.length > 0 && _anchor)
       ? `<div style="background:rgba(55,138,221,0.10);border:1px solid rgba(55,138,221,0.3);border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:10px;color:var(--tc-blue);line-height:1.5">
           ℹ <strong>MFの会計期間 (${_skipped.map(s => s.start.slice(0,7)+'〜'+s.end.slice(0,7)).join(' / ')} と ${_anchor.start.slice(0,7)}〜${_anchor.end.slice(0,7)}) が御社FYに2期またがっています。</strong><br>
-          BSは累積残高を作るため anchor期 (${_anchor.start}〜${_anchor.end}) の仕訳のみで集計（anchor期外の月はゼロ表示）。<br>
-          PL/CFは月次集計のため全期間の仕訳を使用しています。
+          ${_bv2
+            ? `🆕 期境界認識モード: 境界仕訳 ${_boundary.stats?.total || 0}件を検出して PL/CF から除外し、anchor期 opening journal を起点に pre期月 (4-6月) のBSを逆算しています。${_boundary.stats?.byReason ? '<br>内訳: ' + Object.entries(_boundary.stats.byReason).map(([k,v])=>`${k}=${v}`).join(' / ') : ''}`
+            : `BSは累積残高を作るため anchor期 (${_anchor.start}〜${_anchor.end}) の仕訳のみで集計（anchor期外の月はゼロ表示）。<br>PL/CFは月次集計のため全期間の仕訳を使用しています。`
+          }
         </div>`
       : '';
     const bsNote = skipNote + (hasOpening
