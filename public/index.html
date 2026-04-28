@@ -12966,7 +12966,307 @@ document.addEventListener('DOMContentLoaded', function() {
     renderFTEMatrix();
     renderWeightMatrix();
     renderSGABody();
-    if (typeof renderVersionUI === 'function') renderVersionUI();
+    updateDirtyFlag();
+    renderVersionUI();
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  バージョン管理 (Supabase)
+  // ═══════════════════════════════════════════════════════════
+  async function apiCall(action, body, isPost){
+    const url = '/api/db?action=' + action + (body && !isPost ? '&' + new URLSearchParams(body).toString() : '');
+    const opts = isPost ? { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) } : {};
+    const r = await fetch(url, opts);
+    if (!r.ok) throw new Error(`API ${action} failed (${r.status})`);
+    return r.json();
+  }
+
+  async function loadVersionsFromSupabase(){
+    try {
+      const r = await apiCall('load_workforce_versions');
+      if (r.ok && Array.isArray(r.data)){
+        state.versions = r.data;
+        // 「現在採用中」フラグから currentVersionId を復元
+        const cur = state.versions.find(v => v.is_current);
+        if (cur && !state.currentVersionId) state.currentVersionId = cur.version_id;
+        return true;
+      }
+    } catch (e) {
+      console.warn('[WF] loadVersions failed:', e.message);
+    }
+    return false;
+  }
+
+  async function saveVersionToSupabase(payload){
+    const r = await apiCall('save_workforce_version', payload, true);
+    if (!r.ok) throw new Error('save failed');
+    return r;
+  }
+
+  async function deleteVersionFromSupabase(version_id){
+    return apiCall('delete_workforce_version', { version_id }, true);
+  }
+
+  async function setCurrentInSupabase(version_id){
+    return apiCall('set_workforce_current', { version_id }, true);
+  }
+
+  function updateDirtyFlag(){
+    if (!state.currentVersionId){
+      state.isDirty = state.members.length > 0;
+      return;
+    }
+    const v = state.versions.find(x => x.version_id === state.currentVersionId);
+    if (!v){ state.isDirty = true; return; }
+    state.isDirty = JSON.stringify(takeSnapshot()) !== JSON.stringify(v.snapshot);
+  }
+
+  function showWfStatus(msg, type){
+    // 軽量トースト
+    const t = document.createElement('div');
+    const colors = { ok: ['var(--bg-green)','var(--tc-green)'], err: ['var(--bg-red)','var(--tc-red)'], info: ['var(--bg2)','var(--text)'] };
+    const [bg, fg] = colors[type || 'ok'] || colors.ok;
+    t.style.cssText = `position:fixed;bottom:24px;right:24px;background:${bg};color:${fg};border:1px solid ${fg};border-radius:var(--rl);padding:10px 16px;font-size:12px;font-weight:700;z-index:9999`;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .4s'; setTimeout(() => t.remove(), 500); }, 2500);
+  }
+
+  // ─── バージョンUI ───
+  function renderVersionUI(){
+    const curEl = $('wf-current-version-name');
+    const badge = $('wf-unsaved-badge');
+    const curBadge = $('wf-current-badge');
+    const overwriteBtn = $('wf-overwrite-btn');
+    const setCurBtn = $('wf-set-current-btn');
+
+    let curVer = null;
+    if (state.currentVersionId) curVer = state.versions.find(x => x.version_id === state.currentVersionId);
+
+    if (curEl){
+      if (curVer){
+        curEl.textContent = curVer.name;
+        curEl.style.color = '#5aabf0';
+      } else {
+        curEl.textContent = '— 未保存 —';
+        curEl.style.color = 'var(--text3)';
+      }
+    }
+    if (badge) badge.style.display = state.isDirty ? '' : 'none';
+    if (curBadge) curBadge.style.display = (curVer && curVer.is_current) ? '' : 'none';
+    if (overwriteBtn) overwriteBtn.style.display = curVer ? '' : 'none';
+    if (setCurBtn) setCurBtn.style.display = (curVer && !curVer.is_current) ? '' : 'none';
+
+    // 一覧
+    const list = $('wf-version-list');
+    const countEl = $('wf-version-count');
+    if (countEl) countEl.textContent = `${state.versions.length} 件のバージョン`;
+    if (!list) return;
+
+    if (!state.versions.length){
+      list.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text3);font-size:12px;background:var(--bg2);border-radius:var(--rl);border:2px dashed var(--border2)">
+        まだバージョンが保存されていません。<br>上の「💾 新規保存」から作成できます。
+      </div>`;
+    } else {
+      list.innerHTML = state.versions.map(v => {
+        const isCur = v.version_id === state.currentVersionId;
+        const cmpIdx = state.compareSel.indexOf(v.version_id);
+        let cls = 'wf-version-card';
+        if (isCur) cls += ' is-current';
+        if (cmpIdx === 0) cls += ' cmp-from';
+        else if (cmpIdx === 1) cls += ' cmp-to';
+        const memberCount = (v.snapshot.members || []).length;
+        const totalCost = (v.snapshot.members || []).reduce((s,m) => s + (m.cost||0), 0);
+        const totalRev = Object.values(v.snapshot.bizPrograms || {}).flat().reduce((s,p) => s + (p.amount||0), 0);
+        const d = new Date(v.saved_at);
+        const dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        return `<div class="${cls}">
+          <h4>
+            <span>${escapeHtml(v.name)}</span>
+            ${v.is_current ? '<span class="v-current-tag">採用中</span>' : (isCur ? '<span class="v-current-tag" style="background:#5aabf0">編集中</span>' : '')}
+          </h4>
+          <div class="v-date">📅 ${dateStr}</div>
+          <div class="v-memo">${v.memo ? escapeHtml(v.memo) : '<span style="color:var(--text3)">（メモなし）</span>'}</div>
+          <div class="v-stats">
+            <span>👥 ${memberCount}名</span>
+            <span>💰 売上 ${fmtJPY(totalRev)}</span>
+            <span>💴 人件費 ${fmtJPY(totalCost)}</span>
+          </div>
+          <div class="v-actions">
+            ${isCur ? '' : `<button class="primary" onclick="WF.loadVersion(${v.version_id})">読込</button>`}
+            <button onclick="WF.renameVersion(${v.version_id})">編集</button>
+            <button onclick="WF.duplicateVersion(${v.version_id})">複製</button>
+            <button onclick="WF.toggleCompare(${v.version_id})">${cmpIdx >= 0 ? '比較解除' : '比較'}</button>
+            ${v.is_current ? '' : `<button onclick="WF.makeVersionCurrent(${v.version_id})" title="チーム共通の現行版にする">⭐</button>`}
+            <button class="danger" onclick="WF.deleteVersion(${v.version_id})">削除</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // 比較バー
+    const cmpBar = $('wf-compare-bar');
+    if (cmpBar){
+      if (state.compareSel.length > 0){
+        cmpBar.style.display = '';
+        const a = state.versions.find(x => x.version_id === state.compareSel[0]);
+        const b = state.versions.find(x => x.version_id === state.compareSel[1]);
+        const fromEl = $('wf-compare-from-name'); if (fromEl) fromEl.textContent = a ? a.name : '—';
+        const toEl   = $('wf-compare-to-name');   if (toEl)   toEl.textContent   = b ? b.name : '（もう1つ選択）';
+      } else {
+        cmpBar.style.display = 'none';
+      }
+    }
+  }
+
+  // ─── ハンドラ ───
+  function openSaveModal(mode){
+    state._saveMode = mode || 'new';
+    $('wf-save-modal-title').textContent = mode === 'overwrite' ? '上書き保存' : '新しいバージョンとして保存';
+    if (mode === 'overwrite' && state.currentVersionId){
+      const v = state.versions.find(x => x.version_id === state.currentVersionId);
+      if (v){
+        $('wf-version-name').value = v.name || '';
+        $('wf-version-memo').value = v.memo || '';
+      }
+    } else {
+      $('wf-version-name').value = '';
+      $('wf-version-memo').value = '';
+    }
+    $('wf-save-modal').classList.add('show');
+    setTimeout(() => $('wf-version-name').focus(), 50);
+  }
+
+  async function confirmSaveVersion(){
+    const name = ($('wf-version-name').value || '').trim();
+    if (!name){ alert('バージョン名を入力してください'); return; }
+    const memo = ($('wf-version-memo').value || '').trim();
+    const isOverwrite = state._saveMode === 'overwrite' && state.currentVersionId;
+    const version_id = isOverwrite ? state.currentVersionId : Date.now();
+    const snapshot = takeSnapshot();
+    try {
+      await saveVersionToSupabase({ version_id, name, memo, snapshot });
+      state.currentVersionId = version_id;
+      await loadVersionsFromSupabase();
+      $('wf-save-modal').classList.remove('show');
+      renderAll();
+      showWfStatus(isOverwrite ? '上書き保存しました' : `「${name}」として保存しました`);
+    } catch (e){
+      console.error(e);
+      alert('保存に失敗しました: ' + e.message);
+    }
+  }
+
+  async function loadVersion(version_id){
+    const v = state.versions.find(x => x.version_id === version_id);
+    if (!v) return;
+    if (state.isDirty && state.currentVersionId !== version_id){
+      if (!confirm('未保存の変更があります。バージョンを切り替えると失われますがよろしいですか？')) return;
+    } else {
+      if (!confirm(`「${v.name}」を読み込みますか？`)) return;
+    }
+    restoreSnapshot(v.snapshot);
+    state.currentVersionId = version_id;
+    renderAll();
+    showWfStatus(`「${v.name}」を読み込みました`);
+  }
+
+  async function deleteVersion(version_id){
+    const v = state.versions.find(x => x.version_id === version_id);
+    if (!v) return;
+    if (!confirm(`「${v.name}」を削除しますか？この操作は取り消せません。`)) return;
+    try {
+      await deleteVersionFromSupabase(version_id);
+      if (state.currentVersionId === version_id) state.currentVersionId = null;
+      state.compareSel = state.compareSel.filter(id => id !== version_id);
+      await loadVersionsFromSupabase();
+      renderVersionUI();
+      showWfStatus(`「${v.name}」を削除しました`);
+    } catch (e){
+      alert('削除に失敗しました: ' + e.message);
+    }
+  }
+
+  async function renameVersion(version_id){
+    const v = state.versions.find(x => x.version_id === version_id);
+    if (!v) return;
+    const newName = prompt('新しい名前を入力', v.name);
+    if (newName === null || newName.trim() === '') return;
+    const newMemo = prompt('メモ（空欄でOK）', v.memo || '');
+    if (newMemo === null) return;
+    try {
+      await saveVersionToSupabase({ version_id, name: newName.trim(), memo: newMemo.trim(), snapshot: v.snapshot, is_current: v.is_current });
+      await loadVersionsFromSupabase();
+      renderVersionUI();
+      showWfStatus('バージョン情報を更新しました');
+    } catch (e){
+      alert('更新に失敗しました: ' + e.message);
+    }
+  }
+
+  async function duplicateVersion(version_id){
+    const v = state.versions.find(x => x.version_id === version_id);
+    if (!v) return;
+    const new_id = Date.now();
+    try {
+      await saveVersionToSupabase({ version_id: new_id, name: v.name + ' (コピー)', memo: v.memo, snapshot: v.snapshot });
+      await loadVersionsFromSupabase();
+      renderVersionUI();
+      showWfStatus(`「${v.name} (コピー)」を作成しました`);
+    } catch (e){
+      alert('複製に失敗しました: ' + e.message);
+    }
+  }
+
+  async function makeVersionCurrent(version_id){
+    if (!confirm('このバージョンを「採用中（チーム共通の現行版）」に設定しますか？')) return;
+    try {
+      await setCurrentInSupabase(version_id);
+      await loadVersionsFromSupabase();
+      renderVersionUI();
+      showWfStatus('採用中に設定しました');
+    } catch (e){
+      alert('採用設定に失敗しました: ' + e.message);
+    }
+  }
+
+  function toggleCompare(version_id){
+    const idx = state.compareSel.indexOf(version_id);
+    if (idx >= 0){
+      state.compareSel.splice(idx, 1);
+    } else {
+      if (state.compareSel.length >= 2) state.compareSel.shift();
+      state.compareSel.push(version_id);
+    }
+    renderVersionUI();
+  }
+
+  function clearCompare(){
+    state.compareSel = [];
+    const dr = $('wf-diff-result'); if (dr) dr.innerHTML = '';
+    renderVersionUI();
+  }
+
+  // ─── メンバー追加モーダル ───
+  function openAddModal(){
+    $('wf-add-modal').classList.add('show');
+    $('wf-new-name').value = '';
+    $('wf-new-role').value = '';
+    $('wf-new-cost').value = '3600000';
+    $('wf-new-ability').value = '1.0';
+    setTimeout(() => $('wf-new-name').focus(), 50);
+  }
+
+  function addMember(){
+    const name = ($('wf-new-name').value || '').trim();
+    const role = ($('wf-new-role').value || '').trim();
+    const cost = parseInt($('wf-new-cost').value) || 0;
+    const ability = parseFloat($('wf-new-ability').value) || 1.0;
+    if (!name){ alert('名前を入力してください'); return; }
+    state.members.push({ name, role, cost, ability, allocMatrix: makeAllocMatrix() });
+    $('wf-add-modal').classList.remove('show');
+    renderAll();
+    showWfStatus(`「${name}」を追加しました`);
   }
 
   // ─── window.WF: 外部から呼び出すエントリーポイント ───
@@ -12981,9 +13281,18 @@ document.addEventListener('DOMContentLoaded', function() {
     memberRevenue, memberRatio, memberTotalPct,
     totalCost, totalTargetRevenue, totalRealizedRev, totalCostsAll, totalOperatingProfit,
     renderAll,
-    init: function(){
+    init: async function(){
       if (state.initialized) { renderAll(); return; }
       state.initialized = true;
+      // Supabase からバージョン一覧を読み込み、is_current があれば自動復元
+      const ok = await loadVersionsFromSupabase();
+      if (ok){
+        const cur = state.versions.find(v => v.is_current);
+        if (cur){
+          restoreSnapshot(cur.snapshot);
+          state.currentVersionId = cur.version_id;
+        }
+      }
       renderAll();
     },
     toggleSection: function(key){ state.collapsed[key] = !state.collapsed[key]; renderPL(); },
@@ -12997,17 +13306,29 @@ document.addEventListener('DOMContentLoaded', function() {
       tabs.forEach(b => b.classList.remove('active'));
       if (btn) btn.classList.add('active');
     },
-    // UI ハンドラ: 次コミット (B4) で実装
-    saveAsNew: function(){ alert('保存機能は次コミットで実装します'); },
-    overwriteCurrent: function(){ alert('上書き保存は次コミットで実装します'); },
-    setCurrentVersion: function(){ alert('採用設定は次コミットで実装します'); },
-    closeAddModal: function(){ const el = $('wf-add-modal'); if (el) el.classList.remove('show'); },
-    closeSaveModal: function(){ const el = $('wf-save-modal'); if (el) el.classList.remove('show'); },
-    openAddModal: function(){ alert('追加は次コミットで実装します'); },
-    addMember: function(){},
-    confirmSaveVersion: function(){},
-    showDiff: function(){},
-    clearCompare: function(){},
+    // バージョン管理 + メンバー追加
+    saveAsNew:        function(){ openSaveModal('new'); },
+    overwriteCurrent: function(){
+      if (!state.currentVersionId){ alert('まだバージョンが選ばれていません。新規保存してください'); return; }
+      openSaveModal('overwrite');
+    },
+    setCurrentVersion: function(){
+      if (!state.currentVersionId){ alert('まだバージョンが選ばれていません'); return; }
+      makeVersionCurrent(state.currentVersionId);
+    },
+    closeAddModal:   function(){ $('wf-add-modal').classList.remove('show'); },
+    closeSaveModal:  function(){ $('wf-save-modal').classList.remove('show'); },
+    openAddModal:    openAddModal,
+    addMember:       addMember,
+    confirmSaveVersion: confirmSaveVersion,
+    loadVersion:        loadVersion,
+    deleteVersion:      deleteVersion,
+    renameVersion:      renameVersion,
+    duplicateVersion:   duplicateVersion,
+    makeVersionCurrent: makeVersionCurrent,
+    toggleCompare:      toggleCompare,
+    clearCompare:       clearCompare,
+    showDiff:           function(){ alert('差分表示は次コミット (B5) で実装します'); },
     addSGA: function(){ state.sgaItems.push({name:'新規販管費', amount:0}); state.collapsed.sga = false; renderPL(); },
     resetToInitial: function(){ if (!confirm('初期値に戻しますか？')) return; restoreSnapshot({ members: DEFAULT_MEMBERS, bizPrograms: DEFAULT_BIZ_PROGRAMS, bizCosts: DEFAULT_BIZ_COSTS, sgaItems: DEFAULT_SGA_ITEMS, roleWeights: DEFAULT_ROLE_WEIGHTS, requiredFTE: DEFAULT_REQUIRED_FTE }); renderAll(); },
     resetAllAbility: function(){ if (!confirm('全メンバーの能力係数を1にリセットしますか？')) return; state.members.forEach(m => m.ability = 1.0); renderAll(); },
