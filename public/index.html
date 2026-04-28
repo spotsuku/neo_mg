@@ -4248,21 +4248,40 @@ function renderCFView(d) {
     bCloseDisplay[i] = Math.round(bOpenDisplay[i] + bNetCFd[i]);
   }
 
-  // 実績の月初・月末はマネフォ同期の銀行残高を真の値とする（みずほ＋商工中金合算）。
-  // 月初実績: 1月目はストア値 or 期首推定 / 2月目以降は前月末を強制引き継ぎ
-  // 月末実績: ストア cfClose（銀行残高）があればそれを優先。無ければ 月初 + 純CF。
-  // → 月次純CF（実績）は別途 close - open で再計算し、テーブル上の整合を取る。
+  // 実績の月初・月末は MF連携で取得した BS現預金（銀行残高）を真の値とする。
+  // 優先順位: BS現預金（最新の真値） > ストア cfClose（旧データ） > 月初+純CF（推定）
+  // 月初実績: 1月目はBS現預金/前年度末/ストア値 / 2月目以降は前月末を強制引き継ぎ
+  // → 月次純CF（実績）は close - open で再計算してテーブル上の整合を取る。
+  // → これで CF月末残高 と BS現預金 が常に一致するようになる
+  const bsCashAt = (i) => {
+    const v = DB?.[currentYear]?.bs?.actual?.[i]?.cash;
+    return (v != null && Number.isFinite(Number(v))) ? Number(v) : null;
+  };
+  const prevYrLastBsCash = (() => {
+    if (!prevYrKey || !DB[prevYrKey]?.bs?.actual) return null;
+    const idxs = Object.keys(DB[prevYrKey].bs.actual).map(Number).filter(n => !isNaN(n));
+    if (!idxs.length) return null;
+    const lastBs = DB[prevYrKey].bs.actual[Math.max(...idxs)];
+    return lastBs?.cash != null ? Number(lastBs.cash) : null;
+  })();
   const aOpenDisplay = new Array(N).fill(null);
   const aCloseDisplay = new Array(N).fill(null);
   for (let i = 0; i < N; i++) {
     if (i === 0) {
+      // 4月月初 = 前年度末BS現預金 > ストア値 > 予算月初 > 前年度cfClose
       const storedOpen = getN(aOpen, 0);
-      aOpenDisplay[0] = storedOpen > 0 ? storedOpen : (bOpenDisplay[0] || prevYrClose || null);
+      aOpenDisplay[0] = prevYrLastBsCash != null ? prevYrLastBsCash
+        : (storedOpen > 0 ? storedOpen
+          : (bOpenDisplay[0] || prevYrClose || null));
     } else {
       aOpenDisplay[i] = aCloseDisplay[i-1]; // 強制的に前月末から引き継ぎ
     }
-    if (hasActualClose(i)) {
-      aCloseDisplay[i] = getN(aClose, i); // 銀行残高を最優先（マネフォ同期）
+    // 月末: BS現預金が最優先、無ければ ストア cfClose、最後に 月初+純CF
+    const bsC = bsCashAt(i);
+    if (bsC != null && bsC !== 0) {
+      aCloseDisplay[i] = Math.round(bsC);
+    } else if (hasActualClose(i)) {
+      aCloseDisplay[i] = getN(aClose, i);
     } else if (aNetCFd[i] !== null && aOpenDisplay[i] !== null) {
       aCloseDisplay[i] = Math.round(aOpenDisplay[i] + aNetCFd[i]);
     } else {
@@ -10576,7 +10595,34 @@ function mfRenderPreview() {
       純CF <strong>${(totalCashIn-totalCashOut).toLocaleString()}千円</strong><br>
       各仕訳の摘要・勘定科目名から、下記CF科目に自動仕分けしました。`;
 
+    // 月初/月末残高は BS現預金（取込済み）から導出する
+    // BS未取込の場合は cashIn-cashOut の累積から推定（4月月初=0起点）
+    const dbY = DB?.[String(p.fy)];
+    const bsCashCFAt = (i) => {
+      const v = dbY?.bs?.actual?.[i]?.cash;
+      return (v != null && Number.isFinite(Number(v))) ? Number(v) : null;
+    };
+    const hasBsCash = months.some((_, i) => bsCashCFAt(i) != null);
+    const cashInArr  = p.cf?.cashIn  || [];
+    const cashOutArr = p.cf?.cashOut || [];
+    // 月末残高: BS現預金 > 累積（cashIn-cashOut）
+    const closeAt = (i) => {
+      if (hasBsCash) {
+        const v = bsCashCFAt(i);
+        if (v != null) return v;
+      }
+      // BSが無い場合は cashIn/cashOut の累積（期首=0起点）
+      let running = 0;
+      for (let k = 0; k <= i; k++) running += (cashInArr[k] || 0) - (cashOutArr[k] || 0);
+      return running;
+    };
+    const openAt = (i) => i === 0 ? (closeAt(0) - ((cashInArr[0] || 0) - (cashOutArr[0] || 0)))
+                                   : closeAt(i - 1);
+
     tblEl.innerHTML = mfBuildTable(months, monthNames, [
+      { label:'【現預金残高】',           key:'__header__' },
+      { label:'　月初残高',               key:'__calc__', isRev:true, formula:openAt },
+      { label:'　月末残高',               key:'__calc__', isRev:true, formula:closeAt },
       { label:'【営業収入】',           key:'__header__' },
       { label:'　売上入金(会費)',       key:'cfInFee',     isRev:true },
       { label:'　売上入金(研修)',       key:'cfInTraining', isRev:true },
@@ -10601,7 +10647,17 @@ function mfRenderPreview() {
       { label:'【財務支出】',           key:'__header__' },
       { label:'　借入返済',             key:'loanOut',     isOut:true },
       { label:'　投資',                 key:'investPay',   isOut:true },
-    ], (key, i) => (monthly[key] && monthly[key][i]) || 0, initialVisibleIdxSet);
+    ], (key, i, row) => row?.key === '__calc__' ? row.formula(i)
+                                                : ((monthly[key] && monthly[key][i]) || 0),
+       initialVisibleIdxSet);
+
+    // BS未取込の警告
+    if (!hasBsCash) {
+      const noteEl = document.createElement('div');
+      noteEl.style.cssText = 'background:rgba(239,159,39,0.10);border:1px solid rgba(239,159,39,0.3);border-radius:6px;padding:6px 10px;margin-top:6px;font-size:10px;color:var(--tc-amber);line-height:1.5';
+      noteEl.innerHTML = '⚠ <strong>BS試算表が未取得のため、月初/月末残高は cashIn − cashOut の累積（期首=0 起点）として表示しています。</strong><br>BS試算表を取得・反映すると、銀行残高ベースの真の月初/月末残高に切り替わります。';
+      tblEl.appendChild(noteEl);
+    }
 
     // ── CF仕分け編集テーブル（相手方科目 → CFカテゴリ） ──
     const cfmapEl = document.getElementById('mf-preview-cfmap');
