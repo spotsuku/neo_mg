@@ -11013,7 +11013,27 @@ window.mfOnCommitMonthChange = function() {
     ], (key, i, row) => row?.key === '__calc__' ? row.formula(i) : getBS(key, i), visibleIdxSet, { hideTotal: true });
   } else if (p.type === 'journals') {
     const monthly = p.cf.monthly || {};
+    // 月初/月末残高: BS現預金（取込済み）から導出。BS未取込なら cashIn-cashOut 累積
+    const dbY = DB?.[String(p.fy)];
+    const bsCashCFAt = (i) => {
+      const v = dbY?.bs?.actual?.[i]?.cash;
+      return (v != null && Number.isFinite(Number(v))) ? Number(v) : null;
+    };
+    const hasBsCash = months.some((_, i) => bsCashCFAt(i) != null);
+    const cashInArr  = p.cf?.cashIn  || [];
+    const cashOutArr = p.cf?.cashOut || [];
+    const closeAt = (i) => {
+      if (hasBsCash) { const v = bsCashCFAt(i); if (v != null) return v; }
+      let running = 0;
+      for (let k = 0; k <= i; k++) running += (cashInArr[k] || 0) - (cashOutArr[k] || 0);
+      return running;
+    };
+    const openAt = (i) => i === 0 ? (closeAt(0) - ((cashInArr[0] || 0) - (cashOutArr[0] || 0)))
+                                   : closeAt(i - 1);
     tblEl.innerHTML = mfBuildTable(months, monthNames, [
+      { label:'【現預金残高】',       key:'__header__' },
+      { label:'　月初残高',           key:'__calc__', isRev:true, formula:openAt },
+      { label:'　月末残高',           key:'__calc__', isRev:true, formula:closeAt },
       { label:'【営業収入】',       key:'__header__' },
       { label:'　売上入金(会費)',    key:'cfInFee',      isRev:true },
       { label:'　売上入金(研修)',    key:'cfInTraining', isRev:true },
@@ -11038,7 +11058,15 @@ window.mfOnCommitMonthChange = function() {
       { label:'【財務支出】',       key:'__header__' },
       { label:'　借入返済',          key:'loanOut',      isOut:true },
       { label:'　事業投資',          key:'investPay',    isOut:true },
-    ], (key, i) => (monthly[key] && monthly[key][i]) || 0, visibleIdxSet);
+    ], (key, i, row) => row?.key === '__calc__' ? row.formula(i)
+                                                : ((monthly[key] && monthly[key][i]) || 0),
+       visibleIdxSet);
+    if (!hasBsCash) {
+      const noteEl = document.createElement('div');
+      noteEl.style.cssText = 'background:rgba(239,159,39,0.10);border:1px solid rgba(239,159,39,0.3);border-radius:6px;padding:6px 10px;margin-top:6px;font-size:10px;color:var(--tc-amber);line-height:1.5';
+      noteEl.innerHTML = '⚠ <strong>BS試算表が未取得のため、月初/月末残高は cashIn − cashOut の累積（期首=0 起点）として表示しています。</strong><br>BS試算表を取得・反映すると、銀行残高ベースの真の月初/月末残高に切り替わります。';
+      tblEl.appendChild(noteEl);
+    }
   }
 };
 
