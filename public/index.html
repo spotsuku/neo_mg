@@ -649,6 +649,34 @@ input.cells-edit-input {
 
   <!-- BS 月次表示（読み取り専用、MF連携から自動反映） -->
   <div id="view-bs" style="display:none">
+    <!-- BS サマリーカード（最終データ月の値、5指標を併記） -->
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:1rem">
+      <div class="mc" title="最終データ月の資産合計（流動資産 + 固定資産）">
+        <div class="mc-l">資産合計</div>
+        <div class="mc-v" id="bs-sum-asset">—</div>
+        <div class="mc-s"><span id="bs-sum-asset-sub" style="color:var(--text3)">—</span></div>
+      </div>
+      <div class="mc" title="最終データ月の負債合計（流動負債 + 固定負債）">
+        <div class="mc-l">負債合計</div>
+        <div class="mc-v" id="bs-sum-liab">—</div>
+        <div class="mc-s"><span id="bs-sum-liab-sub" style="color:var(--text3)">—</span></div>
+      </div>
+      <div class="mc" title="最終データ月の純資産合計（資本金 + 利益剰余金 + 新株予約権）">
+        <div class="mc-l">純資産合計</div>
+        <div class="mc-v" id="bs-sum-equity">—</div>
+        <div class="mc-s"><span id="bs-sum-equity-sub" style="color:var(--text3)">—</span></div>
+      </div>
+      <div class="mc" title="最終データ月の現預金残高">
+        <div class="mc-l">現預金</div>
+        <div class="mc-v" id="bs-sum-cash">—</div>
+        <div class="mc-s"><span id="bs-sum-cash-sub" style="color:var(--text3)">—</span></div>
+      </div>
+      <div class="mc" title="自己資本比率 = 純資産合計 ÷ 資産合計">
+        <div class="mc-l">自己資本比率</div>
+        <div class="mc-v" id="bs-sum-eqratio">—</div>
+        <div class="mc-s" id="bs-sum-eqratio-sub"></div>
+      </div>
+    </div>
     <div class="card" style="margin-bottom:1rem">
       <div class="ct">月次BS推移（累積残高） — <span id="bs-chart-year-label">2025年度</span></div>
       <div class="ch" style="height:220px"><canvas id="bs-chart"></canvas></div>
@@ -3616,9 +3644,25 @@ function renderBSView(d) {
   const wrap = document.getElementById('bs-table-wrap');
   if (!wrap) return;
   const months = d.months || [];
+
+  // KPIカードのデフォルト値（データ無しの場合）
+  const setKpi = (id, value, sub) => {
+    const v = document.getElementById(id);
+    if (v) v.innerHTML = value;
+    if (sub != null) {
+      const s = document.getElementById(id + '-sub');
+      if (s) s.innerHTML = sub;
+    }
+  };
+
   if (!d.bs || !d.bs.actual) {
     wrap.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:11px">BSデータがありません。MF連携タブから BS 試算表を取得して反映してください。</div>';
     destroyChart('bs-chart');
+    setKpi('bs-sum-asset', '—', '—');
+    setKpi('bs-sum-liab',  '—', '—');
+    setKpi('bs-sum-equity','—', '—');
+    setKpi('bs-sum-cash',  '—', '—');
+    setKpi('bs-sum-eqratio','—', '');
     return;
   }
   const get = (key, i) => {
@@ -3630,6 +3674,46 @@ function renderBSView(d) {
   const sumCl = i => get('payable',i) + get('borrowing_short',i) + get('other_cl',i);
   const sumFl = i => get('borrowing',i);
   const sumEq = i => get('capital',i) + get('retained',i) + get('warrant',i);
+
+  // ── KPIカード: 最終データ月（最大idxでBSデータが入っている月）の値 ──
+  const bsIdxs = Object.keys(d.bs.actual).map(Number).filter(n => !isNaN(n));
+  const lastIdx = bsIdxs.length ? Math.max(...bsIdxs) : -1;
+  if (lastIdx >= 0) {
+    const asset  = sumCa(lastIdx) + sumFa(lastIdx);
+    const liab   = sumCl(lastIdx) + sumFl(lastIdx);
+    const equity = sumEq(lastIdx);
+    const cash   = get('cash', lastIdx);
+    const eqRatio = asset !== 0 ? (equity / asset * 100) : 0;
+    const monthLabel = MONTH_LABELS[months[lastIdx]] || months[lastIdx] || '';
+    const fmt = v => {
+      const r = Math.round(v);
+      if (r === 0) return '—';
+      return r < 0 ? `<span class="r">▲${Math.abs(r).toLocaleString()}</span>` : r.toLocaleString();
+    };
+    const fmtBig = v => {
+      const r = Math.round(v);
+      if (r === 0) return '—';
+      return r < 0 ? `▲${Math.abs(r).toLocaleString()}` : r.toLocaleString();
+    };
+    setKpi('bs-sum-asset',  fmtBig(asset),  `<span style="color:var(--text3)">${monthLabel}末・千円</span>`);
+    setKpi('bs-sum-liab',   fmtBig(liab),   `<span style="color:var(--text3)">${monthLabel}末・千円</span>`);
+    setKpi('bs-sum-equity', fmtBig(equity), `<span style="color:var(--text3)">${monthLabel}末・千円</span>`);
+    setKpi('bs-sum-cash',   fmtBig(cash),   `<span style="color:var(--text3)">${monthLabel}末・千円</span>`);
+    if (asset === 0) {
+      setKpi('bs-sum-eqratio', '—', '');
+    } else {
+      const ratioText = eqRatio.toFixed(1) + '%';
+      const ratioColor = eqRatio < 0 ? 'var(--tc-red)' : eqRatio < 20 ? 'var(--tc-amber)' : 'var(--tc-green)';
+      setKpi('bs-sum-eqratio', `<span style="color:${ratioColor}">${ratioText}</span>`,
+        `<span style="color:var(--text3)">${monthLabel}末</span>`);
+    }
+  } else {
+    setKpi('bs-sum-asset', '—', '—');
+    setKpi('bs-sum-liab',  '—', '—');
+    setKpi('bs-sum-equity','—', '—');
+    setKpi('bs-sum-cash',  '—', '—');
+    setKpi('bs-sum-eqratio','—', '');
+  }
 
   // ── BSチャート: 月末残高（累積）の推移 ──
   // 資産は正、負債は負（下方向）、純資産は折れ線で表示
