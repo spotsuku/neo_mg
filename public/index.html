@@ -411,12 +411,6 @@ input.cells-edit-input {
         <button class="tab" onclick="sw('report',this)">📋 月次レポート</button>
         <button class="tab" onclick="sw('pdf',this)">📄 役員PDF</button>
       </div>
-      <!-- PL/CF/BS サブタブ（月次財務タブ選択時のみ表示） -->
-      <div class="pa-toggle" id="nav-pa-toggle" style="display:none;margin:0">
-        <button class="pa-btn active" onclick="setPaView('pl',this)">PL（損益）</button>
-        <button class="pa-btn" onclick="setPaView('cf',this)">CF（資金繰り）</button>
-        <button class="pa-btn" onclick="setPaView('bs',this)">BS（貸借対照表）</button>
-      </div>
     </div>
   </div>
 </div>
@@ -569,8 +563,13 @@ input.cells-edit-input {
      月次 PL / CF 予実管理
 ────────────────────────────────────── -->
 <div class="sec" id="sec-pl-cf">
-  <!-- PL/CF/BS サブタブはヘッダーに移動済み（#nav-pa-toggle） -->
-  <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
+  <!-- PL/CF/BS サブタブ + レジェンド（ヘッダー高さを サマリー と揃えるためセクション内に配置） -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
+    <div class="pa-toggle">
+      <button class="pa-btn active" onclick="setPaView('pl',this)">PL（損益）</button>
+      <button class="pa-btn" onclick="setPaView('cf',this)">CF（資金繰り）</button>
+      <button class="pa-btn" onclick="setPaView('bs',this)">BS（貸借対照表）</button>
+    </div>
     <div style="display:flex;gap:7px;align-items:center">
       <div class="legend"><div class="li"><div class="ld" style="background:#378ADD;opacity:.5"></div>予算</div><div class="li"><div class="ld" style="background:#378ADD"></div>実績</div><div class="li"><div class="ld" style="background:#3B6D11"></div>予実差</div></div>
     </div>
@@ -1444,9 +1443,6 @@ function sw(id, el) {
   document.getElementById('sec-' + id).classList.add('on');
   if (el) el.classList.add('active');
   try { localStorage.setItem('neo_active_tab', id); } catch(e) {}
-  // PL/CF/BS サブタブ（ヘッダー内）の表示制御: 月次財務タブ選択時のみ表示
-  const navPaToggle = document.getElementById('nav-pa-toggle');
-  if (navPaToggle) navPaToggle.style.display = (id === 'pl-cf') ? 'flex' : 'none';
   if (id === 'pl-cf') renderPLCF();
   if (id === 'sim') {
     // タブ切替時に現在の年度に同期
