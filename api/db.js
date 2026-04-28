@@ -397,6 +397,69 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, summary });
       }
 
+      // ────────────────────────────────────────────────────────────
+      //  工数配分シミュレーター (workforce_versions)
+      // ────────────────────────────────────────────────────────────
+
+      // 一覧（最新順）
+      case 'load_workforce_versions': {
+        const { data, error } = await supabase
+          .from('workforce_versions')
+          .select('version_id, name, memo, is_current, snapshot, saved_at')
+          .order('saved_at', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json({ ok: true, data: data || [] });
+      }
+
+      // 保存（新規 or 上書き）
+      case 'save_workforce_version': {
+        const { version_id, name, memo, snapshot, is_current } = req.body;
+        const payload = {
+          version_id,
+          name,
+          memo: memo || null,
+          snapshot,
+          saved_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        if (is_current === true) {
+          // 他レコードの is_current を一旦下ろす
+          await supabase.from('workforce_versions').update({ is_current: false }).neq('version_id', version_id);
+          payload.is_current = true;
+        }
+        const { error } = await supabase
+          .from('workforce_versions')
+          .upsert(payload, { onConflict: 'version_id' });
+        if (error) throw error;
+        return res.status(200).json({ ok: true });
+      }
+
+      // 削除
+      case 'delete_workforce_version': {
+        const { version_id } = req.body;
+        const { error } = await supabase
+          .from('workforce_versions')
+          .delete()
+          .eq('version_id', version_id);
+        if (error) throw error;
+        return res.status(200).json({ ok: true });
+      }
+
+      // 「現在採用中」フラグの設定（指定IDのみ true、他は false）
+      case 'set_workforce_current': {
+        const { version_id } = req.body;
+        // 全レコードを false に
+        await supabase.from('workforce_versions').update({ is_current: false }).neq('version_id', -1);
+        if (version_id != null) {
+          const { error } = await supabase
+            .from('workforce_versions')
+            .update({ is_current: true })
+            .eq('version_id', version_id);
+          if (error) throw error;
+        }
+        return res.status(200).json({ ok: true });
+      }
+
       default:
         return res.status(400).json({ error: `Unknown action: ${action}` });
     }

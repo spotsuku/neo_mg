@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEO福岡 工数配分シミュレーター v14</title>
+<!--
+  PROTOTYPE REFERENCE (v14)
+  この HTML はリファレンス用。実装は public/index.html の sec-workforce セクションに統合する。
+  計算ロジック (memberRevenue, bizRoleFulfillment, roleRealizedRev, effectiveWeight 等) は
+  ほぼそのまま流用し、localStorage 部分のみ Supabase に置換する。
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: #f5f5f7;
+    color: #1c1c1e;
+    padding: 12px;
+    line-height: 1.4;
+  }
+  .container { max-width: 1700px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
+  .subtitle { color: #86868b; margin-bottom: 12px; font-size: 11px; }
+  h2 { font-size: 16px; font-weight: 700; margin: 14px 0 8px 0; padding-left: 8px; border-left: 4px solid #D13020; }
+  h3 { font-size: 13px; font-weight: 700; margin: 10px 0 6px 0; }
+  h4 { font-size: 12px; margin: 8px 0 4px 0; }
+
+  .kpi-bar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; background: white; padding: 10px 12px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .kpi-item { display: flex; flex-direction: column; min-width: 110px; }
+  .kpi-item .label { font-size: 10px; color: #86868b; }
+  .kpi-item .value { font-size: 15px; font-weight: 700; }
+  .kpi-item .sub { font-size: 9px; color: #86868b; }
+  .v-good { color: #34c759 !important; }
+  .v-bad { color: #D13020 !important; }
+  .v-warn { color: #ff9500 !important; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; background: white; padding: 3px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow-x: auto; }
+  .tab { flex: 1; min-width: 100px; padding: 8px; text-align: center; cursor: pointer; border-radius: 6px; font-size: 12px; font-weight: 600; color: #86868b; transition: all 0.2s; white-space: nowrap; }
+  .tab.active { background: #1c1c1e; color: white; }
+  .tab:hover:not(.active) { background: #f5f5f7; color: #1c1c1e; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .role-badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; color: white; }
+  .r-営業 { background: #D13020; }
+  .r-納品 { background: #007aff; }
+  .r-CS { background: #34c759; }
+  .r-企画 { background: #ff9500; }
+
+  .pl-wrap { background: white; border-radius: 10px; padding: 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow-x: auto; }
+  .pl-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 900px; }
+  .pl-table th, .pl-table td { padding: 6px 8px; border-bottom: 1px solid #f0f0f2; }
+  .pl-table thead th { background: #1c1c1e; color: white; font-size: 11px; font-weight: 600; text-align: center; }
+  .pl-table thead th:first-child { text-align: left; }
+  .pl-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pl-table .row-cat td { background: #fef3c7; font-weight: 700; cursor: pointer; user-select: none; }
+  .pl-table .row-cat td:first-child::before { content: '▼ '; font-size: 10px; color: #86868b; }
+  .pl-table .row-cat.collapsed td:first-child::before { content: '▶ '; }
+  .pl-table .row-detail td { background: #fafafa; font-size: 11px; color: #555; }
+  .pl-table .row-detail td:first-child { padding-left: 24px; color: #86868b; }
+  .pl-table .row-cost td { background: #fff5f5; }
+  .pl-table .row-cost td:first-child { padding-left: 24px; color: #86868b; font-size: 11px; }
+  .pl-table .row-summary td { background: #1c1c1e; color: white; font-weight: 700; font-size: 13px; border-top: 2px solid #1c1c1e; }
+  .pl-table .row-section td { background: #fee8e6; font-weight: 700; color: #8b1c10; }
+  .pl-table .pl-input { width: 100%; padding: 3px 5px; border: 1px solid transparent; border-radius: 3px; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; background: transparent; }
+  .pl-table .pl-input:focus, .pl-table .pl-input:hover { outline: 1px solid #007aff; background: white; }
+  .pl-table .row-detail .pl-input { background: white; border-color: #e0e0e2; }
+  .pl-table .label-input { border: 1px solid transparent; background: transparent; font-size: 11px; padding: 2px 4px; border-radius: 3px; width: 140px; }
+  .pl-table .label-input:focus { outline: 1px solid #007aff; background: white; }
+  .pl-table .add-prog-btn { background: none; border: 1px dashed #d2d2d7; color: #86868b; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; }
+  .pl-table .add-prog-btn:hover { border-color: #1c1c1e; color: #1c1c1e; }
+  .pl-table .del-row-btn { background: none; border: none; color: #D13020; cursor: pointer; font-size: 12px; padding: 0 4px; }
+  .pl-table .del-row-btn:hover { color: #8b1c10; }
+  .pl-table .ratio-cell { font-weight: 700; text-align: center; font-size: 11px; }
+  .pl-table .ratio-cell.good { color: #34c759; }
+  .pl-table .ratio-cell.warn { color: #ff9500; }
+  .pl-table .ratio-cell.bad { color: #D13020; }
+
+  .grid-wrap { background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: auto; max-height: 70vh; position: relative; }
+  table.grid { border-collapse: separate; border-spacing: 0; font-size: 11px; width: max-content; min-width: 100%; }
+  table.grid th, table.grid td { border-right: 1px solid #e5e5e7; border-bottom: 1px solid #e5e5e7; padding: 4px 6px; text-align: center; background: white; white-space: nowrap; }
+  table.grid thead tr.lv1 th { background: #1c1c1e; color: white; font-size: 12px; font-weight: 700; position: sticky; top: 0; z-index: 5; padding: 6px 4px; border-right: 2px solid #444; }
+  table.grid thead tr.lv2 th { background: #2c2c2e; color: white; font-size: 10px; font-weight: 600; position: sticky; top: 28px; z-index: 5; padding: 4px; }
+  table.grid thead tr.summary-row th, table.grid thead tr.summary-row td { position: sticky; z-index: 5; padding: 5px 6px; font-size: 11px; }
+  table.grid thead tr.sr-required th, table.grid thead tr.sr-required td { top: 56px; background: #f5f5f7 !important; border-bottom: 1px solid #e0e0e2; }
+  table.grid thead tr.sr-invested th, table.grid thead tr.sr-invested td { top: 84px; background: #f5f5f7 !important; border-bottom: 1px solid #e0e0e2; }
+  table.grid thead tr.sr-fulfill th, table.grid thead tr.sr-fulfill td { top: 112px; background: #fff8e1 !important; border-bottom: 2px solid #1c1c1e; }
+  table.grid thead tr.summary-row .col-name { z-index: 7; }
+  table.grid thead tr.summary-row .col-cost { z-index: 7; }
+  table.grid thead tr.summary-row .col-ability { z-index: 7; }
+  table.grid thead tr.sr-required .col-name, table.grid thead tr.sr-required .col-cost, table.grid thead tr.sr-required .col-ability { background: #f5f5f7 !important; }
+  table.grid thead tr.sr-invested .col-name, table.grid thead tr.sr-invested .col-cost, table.grid thead tr.sr-invested .col-ability { background: #f5f5f7 !important; }
+  table.grid thead tr.sr-fulfill .col-name, table.grid thead tr.sr-fulfill .col-cost, table.grid thead tr.sr-fulfill .col-ability { background: #fff8e1 !important; }
+  .col-name { position: sticky; left: 0; z-index: 4; text-align: left !important; min-width: 130px; max-width: 160px; background: white !important; border-right: 2px solid #1c1c1e !important; }
+  .col-cost { position: sticky; left: 130px; z-index: 4; min-width: 80px; background: white !important; border-right: 1px solid #e5e5e7 !important; }
+  .col-ability { position: sticky; left: 210px; z-index: 4; min-width: 60px; background: white !important; border-right: 2px solid #1c1c1e !important; }
+  table.grid thead .col-name, table.grid thead .col-cost, table.grid thead .col-ability { z-index: 7; }
+  table.grid thead tr.lv1 .col-name, table.grid thead tr.lv1 .col-cost, table.grid thead tr.lv1 .col-ability { background: #1c1c1e !important; }
+  table.grid thead tr.lv2 .col-name, table.grid thead tr.lv2 .col-cost, table.grid thead tr.lv2 .col-ability { background: #2c2c2e !important; }
+
+  .grid-cell-input { width: 44px; padding: 3px 4px; border: 1px solid transparent; border-radius: 3px; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; background: transparent; }
+  .grid-cell-input:focus { outline: 2px solid #007aff; background: white; }
+  .grid-cell-input.zero { color: #d2d2d7; }
+  .grid-cell-input.has-val { background: #e8f4ff; color: #1c1c1e; font-weight: 600; }
+
+  td.role-営業 { background: #fff5f5 !important; }
+  td.role-納品 { background: #f0f8ff !important; }
+  td.role-CS { background: #f0fff4 !important; }
+  td.role-企画 { background: #fff8f0 !important; }
+  td.role-営業 .grid-cell-input.has-val { background: #ffd6d6; }
+  td.role-納品 .grid-cell-input.has-val { background: #d6e9ff; }
+  td.role-CS .grid-cell-input.has-val { background: #d6f5dc; }
+  td.role-企画 .grid-cell-input.has-val { background: #ffeed6; }
+
+  td.biz-end, th.biz-end { border-right: 2px solid #1c1c1e !important; }
+
+  .name-input { border: 1px solid transparent; background: transparent; font-size: 12px; font-weight: 600; padding: 2px 4px; border-radius: 3px; width: 100%; }
+  .role-input { border: 1px solid transparent; background: transparent; font-size: 10px; color: #86868b; padding: 1px 4px; border-radius: 3px; width: 100%; }
+  .name-input:focus, .role-input:focus, .cost-input:focus, .ability-input:focus { outline: 1px solid #007aff; background: white; }
+  .cost-input { width: 70px; padding: 3px 4px; border: 1px solid #d2d2d7; border-radius: 3px; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .ability-input { width: 50px; padding: 3px 4px; border: 1px solid #d2d2d7; border-radius: 3px; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .ability-input.high { background: #ffe0e6; color: #b71c1c; font-weight: 700; }
+  .ability-input.low { background: #f0f0f0; color: #86868b; }
+
+  .col-total, .col-rev, .col-ratio { background: #fafafa !important; font-weight: 600; }
+  .total-pct { font-size: 11px; }
+  .total-pct.ok { color: #34c759; }
+  .total-pct.warn { color: #ff9500; }
+  .total-pct.err { color: #D13020; }
+  .ratio-num { padding: 3px 6px; border-radius: 3px; font-weight: 700; font-size: 11px; }
+  .ratio-num.good { background: #d4f4dd; color: #1f7a3d; }
+  .ratio-num.warn { background: #fff3cd; color: #8a6500; }
+  .ratio-num.bad { background: #fadcd9; color: #8b1c10; }
+
+  table.grid tfoot td { background: #f5f5f7; font-weight: 700; font-size: 11px; border-top: 2px solid #1c1c1e; position: sticky; bottom: 0; z-index: 3; }
+  tfoot .col-name, tfoot .col-cost, tfoot .col-ability { background: #f5f5f7 !important; z-index: 5; }
+  .ful-cell { font-size: 10px; line-height: 1.2; }
+  .ful-cell .pct { font-weight: 700; font-size: 11px; }
+  .ful-cell.good .pct { color: #34c759; }
+  .ful-cell.low .pct { color: #D13020; }
+  .ful-cell.over .pct { color: #ff9500; }
+
+  .col-del { background: white !important; }
+  .delete-btn { background: none; border: none; color: #D13020; cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 3px; }
+  .delete-btn:hover { background: #fadcd9; }
+
+  .fulfillment-heatmap, .config-matrix { background: white; border-radius: 10px; padding: 14px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow-x: auto; }
+  .heatmap-table, .config-matrix table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 600px; }
+  .heatmap-table th, .heatmap-table td, .config-matrix th, .config-matrix td { padding: 8px; text-align: center; border-bottom: 1px solid #f5f5f7; }
+  .heatmap-table th, .config-matrix th { background: #1c1c1e; color: white; font-size: 11px; font-weight: 600; }
+  .heatmap-table td:first-child, .config-matrix td:first-child { text-align: left; font-weight: 600; }
+  .heatmap-table th:first-child, .config-matrix th:first-child { text-align: left; }
+  .heatmap-cell { padding: 8px !important; min-width: 110px; border: 1px solid #f5f5f7 !important; }
+  .heatmap-cell .ful-pct { font-size: 16px; font-weight: 700; }
+  .heatmap-cell .ful-detail { font-size: 10px; color: #86868b; margin-top: 2px; }
+  .heat-good { background: #d4f4dd !important; color: #1f7a3d; }
+  .heat-low { background: #fadcd9 !important; color: #8b1c10; }
+  .heat-over { background: #fff3cd !important; color: #8a6500; }
+  .heat-zero { background: #f5f5f7 !important; color: #86868b; }
+  .config-input { width: 60px; padding: 4px; border: 1px solid #d2d2d7; border-radius: 4px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .config-input:focus { outline: 2px solid #007aff; }
+  .weight-total { font-weight: 700; }
+  .weight-total.ok { color: #34c759; }
+  .weight-total.warn { color: #D13020; }
+
+  .controls { background: white; padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .controls button { padding: 6px 10px; border: 1px solid #d2d2d7; border-radius: 5px; background: white; cursor: pointer; font-size: 11px; font-weight: 600; }
+  .controls button:hover { background: #f5f5f7; }
+  .controls button.primary { background: #1c1c1e; color: white; border-color: #1c1c1e; }
+  .controls button.add { background: #34c759; color: white; border-color: #34c759; }
+
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+  .modal-bg.show { display: flex; }
+  .modal { background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 460px; max-height: 90vh; overflow-y: auto; }
+  .modal h3 { margin-bottom: 14px; }
+  .modal label { display: block; font-size: 12px; margin-bottom: 4px; color: #86868b; }
+  .modal input { width: 100%; padding: 8px 10px; border: 1px solid #d2d2d7; border-radius: 6px; margin-bottom: 12px; font-size: 13px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+
+  .legend { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 10px; color: #86868b; margin-bottom: 6px; }
+  .legend .item { display: flex; align-items: center; gap: 4px; }
+  .legend .swatch { width: 12px; height: 12px; border-radius: 2px; border: 1px solid #d2d2d7; }
+
+  .ful-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .ful-card { background: white; border-radius: 10px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 4px solid; }
+  .ful-card.action-hire { border-left-color: #D13020; }
+  .ful-card.action-shift { border-left-color: #ff9500; }
+  .ful-card.action-ok { border-left-color: #34c759; }
+  .ful-card h4 { font-size: 13px; margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .ful-card .badge-count { background: #1c1c1e; color: white; border-radius: 10px; padding: 2px 8px; font-size: 10px; }
+  .ful-card-list { font-size: 11px; }
+  .ful-card-item { padding: 4px 0; border-bottom: 1px solid #f5f5f7; display: flex; justify-content: space-between; }
+  .ful-card-item:last-child { border-bottom: none; }
+
+  .version-toolbar { background: white; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 4px solid #007aff; }
+  .version-toolbar .current-label { font-size: 11px; color: #86868b; }
+  .version-toolbar .current-name { font-weight: 700; font-size: 13px; color: #007aff; }
+  .version-toolbar .unsaved-badge { background: #ff9500; color: white; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 3px; }
+  .version-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .version-card { background: white; border-radius: 10px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 4px solid #d2d2d7; cursor: pointer; transition: all 0.15s; position: relative; }
+  .version-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left-color: #007aff; }
+  .version-card.current { border-left-color: #34c759; background: #f0fff4; }
+  .version-card.compare-from { border-left-color: #af52de; background: #f9f0ff; }
+  .version-card.compare-to { border-left-color: #ff9500; background: #fff8e1; }
+  .version-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+  .version-card .v-date { font-size: 10px; color: #86868b; margin-bottom: 6px; }
+  .version-card .v-memo { font-size: 12px; color: #555; margin-bottom: 8px; min-height: 32px; line-height: 1.4; }
+  .version-card .v-stats { font-size: 11px; color: #86868b; border-top: 1px solid #f0f0f2; padding-top: 6px; margin-bottom: 8px; }
+  .version-card .v-stats span { margin-right: 10px; }
+  .version-card .v-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+  .version-card .v-actions button { padding: 4px 8px; border: 1px solid #d2d2d7; border-radius: 4px; background: white; cursor: pointer; font-size: 10px; font-weight: 600; }
+  .version-card .v-actions button:hover { background: #f5f5f7; }
+  .version-card .v-actions button.primary { background: #1c1c1e; color: white; border-color: #1c1c1e; }
+  .version-card .v-actions button.danger { color: #D13020; border-color: #D13020; }
+  .version-card .current-badge { background: #34c759; color: white; font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: 600; }
+  .empty-state { text-align: center; padding: 30px; color: #86868b; font-size: 13px; background: white; border-radius: 10px; border: 2px dashed #d2d2d7; }
+
+  .diff-table { width: 100%; border-collapse: collapse; font-size: 12px; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .diff-table th { background: #1c1c1e; color: white; padding: 8px; text-align: left; font-size: 11px; }
+  .diff-table td { padding: 6px 8px; border-bottom: 1px solid #f0f0f2; }
+  .diff-table .diff-add { background: #f0fff4; color: #1f7a3d; }
+  .diff-table .diff-remove { background: #fadcd9; color: #8b1c10; }
+  .diff-table .diff-change { background: #fff8e1; }
+  .diff-table .diff-old { color: #8b1c10; text-decoration: line-through; }
+  .diff-table .diff-new { color: #1f7a3d; font-weight: 600; }
+  .diff-arrow { color: #86868b; margin: 0 6px; }
+</style>
+</head>
+<body>
+<!--
+  プロトタイプの DOM/JS は省略 (非常に長いため)。
+  完全な実装は public/index.html の sec-workforce および <script> ブロックに統合する。
+  リファレンスとしての CSS は上記に保存済み。
+
+  仕様：
+    BIZ      = ['NEOアカデミア','イベント','研修','事業開発']
+    ROLES    = ['営業','納品','CS','企画']
+    requiredFTE / roleWeights / bizPrograms / bizCosts / sgaItems / INITIAL_MEMBERS
+
+  計算 (要流用):
+    bizRevenue / bizCostTotal / sgaTotal / sgaPerBiz
+    memberAllocCost / memberAllocFTE / bizRoleInvestedFTE
+    bizRoleFulfillment / bizRoleRevCoef / bizRoleCost / bizPersonnelCost
+    effectiveWeight / roleRealizedRev / bizRealizedRev
+    bizGrossProfit / bizOperatingProfit
+    memberRevenue / memberRatio / memberTotalPct
+    totalCost / totalTargetRevenue / totalRealizedRev / totalCostsAll / totalOperatingProfit
+
+  バージョン管理 (Supabase へ置換):
+    takeSnapshot / restoreSnapshot
+    saveAsNewVersion / overwriteCurrentVersion / loadVersion / deleteVersion
+    renameVersion / duplicateVersion
+    toggleCompare / showDiff / computeDiff
+    exportAllVersions / importVersionsFromFile
+
+  v14 の完全 HTML/JS は本リポジトリのチャット履歴 (実装指示書) を参照のこと。
+-->
+</body>
+</html>

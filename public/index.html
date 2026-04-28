@@ -371,6 +371,182 @@ input.cells-edit-input {
 
 /* ── PRESET BTN ── */
 .preset-active{background:var(--bg-blue)!important;color:var(--tc-blue)!important;border-color:var(--tc-blue)!important}
+
+/* ════════════════════════════════════════════════════════════════
+   工数管理 (Workforce) — sec-workforce 内のスタイル
+   ════════════════════════════════════════════════════════════════ */
+#sec-workforce .wf-toolbar{background:var(--bg2);padding:9px 12px;border-radius:var(--rl);margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-left:3px solid #007aff}
+#sec-workforce .wf-current-label{font-size:11px;color:var(--text3)}
+#sec-workforce .wf-current-name{font-weight:700;font-size:13px;color:#5aabf0;margin-left:4px}
+#sec-workforce .wf-unsaved-badge{background:#ff9500;color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:3px;margin-left:6px}
+#sec-workforce .wf-current-badge{background:#34c759;color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:3px;margin-left:6px}
+
+#sec-workforce .wf-panel{display:none}
+#sec-workforce .wf-panel.active{display:block}
+
+/* 役割バッジ */
+#sec-workforce .wf-rb{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600;color:#fff}
+#sec-workforce .wf-r-営業{background:#D13020}
+#sec-workforce .wf-r-納品{background:#007aff}
+#sec-workforce .wf-r-CS{background:#34c759}
+#sec-workforce .wf-r-企画{background:#ff9500}
+
+/* PL表 */
+#sec-workforce .wf-pl-table{width:100%;border-collapse:collapse;font-size:11px;min-width:900px}
+#sec-workforce .wf-pl-table th,#sec-workforce .wf-pl-table td{padding:5px 7px;border-bottom:1px solid var(--border)}
+#sec-workforce .wf-pl-table thead th{background:var(--text);color:var(--bg);font-size:10px;font-weight:600;text-align:center}
+#sec-workforce .wf-pl-table thead th:first-child{text-align:left}
+#sec-workforce .wf-pl-table .num{text-align:right;font-variant-numeric:tabular-nums}
+#sec-workforce .wf-pl-table .row-cat td{background:rgba(254,243,199,0.20);font-weight:700;cursor:pointer;user-select:none}
+#sec-workforce .wf-pl-table .row-cat td:first-child::before{content:'▼ ';font-size:9px;color:var(--text3)}
+#sec-workforce .wf-pl-table .row-cat.collapsed td:first-child::before{content:'▶ '}
+#sec-workforce .wf-pl-table .row-detail td{background:var(--bg2);font-size:10px;color:var(--text2)}
+#sec-workforce .wf-pl-table .row-detail td:first-child{padding-left:22px;color:var(--text3)}
+#sec-workforce .wf-pl-table .row-cost td{background:rgba(255,245,245,0.10)}
+#sec-workforce .wf-pl-table .row-cost td:first-child{padding-left:22px;color:var(--text3);font-size:10px}
+#sec-workforce .wf-pl-table .row-summary td{background:var(--text);color:var(--bg);font-weight:700;font-size:12px;border-top:2px solid var(--text)}
+#sec-workforce .wf-pl-table .row-section td{background:rgba(254,232,230,0.10);font-weight:700}
+#sec-workforce .wf-pl-input{width:100%;padding:3px 5px;border:1px solid transparent;border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:transparent;color:var(--text);font-family:inherit}
+#sec-workforce .wf-pl-input:focus,#sec-workforce .wf-pl-input:hover{outline:1px solid #5aabf0;background:var(--bg)}
+#sec-workforce .wf-pl-table .row-detail .wf-pl-input{background:var(--bg);border-color:var(--border2)}
+#sec-workforce .wf-add-row-btn{background:none;border:1px dashed var(--border2);color:var(--text3);padding:3px 8px;border-radius:4px;cursor:pointer;font-size:10px;font-family:inherit}
+#sec-workforce .wf-add-row-btn:hover{border-color:var(--text);color:var(--text)}
+#sec-workforce .wf-del-row-btn{background:none;border:none;color:#e87070;cursor:pointer;font-size:12px;padding:0 4px}
+#sec-workforce .wf-ratio-cell{font-weight:700;text-align:center;font-size:10px}
+#sec-workforce .wf-ratio-cell.good{color:#5dbd7e}
+#sec-workforce .wf-ratio-cell.warn{color:#f0a060}
+#sec-workforce .wf-ratio-cell.bad{color:#e87070}
+
+/* グリッド */
+#sec-workforce .wf-grid-wrap{overflow:auto;max-height:75vh;position:relative;border:1px solid var(--border);border-radius:var(--rl)}
+#sec-workforce .wf-legend{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:10px;color:var(--text3);margin-bottom:6px}
+#sec-workforce .wf-legend-item{display:flex;align-items:center;gap:4px}
+#sec-workforce .wf-swatch{width:11px;height:11px;border-radius:2px;border:1px solid var(--border2)}
+#sec-workforce table.wf-grid{border-collapse:separate;border-spacing:0;font-size:10px;width:max-content;min-width:100%}
+#sec-workforce table.wf-grid th,#sec-workforce table.wf-grid td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:3px 5px;text-align:center;background:var(--bg);white-space:nowrap;color:var(--text)}
+#sec-workforce table.wf-grid thead tr.lv1 th{background:var(--text);color:var(--bg);font-size:11px;font-weight:700;position:sticky;top:0;z-index:5;padding:5px 4px;border-right:2px solid var(--text2)}
+#sec-workforce table.wf-grid thead tr.lv2 th{background:#2c2c2e;color:#fff;font-size:9px;font-weight:600;position:sticky;top:26px;z-index:5;padding:4px}
+#sec-workforce table.wf-grid thead tr.summary-row th,#sec-workforce table.wf-grid thead tr.summary-row td{position:sticky;z-index:5;padding:5px 6px;font-size:10px}
+#sec-workforce table.wf-grid thead tr.sr-required th,#sec-workforce table.wf-grid thead tr.sr-required td{top:53px;background:var(--bg2)!important;border-bottom:1px solid var(--border)}
+#sec-workforce table.wf-grid thead tr.sr-invested th,#sec-workforce table.wf-grid thead tr.sr-invested td{top:80px;background:var(--bg2)!important;border-bottom:1px solid var(--border)}
+#sec-workforce table.wf-grid thead tr.sr-fulfill th,#sec-workforce table.wf-grid thead tr.sr-fulfill td{top:107px;background:rgba(255,248,225,0.18)!important;border-bottom:2px solid var(--text)}
+#sec-workforce table.wf-grid thead tr.summary-row .wf-col-name,
+#sec-workforce table.wf-grid thead tr.summary-row .wf-col-cost,
+#sec-workforce table.wf-grid thead tr.summary-row .wf-col-ability{z-index:7}
+#sec-workforce .wf-col-name{position:sticky;left:0;z-index:4;text-align:left!important;min-width:130px;max-width:170px;background:var(--bg)!important;border-right:2px solid var(--text)!important}
+#sec-workforce .wf-col-cost{position:sticky;left:130px;z-index:4;min-width:80px;background:var(--bg)!important;border-right:1px solid var(--border)!important}
+#sec-workforce .wf-col-ability{position:sticky;left:210px;z-index:4;min-width:60px;background:var(--bg)!important;border-right:2px solid var(--text)!important}
+#sec-workforce table.wf-grid thead tr.lv1 .wf-col-name,
+#sec-workforce table.wf-grid thead tr.lv1 .wf-col-cost,
+#sec-workforce table.wf-grid thead tr.lv1 .wf-col-ability{background:var(--text)!important}
+#sec-workforce table.wf-grid thead tr.lv2 .wf-col-name,
+#sec-workforce table.wf-grid thead tr.lv2 .wf-col-cost,
+#sec-workforce table.wf-grid thead tr.lv2 .wf-col-ability{background:#2c2c2e!important;color:#fff}
+#sec-workforce .wf-grid-cell-input{width:42px;padding:3px 4px;border:1px solid transparent;border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:transparent;color:var(--text);font-family:inherit}
+#sec-workforce .wf-grid-cell-input:focus{outline:2px solid #5aabf0;background:var(--bg)}
+#sec-workforce .wf-grid-cell-input.zero{color:var(--text3);opacity:.4}
+#sec-workforce .wf-grid-cell-input.has-val{background:rgba(232,244,255,0.18);color:var(--text);font-weight:600}
+#sec-workforce td.wf-role-営業{background:rgba(255,245,245,0.10)!important}
+#sec-workforce td.wf-role-納品{background:rgba(240,248,255,0.10)!important}
+#sec-workforce td.wf-role-CS{background:rgba(240,255,244,0.10)!important}
+#sec-workforce td.wf-role-企画{background:rgba(255,248,240,0.10)!important}
+#sec-workforce td.wf-role-営業 .wf-grid-cell-input.has-val{background:rgba(255,214,214,0.30)}
+#sec-workforce td.wf-role-納品 .wf-grid-cell-input.has-val{background:rgba(214,233,255,0.30)}
+#sec-workforce td.wf-role-CS .wf-grid-cell-input.has-val{background:rgba(214,245,220,0.30)}
+#sec-workforce td.wf-role-企画 .wf-grid-cell-input.has-val{background:rgba(255,238,214,0.30)}
+#sec-workforce td.wf-biz-end,#sec-workforce th.wf-biz-end{border-right:2px solid var(--text)!important}
+#sec-workforce .wf-name-input{border:1px solid transparent;background:transparent;font-size:11px;font-weight:600;padding:2px 4px;border-radius:3px;width:100%;color:var(--text);font-family:inherit}
+#sec-workforce .wf-role-input{border:1px solid transparent;background:transparent;font-size:9px;color:var(--text3);padding:1px 4px;border-radius:3px;width:100%;font-family:inherit}
+#sec-workforce .wf-name-input:focus,#sec-workforce .wf-role-input:focus,#sec-workforce .wf-cost-input:focus,#sec-workforce .wf-ability-input:focus{outline:1px solid #5aabf0;background:var(--bg)}
+#sec-workforce .wf-cost-input{width:72px;padding:3px 4px;border:1px solid var(--border2);border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:var(--bg);color:var(--text);font-family:inherit}
+#sec-workforce .wf-ability-input{width:48px;padding:3px 4px;border:1px solid var(--border2);border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:var(--bg);color:var(--text);font-family:inherit}
+#sec-workforce .wf-ability-input.high{background:rgba(255,224,230,0.30);color:#e87070;font-weight:700}
+#sec-workforce .wf-ability-input.low{background:rgba(180,180,180,0.15);color:var(--text3)}
+#sec-workforce .wf-col-total,#sec-workforce .wf-col-rev,#sec-workforce .wf-col-ratio{background:var(--bg2)!important;font-weight:600}
+#sec-workforce .wf-total-pct{font-size:10px}
+#sec-workforce .wf-total-pct.ok{color:#5dbd7e}
+#sec-workforce .wf-total-pct.warn{color:#f0a060}
+#sec-workforce .wf-total-pct.err{color:#e87070}
+#sec-workforce .wf-ratio-num{padding:2px 6px;border-radius:3px;font-weight:700;font-size:10px}
+#sec-workforce .wf-ratio-num.good{background:var(--bg-green);color:var(--tc-green)}
+#sec-workforce .wf-ratio-num.warn{background:var(--bg-amber);color:var(--tc-amber)}
+#sec-workforce .wf-ratio-num.bad{background:var(--bg-red);color:var(--tc-red)}
+#sec-workforce .wf-ful-cell{font-size:9px;line-height:1.2}
+#sec-workforce .wf-ful-cell .pct{font-weight:700;font-size:10px}
+#sec-workforce .wf-ful-cell.good .pct{color:#5dbd7e}
+#sec-workforce .wf-ful-cell.low .pct{color:#e87070}
+#sec-workforce .wf-ful-cell.over .pct{color:#f0a060}
+#sec-workforce .wf-col-del{background:var(--bg)!important}
+#sec-workforce .wf-delete-btn{background:none;border:none;color:#e87070;cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px}
+
+/* 設定・ヒートマップ表 */
+#sec-workforce .wf-config-tbl{width:100%;border-collapse:collapse;font-size:11px;min-width:600px}
+#sec-workforce .wf-config-tbl th,#sec-workforce .wf-config-tbl td{padding:7px 8px;text-align:center;border-bottom:1px solid var(--border)}
+#sec-workforce .wf-config-tbl th{background:var(--text);color:var(--bg);font-size:10px;font-weight:600}
+#sec-workforce .wf-config-tbl td:first-child,#sec-workforce .wf-config-tbl th:first-child{text-align:left;font-weight:600}
+#sec-workforce .wf-config-input{width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;text-align:right;font-size:11px;font-variant-numeric:tabular-nums;background:var(--bg);color:var(--text);font-family:inherit}
+#sec-workforce .wf-config-input:focus{outline:2px solid #5aabf0}
+#sec-workforce .wf-weight-total.ok{color:#5dbd7e;font-weight:700}
+#sec-workforce .wf-weight-total.warn{color:#e87070;font-weight:700}
+
+/* ヒートマップセル */
+#sec-workforce .wf-heat-cell{padding:8px!important;min-width:110px;border:1px solid var(--border)!important}
+#sec-workforce .wf-heat-pct{font-size:15px;font-weight:700}
+#sec-workforce .wf-heat-detail{font-size:9px;color:var(--text3);margin-top:2px}
+#sec-workforce .wf-heat-good{background:rgba(212,244,221,0.18)!important;color:#5dbd7e}
+#sec-workforce .wf-heat-low{background:rgba(250,220,217,0.18)!important;color:#e87070}
+#sec-workforce .wf-heat-over{background:rgba(255,243,205,0.18)!important;color:#f0a060}
+#sec-workforce .wf-heat-zero{background:var(--bg2)!important;color:var(--text3)}
+
+/* 充足度サマリーカード */
+#sec-workforce .wf-ful-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+#sec-workforce .wf-ful-card{background:var(--bg2);border-radius:var(--r);padding:10px 12px;border-left:3px solid}
+#sec-workforce .wf-ful-card.action-hire{border-left-color:#e87070}
+#sec-workforce .wf-ful-card.action-shift{border-left-color:#f0a060}
+#sec-workforce .wf-ful-card.action-ok{border-left-color:#5dbd7e}
+#sec-workforce .wf-ful-card h4{font-size:12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;font-weight:700}
+#sec-workforce .wf-ful-card .badge-count{background:var(--text);color:var(--bg);border-radius:10px;padding:1px 7px;font-size:10px}
+#sec-workforce .wf-ful-card-list{font-size:10px}
+#sec-workforce .wf-ful-card-item{padding:3px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between}
+#sec-workforce .wf-ful-card-item:last-child{border-bottom:none}
+
+/* バージョン一覧 */
+#sec-workforce .wf-version-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+#sec-workforce .wf-version-card{background:var(--bg2);border-radius:var(--r);padding:11px 13px;border-left:3px solid var(--border2)}
+#sec-workforce .wf-version-card.is-current{border-left-color:#5dbd7e}
+#sec-workforce .wf-version-card.cmp-from{border-left-color:#af52de;background:rgba(175,82,222,0.10)}
+#sec-workforce .wf-version-card.cmp-to{border-left-color:#f0a060;background:rgba(240,160,96,0.10)}
+#sec-workforce .wf-version-card h4{font-size:13px;font-weight:700;margin-bottom:3px;display:flex;justify-content:space-between;align-items:center}
+#sec-workforce .wf-version-card .v-date{font-size:9px;color:var(--text3);margin-bottom:5px}
+#sec-workforce .wf-version-card .v-memo{font-size:11px;color:var(--text2);margin-bottom:6px;min-height:30px;line-height:1.4}
+#sec-workforce .wf-version-card .v-stats{font-size:10px;color:var(--text3);border-top:1px solid var(--border);padding-top:5px;margin-bottom:6px}
+#sec-workforce .wf-version-card .v-stats span{margin-right:8px}
+#sec-workforce .wf-version-card .v-actions{display:flex;gap:4px;flex-wrap:wrap}
+#sec-workforce .wf-version-card .v-actions button{padding:3px 8px;border:1px solid var(--border2);border-radius:3px;background:var(--bg);cursor:pointer;font-size:9px;font-weight:600;color:var(--text);font-family:inherit}
+#sec-workforce .wf-version-card .v-actions button:hover{background:var(--bg3)}
+#sec-workforce .wf-version-card .v-actions button.primary{background:var(--text);color:var(--bg);border-color:var(--text)}
+#sec-workforce .wf-version-card .v-actions button.danger{color:#e87070;border-color:#e87070}
+#sec-workforce .wf-version-card .v-current-tag{background:#5dbd7e;color:#fff;font-size:9px;padding:1px 6px;border-radius:3px;font-weight:600}
+
+/* 差分テーブル */
+#sec-workforce .wf-diff-tbl{width:100%;border-collapse:collapse;font-size:11px;background:var(--bg2);border-radius:var(--r);overflow:hidden;margin-bottom:10px}
+#sec-workforce .wf-diff-tbl th{background:var(--text);color:var(--bg);padding:6px 8px;text-align:left;font-size:10px}
+#sec-workforce .wf-diff-tbl td{padding:5px 8px;border-bottom:1px solid var(--border)}
+#sec-workforce .wf-diff-add{background:rgba(93,189,126,0.12);color:#5dbd7e}
+#sec-workforce .wf-diff-remove{background:rgba(232,112,112,0.12);color:#e87070}
+#sec-workforce .wf-diff-change{background:rgba(240,160,96,0.10)}
+#sec-workforce .wf-diff-old{color:#e87070;text-decoration:line-through}
+#sec-workforce .wf-diff-new{color:#5dbd7e;font-weight:600}
+#sec-workforce .wf-diff-arrow{color:var(--text3);margin:0 6px}
+
+/* モーダル */
+#sec-workforce .wf-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:200;align-items:center;justify-content:center}
+#sec-workforce .wf-modal-bg.show{display:flex}
+#sec-workforce .wf-modal{background:var(--bg);padding:22px;border-radius:var(--rl);width:90%;max-width:460px;max-height:90vh;overflow-y:auto;border:1px solid var(--border)}
+#sec-workforce .wf-modal h3{margin-bottom:14px;font-size:14px}
+#sec-workforce .wf-modal label{display:block;font-size:11px;margin-bottom:4px;color:var(--text3)}
+#sec-workforce .wf-modal input{width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;margin-bottom:10px;font-size:12px;background:var(--bg);color:var(--text);font-family:inherit}
+#sec-workforce .wf-modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
 </style>
 </head>
 <body>
@@ -416,6 +592,7 @@ input.cells-edit-input {
         <button class="tab" onclick="sw('pl-cf',this)">📈 月次財務</button>
         <button class="tab" onclick="sw('import',this)">🔗 MF連携</button>
         <button class="tab" onclick="sw('sim',this)">🔮 シミュレーション</button>
+        <button class="tab" onclick="sw('workforce',this)">⚙️ 工数管理</button>
         <button class="tab" onclick="sw('report',this)">📋 月次レポート</button>
         <button class="tab" onclick="sw('pdf',this)">📄 役員PDF</button>
       </div>
@@ -1160,6 +1337,165 @@ input.cells-edit-input {
   </div>
 
 </div>
+<!-- ──────────────────────────────────────
+     工数管理（メンバー × 事業 × 役割 配分シミュレーター）
+────────────────────────────────────── -->
+<div class="sec" id="sec-workforce">
+  <!-- 現在バージョン + 操作 -->
+  <div class="wf-toolbar">
+    <div>
+      <span class="wf-current-label">現在のバージョン:</span>
+      <span class="wf-current-name" id="wf-current-version-name">— 未保存 —</span>
+      <span class="wf-unsaved-badge" id="wf-unsaved-badge" style="display:none">未保存の変更</span>
+      <span class="wf-current-badge" id="wf-current-badge" style="display:none">現在採用中</span>
+    </div>
+    <button class="btn btn-g" onclick="WF.saveAsNew()" style="font-size:11px;padding:5px 12px">💾 新規保存</button>
+    <button class="btn" onclick="WF.overwriteCurrent()" id="wf-overwrite-btn" style="font-size:11px;padding:5px 12px">📝 上書き保存</button>
+    <button class="btn" onclick="WF.setCurrentVersion()" id="wf-set-current-btn" style="font-size:11px;padding:5px 12px" title="このバージョンをチーム共通の現行版にする">⭐ 採用中にする</button>
+    <button class="btn" onclick="WF.switchSubtab('versions')" style="font-size:11px;padding:5px 12px;margin-left:auto">📚 履歴を見る</button>
+  </div>
+
+  <!-- KPIバー -->
+  <div class="metrics" style="grid-template-columns:repeat(5,minmax(0,1fr));margin-bottom:1rem">
+    <div class="mc"><div class="mc-l">総人件費</div><div class="mc-v" id="wf-kpi-cost">—</div><div class="mc-s" id="wf-kpi-member-count"></div></div>
+    <div class="mc"><div class="mc-l">総売上（設定）</div><div class="mc-v" id="wf-kpi-target-rev">—</div></div>
+    <div class="mc"><div class="mc-l">実現売上</div><div class="mc-v" id="wf-kpi-rev">—</div><div class="mc-s" id="wf-kpi-rev-sub"></div></div>
+    <div class="mc" title="実現売上 ÷ 総人件費"><div class="mc-l">生産性倍率</div><div class="mc-v" id="wf-kpi-ratio">—</div><div class="mc-s">目標 3.0倍以上</div></div>
+    <div class="mc"><div class="mc-l">想定営業利益</div><div class="mc-v" id="wf-kpi-profit">—</div><div class="mc-s">PL基準</div></div>
+  </div>
+
+  <!-- サブタブ -->
+  <div class="pa-toggle" style="margin-bottom:1rem">
+    <button class="pa-btn active" onclick="WF.switchSubtab('main',this)">📋 PL + グリッド</button>
+    <button class="pa-btn" onclick="WF.switchSubtab('versions',this)">📚 履歴</button>
+    <button class="pa-btn" onclick="WF.switchSubtab('fulfill',this)">🎯 充足度</button>
+    <button class="pa-btn" onclick="WF.switchSubtab('settings',this)">⚙ 設定</button>
+  </div>
+
+  <!-- ① メイン: PL + グリッド -->
+  <div class="wf-panel" id="wf-panel-main">
+    <div class="card">
+      <div class="ct">事業別 PL（プログラム別売上 → 原価 → 人件費 → 販管費 → 営業利益）</div>
+      <div style="overflow-x:auto"><table class="wf-pl-table" id="wf-pl-table"></table></div>
+    </div>
+
+    <div class="card">
+      <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>👥 メンバー工数配分</span>
+        <button class="btn btn-g" onclick="WF.openAddModal()" style="font-size:10px;padding:3px 10px;margin-left:auto">＋ メンバー追加</button>
+        <button class="btn" onclick="WF.resetToInitial()" style="font-size:10px;padding:3px 10px">初期値に戻す</button>
+        <button class="btn" onclick="WF.resetAllAbility()" style="font-size:10px;padding:3px 10px">能力係数を全部1に</button>
+      </div>
+      <div class="wf-legend">
+        <span>役割色:</span>
+        <span class="wf-legend-item"><span class="wf-swatch" style="background:#fff5f5"></span>営業</span>
+        <span class="wf-legend-item"><span class="wf-swatch" style="background:#f0f8ff"></span>納品</span>
+        <span class="wf-legend-item"><span class="wf-swatch" style="background:#f0fff4"></span>CS</span>
+        <span class="wf-legend-item"><span class="wf-swatch" style="background:#fff8f0"></span>企画</span>
+        <span style="margin-left:8px">単位：人月</span>
+      </div>
+      <div class="wf-grid-wrap"><table class="wf-grid" id="wf-grid-table"></table></div>
+    </div>
+  </div>
+
+  <!-- ② バージョン履歴 -->
+  <div class="wf-panel" id="wf-panel-versions" style="display:none">
+    <div class="card">
+      <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>📚 バージョン履歴</span>
+        <span id="wf-version-count" style="font-size:10px;color:var(--text3);margin-left:auto"></span>
+      </div>
+      <div id="wf-compare-bar" style="display:none;background:rgba(175,82,222,0.10);padding:8px 12px;border-radius:6px;margin-bottom:8px;font-size:11px">
+        <strong>📊 比較モード：</strong>
+        <span id="wf-compare-from-name" style="color:#af52de;font-weight:600">A</span>
+        <span style="margin:0 8px">⇄</span>
+        <span id="wf-compare-to-name" style="color:#ff9500;font-weight:600">B</span>
+        <button class="btn btn-p" onclick="WF.showDiff()" style="margin-left:8px;font-size:10px;padding:3px 10px">差分を表示</button>
+        <button class="btn" onclick="WF.clearCompare()" style="margin-left:4px;font-size:10px;padding:3px 10px">クリア</button>
+      </div>
+      <div id="wf-diff-result"></div>
+      <div class="wf-version-list" id="wf-version-list"></div>
+    </div>
+  </div>
+
+  <!-- ③ 充足度ダッシュボード -->
+  <div class="wf-panel" id="wf-panel-fulfill" style="display:none">
+    <div class="card">
+      <div class="ct">役割充足ダッシュボード</div>
+      <div class="wf-ful-summary" id="wf-ful-summary"></div>
+    </div>
+    <div class="card">
+      <div class="ct">事業 × 役割 ヒートマップ</div>
+      <div style="overflow-x:auto">
+        <table class="wf-config-tbl">
+          <thead><tr><th>事業＼役割</th><th><span class="wf-rb wf-r-営業">営業</span></th><th><span class="wf-rb wf-r-納品">納品</span></th><th><span class="wf-rb wf-r-CS">CS</span></th><th><span class="wf-rb wf-r-企画">企画</span></th></tr></thead>
+          <tbody id="wf-heatmap-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ct">必要月工数設定</div>
+      <div style="overflow-x:auto">
+        <table class="wf-config-tbl">
+          <thead><tr><th>事業</th><th>営業</th><th>納品</th><th>CS</th><th>企画</th><th>合計</th></tr></thead>
+          <tbody id="wf-fte-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ 設定 -->
+  <div class="wf-panel" id="wf-panel-settings" style="display:none">
+    <div class="card">
+      <div class="ct">役割ウェイトマトリクス（事業内の売上配分）</div>
+      <div style="overflow-x:auto">
+        <table class="wf-config-tbl">
+          <thead><tr><th>事業</th><th>営業</th><th>納品</th><th>CS</th><th>企画</th><th>合計</th></tr></thead>
+          <tbody id="wf-weight-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ct">本部費用（販管費）— 4事業に均等按分（各25%）</div>
+      <div style="overflow-x:auto">
+        <table class="wf-config-tbl">
+          <thead><tr><th>項目</th><th>金額（円）</th><th></th></tr></thead>
+          <tbody id="wf-sga-body"></tbody>
+        </table>
+      </div>
+      <button class="btn btn-g" style="margin-top:8px;font-size:11px;padding:4px 12px" onclick="WF.addSGA()">＋ 販管費項目を追加</button>
+    </div>
+  </div>
+
+  <!-- メンバー追加モーダル -->
+  <div class="wf-modal-bg" id="wf-add-modal">
+    <div class="wf-modal">
+      <h3 style="margin-bottom:14px">メンバーを追加</h3>
+      <label>名前</label><input type="text" id="wf-new-name" placeholder="例: 山田太郎">
+      <label>役職（任意）</label><input type="text" id="wf-new-role" placeholder="例: 営業マネージャー">
+      <label>人件費（円・年額）</label><input type="number" id="wf-new-cost" value="3600000" step="100000">
+      <label>能力係数（0.5〜3.0、デフォルト1.0）</label><input type="number" id="wf-new-ability" value="1.0" step="0.1" min="0.1" max="5.0">
+      <div class="wf-modal-actions">
+        <button class="btn" onclick="WF.closeAddModal()">キャンセル</button>
+        <button class="btn btn-p" onclick="WF.addMember()">追加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- バージョン保存モーダル -->
+  <div class="wf-modal-bg" id="wf-save-modal">
+    <div class="wf-modal">
+      <h3 id="wf-save-modal-title" style="margin-bottom:14px">新しいバージョンとして保存</h3>
+      <label>バージョン名（必須）</label><input type="text" id="wf-version-name" placeholder="例: 2026年4月度配置 / Q2見直し版">
+      <label>メモ・変更点（任意）</label><textarea id="wf-version-memo" placeholder="例: 三木さんの研修営業を増加、佐藤を新規追加" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:6px;margin-bottom:12px;font-size:13px;font-family:inherit;min-height:80px;resize:vertical;background:var(--bg);color:var(--text)"></textarea>
+      <div class="wf-modal-actions">
+        <button class="btn" onclick="WF.closeSaveModal()">キャンセル</button>
+        <button class="btn btn-p" onclick="WF.confirmSaveVersion()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ──────────────────────────────────────
      月次レポート
 ────────────────────────────────────── -->
@@ -10111,7 +10447,7 @@ window.addEventListener('load', async () => {
       const yBtns = document.querySelectorAll('.year-toggle .yt');
       if (yBtns[yIdx]) setYear(savedYear, yBtns[yIdx]);
     }
-    const tabOrder = ['weekly','pl-cf','import','sim','report','pdf'];
+    const tabOrder = ['weekly','pl-cf','import','sim','workforce','report','pdf'];
     const savedTab = localStorage.getItem('neo_active_tab');
     const tIdx = tabOrder.indexOf(savedTab);
     if (tIdx > 0) { // 0='weekly' はデフォルトなのでスキップ
