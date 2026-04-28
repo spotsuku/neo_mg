@@ -647,36 +647,6 @@ input.cells-edit-input {
     </div>
   </div>
 
-  <!-- 月次入力フォーム -->
-  <div class="card">
-    <div class="ct">月次データ手動入力（CSVがない場合）</div>
-    <div class="fg">
-      <div class="fl"><label>対象月（YYMM）</label><input type="text" id="mi-month" placeholder="例: 2604"></div>
-      <div class="fl"><label>区分</label><select id="mi-type"><option value="budget">予算</option><option value="actual">実績</option></select></div>
-      <div class="fl"><label>記入者</label><input type="text" id="mi-author" placeholder="例: 三木智弘"></div>
-    </div>
-    <div class="section-lbl">PL（千円）</div>
-    <div class="fg">
-      <div class="fl"><label>売上合計</label><input type="number" id="mi-rev" placeholder="0"></div>
-      <div class="fl"><label>売上原価</label><input type="number" id="mi-cogs" placeholder="0"></div>
-      <div class="fl"><label>人件費（社保込）</label><input type="number" id="mi-labor" placeholder="0"></div>
-      <div class="fl"><label>業務委託費</label><input type="number" id="mi-outsource" placeholder="0"></div>
-      <div class="fl"><label>広告販促費</label><input type="number" id="mi-adv" placeholder="0"></div>
-      <div class="fl"><label>外注費</label><input type="number" id="mi-gaichu" placeholder="0"></div>
-      <div class="fl"><label>その他販管費</label><input type="number" id="mi-other" placeholder="0"></div>
-    </div>
-    <div class="section-lbl">CF（千円）</div>
-    <div class="fg">
-      <div class="fl"><label>月初現金残高</label><input type="number" id="mi-cf-open" placeholder="0"></div>
-      <div class="fl"><label>売上入金</label><input type="number" id="mi-cf-in" placeholder="0"></div>
-      <div class="fl"><label>月末現金残高</label><input type="number" id="mi-cf-close" placeholder="0"></div>
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-p" onclick="saveManual()">💾 保存する</button>
-      <span class="save-ok" id="manual-save-ok">✓ 保存しました</span>
-    </div>
-  </div>
-
   <!-- BS 月次表示（読み取り専用、MF連携から自動反映） -->
   <div id="view-bs" style="display:none">
     <div class="card" style="margin-bottom:1rem">
@@ -6859,44 +6829,6 @@ async function loadImportedList() {
 
   window.ilSetTab = (tab) => renderTab(tab);
   renderTab('pl');
-}
-
-// ───────────────────────────────────────────
-//  MANUAL SAVE
-// ───────────────────────────────────────────
-async function saveManual() {
-  const month = document.getElementById('mi-month').value;
-  const kind = document.getElementById('mi-type').value;
-  if (!month) { alert('対象月を入力してください'); return; }
-
-  const yr = getYearKey(month);
-  const d = DB[yr];
-  const idx = d.months.indexOf(month);
-  if (idx === -1) { alert(`月 ${month} はデータセットにありません`); return; }
-
-  const target = kind === 'actual' ? d.pl.actual : d.pl.budget;
-  const get = id => { const v = document.getElementById(id).value; return v !== '' ? Number(v) : undefined; };
-
-  if (get('mi-rev') !== undefined) target.rev[idx] = get('mi-rev');
-  if (get('mi-labor') !== undefined) target.labor[idx] = get('mi-labor');
-  if (get('mi-outsource') !== undefined) target.outsource[idx] = get('mi-outsource');
-  if (get('mi-adv') !== undefined) target.adv[idx] = get('mi-adv');
-  if (get('mi-gaichu') !== undefined) { if (!target.gaichu) target.gaichu=[]; target.gaichu[idx] = get('mi-gaichu'); }
-  if (get('mi-other') !== undefined) target.other[idx] = get('mi-other');
-
-  if (kind === 'actual') {
-    if (get('mi-cf-open') !== undefined) d.cf.actual.open[idx] = get('mi-cf-open');
-    if (get('mi-cf-in') !== undefined) d.cf.actual.cfIn[idx] = get('mi-cf-in');
-    if (get('mi-cf-close') !== undefined) d.cf.actual.cfClose[idx] = get('mi-cf-close');
-  }
-
-  await saveDB();
-  const ok = document.getElementById('manual-save-ok');
-  ok.style.display = 'inline';
-  setTimeout(() => ok.style.display = 'none', 2500);
-  updateWeeklyKPIs();
-  renderPLCF();
-  loadImportedList();
 }
 
 // ───────────────────────────────────────────
