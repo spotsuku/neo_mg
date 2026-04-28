@@ -383,6 +383,11 @@ input.cells-edit-input {
 
 /* wf-panel の表示制御は inline style で切り替え (switchSubtab が style.display を直接操作) */
 
+/* 工数管理: number入力からネイティブの上下スピナーを除去 (スプレッドシート風) */
+#sec-workforce input[type="number"]::-webkit-outer-spin-button,
+#sec-workforce input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
+#sec-workforce input[type="number"]{ -moz-appearance:textfield; appearance:textfield }
+
 /* 役割バッジ */
 #sec-workforce .wf-rb{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600;color:#fff}
 #sec-workforce .wf-r-営業{background:#D13020}
@@ -12523,6 +12528,37 @@ document.addEventListener('DOMContentLoaded', function() {
   function totalCostsAll(){ return BIZ.reduce((s,b) => s + bizCostTotal(b), 0); }
   function totalOperatingProfit(){ return BIZ.reduce((s,b) => s + bizOperatingProfit(b), 0); }
 
+  // ─── 自動保存 (localStorage) ───
+  // 編集のたびに即座に localStorage に保存する。リロード後は自動復元される。
+  // 名前付きバージョン (workforce_versions) は別軸で「明示的に保存したスナップショット」として管理。
+  const DRAFT_KEY = 'neo_workforce_draft_v1';
+  let _draftSaveTimer = null;
+  function saveDraftLocal(){
+    if (_draftSaveTimer) clearTimeout(_draftSaveTimer);
+    _draftSaveTimer = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          snapshot: takeSnapshot(),
+          currentVersionId: state.currentVersionId,
+          savedAt: new Date().toISOString(),
+        }));
+      } catch(e){ console.warn('[WF] saveDraftLocal failed:', e.message); }
+    }, 200);
+  }
+  function loadDraftLocal(){
+    try {
+      const s = localStorage.getItem(DRAFT_KEY);
+      if (!s) return null;
+      return JSON.parse(s);
+    } catch(e){
+      console.warn('[WF] loadDraftLocal failed:', e.message);
+      return null;
+    }
+  }
+  function clearDraftLocal(){
+    try { localStorage.removeItem(DRAFT_KEY); } catch(e){}
+  }
+
   // ─── スナップショット ───
   function takeSnapshot(){
     return {
@@ -12574,8 +12610,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function renderPL(){
     const tbl = $('wf-pl-table');
-    if (!tbl){ console.warn('[WF] renderPL: #wf-pl-table not found'); return; }
-    console.log('[WF] renderPL', { members: state.members.length });
+    if (!tbl) return;
     const fmtCol = (n) => fmtJPY(n);
     let h = '<thead><tr><th style="min-width:230px">項目</th>';
     BIZ.forEach(b => h += `<th style="min-width:120px">${b}</th>`);
@@ -12739,8 +12774,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function renderGrid(){
     const tbl = $('wf-grid-table');
-    if (!tbl){ console.warn('[WF] renderGrid: #wf-grid-table not found'); return; }
-    console.log('[WF] renderGrid', { members: state.members.length });
+    if (!tbl) return;
     let thead = '<thead>';
     thead += '<tr class="lv1">';
     thead += '<th class="wf-col-name" rowspan="2">メンバー</th>';
@@ -12969,6 +13003,8 @@ document.addEventListener('DOMContentLoaded', function() {
     renderSGABody();
     updateDirtyFlag();
     renderVersionUI();
+    // 編集が反映されるたびに localStorage に下書きを保存（リロード耐性）
+    saveDraftLocal();
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -13480,23 +13516,29 @@ document.addEventListener('DOMContentLoaded', function() {
     totalCost, totalTargetRevenue, totalRealizedRev, totalCostsAll, totalOperatingProfit,
     renderAll,
     init: async function(){
-      console.log('[WF] init called, initialized=', state.initialized);
       // 確実に PL+グリッド panel を表示
       const main = $('wf-panel-main');
       if (main) main.style.display = 'block';
       if (state.initialized) { renderAll(); return; }
       state.initialized = true;
-      // Supabase からバージョン一覧を読み込み、is_current があれば自動復元
+      // 1. localStorage の下書きが最優先（リロード時の編集状態を維持）
+      const draft = loadDraftLocal();
+      // 2. Supabase からバージョン一覧を取得（履歴UI用）
       const ok = await loadVersionsFromSupabase();
-      if (ok){
+      if (draft && draft.snapshot){
+        restoreSnapshot(draft.snapshot);
+        if (draft.currentVersionId) state.currentVersionId = draft.currentVersionId;
+        console.log('[WF] init: restored from localStorage draft');
+      } else if (ok){
+        // 下書きが無ければ採用中バージョンを復元
         const cur = state.versions.find(v => v.is_current);
         if (cur){
           restoreSnapshot(cur.snapshot);
           state.currentVersionId = cur.version_id;
+          console.log('[WF] init: restored from is_current version');
         }
       }
       renderAll();
-      console.log('[WF] init done, members=', state.members.length, 'wf-panel-main display=', main ? main.style.display : 'NULL');
     },
     toggleSection: function(key){ state.collapsed[key] = !state.collapsed[key]; renderPL(); },
     switchSubtab: function(name, btn){
