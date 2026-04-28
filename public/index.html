@@ -3864,10 +3864,21 @@ function renderCFView(d) {
     const aOutTot = allOutKeys.reduce((t,k) => t + sumArr(cfGet('actual',k)), 0);
     const bOutTot = allOutKeys.reduce((t,k) => t + sumArr(cfGet('budget',k)), 0);
     // 月末残高（最新非ゼロ）
-    const closeArr = cfGet('actual','cfClose');
+    // 優先順位: BS現預金（最新月の真値） > ストア cfClose（旧データ）
+    // → KPIカードの月末現金残高がBSと一致するようにする
     let lastClose = 0;
-    for (let i = closeArr.length-1; i >= 0; i--) {
-      if (Number(closeArr[i]) > 0) { lastClose = Number(closeArr[i]); break; }
+    const _bsActual = DB?.[currentYear]?.bs?.actual || {};
+    const _bsIdxs = Object.keys(_bsActual).map(Number).filter(n => !isNaN(n));
+    if (_bsIdxs.length) {
+      const lastBsIdx = Math.max(..._bsIdxs);
+      const bsCash = Number(_bsActual[lastBsIdx]?.cash);
+      if (Number.isFinite(bsCash) && bsCash !== 0) lastClose = bsCash;
+    }
+    if (lastClose === 0) {
+      const closeArr = cfGet('actual','cfClose');
+      for (let i = closeArr.length-1; i >= 0; i--) {
+        if (Number(closeArr[i]) > 0) { lastClose = Number(closeArr[i]); break; }
+      }
     }
     // 純CF = 入金 - 出金（融資は除外してシンプルな差引）
     const netCF = aInTot - aOutTot;
