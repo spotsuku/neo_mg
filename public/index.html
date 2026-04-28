@@ -9481,6 +9481,7 @@ async function saveDB() {
         months: d.months,
         pl: d.pl,
         cf: d.cf,
+        bs: d.bs || null,                        // BSデータ (MF連携で書き込まれる)
         reportData: d.reportData || {}
       })
     });
@@ -9488,7 +9489,7 @@ async function saveDB() {
       const txt = await res.text();
       throw new Error(`[${yr}] ${res.status}: ${txt.slice(0,80)}`);
     }
-    console.log(`[saveDB] ─ ${yr} ─ Supabase  rev[0]=${d.pl?.budget?.rev?.[0]}`);
+    console.log(`[saveDB] ─ ${yr} ─ Supabase  rev[0]=${d.pl?.budget?.rev?.[0]} bs.actualKeys=${d.bs?.actual ? Object.keys(d.bs.actual).length : 0}`);
   }
 }
 
@@ -9533,10 +9534,25 @@ async function loadDB() {
               months: r.data[yr].months,
               pl: r.data[yr].pl,
               cf: r.data[yr].cf,
+              bs: r.data[yr].bs || null,        // ← Supabase に bs 列がある場合はそれを使う
               reportData: r.data[yr].reportData || {}
             };
+            // bs が Supabase 側に無い (旧スキーマ等) 場合、localStorage から復旧する
+            // これで「Supabase 同期後に bs が消える」既存バグを救済
+            if (!DB[yr].bs || !DB[yr].bs.actual) {
+              try {
+                const raw = localStorage.getItem(`neo_db_${yr}`);
+                if (raw) {
+                  const cached = JSON.parse(raw);
+                  if (cached?.bs?.actual && Object.keys(cached.bs.actual).length > 0) {
+                    DB[yr].bs = cached.bs;
+                    console.log(`[loadDB] ${yr} bs restored from localStorage (Supabase row missing bs)`);
+                  }
+                }
+              } catch(e) { console.warn(`[loadDB] bs localStorage merge failed for ${yr}:`, e); }
+            }
             sanitizeYear(DB[yr], yr);
-            console.log(`[loadDB] ${yr} loaded from Supabase, rev budget[0]:`, DB[yr].pl.budget.rev?.[0]);
+            console.log(`[loadDB] ${yr} loaded from Supabase, rev budget[0]:`, DB[yr].pl.budget.rev?.[0], 'bs.actualKeys:', DB[yr].bs?.actual ? Object.keys(DB[yr].bs.actual).length : 0);
           } else {
             // JSONB にこの年度のデータが無い → localStorage から復旧
             const raw = localStorage.getItem(`neo_db_${yr}`);
