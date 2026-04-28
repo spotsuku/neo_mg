@@ -55,8 +55,13 @@ export default async function handler(req, res) {
         let { error } = await supabase
           .from('fiscal_data')
           .upsert(payload, { onConflict: 'fiscal_year' });
-        if (error && /column.*"?bs"?.*does not exist/i.test(error.message || '')) {
-          console.warn('[save_fiscal] bs column missing, retrying without bs');
+        // Supabase / PostgREST が返す「列が無い」系のエラーを幅広く検出:
+        //   - "column \"bs\" of relation \"fiscal_data\" does not exist"  (Postgres)
+        //   - "Could not find the 'bs' column of 'fiscal_data' in the schema cache"  (PostgREST schema cache)
+        const isBsColumnMissing = error && /['"]?bs['"]?/i.test(error.message || '')
+          && /(does not exist|could not find|schema cache)/i.test(error.message || '');
+        if (isBsColumnMissing) {
+          console.warn('[save_fiscal] bs column missing, retrying without bs:', error.message);
           delete payload.bs;
           const retry = await supabase
             .from('fiscal_data')
