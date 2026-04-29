@@ -712,16 +712,37 @@ input.cells-edit-input {
       <div id="exec-alert-list"></div>
     </div>
 
-    <!-- 経費管理ダッシュボード連携 (Phase 4) -->
+    <!-- 経費管理ダッシュボード（neobudget-liard）リアルタイム連携 (Phase 6) -->
+    <details style="margin-top:8px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg2)" open>
+      <summary style="cursor:pointer;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text2);list-style:none;display:flex;align-items:center;gap:6px">
+        <span>🔗 経費管理ダッシュボード — プログラム別予算消化（リアルタイム）</span>
+        <span id="bd-sync-status" style="font-size:10px;font-weight:400;color:var(--text3);margin-left:auto">読込中...</span>
+      </summary>
+      <div style="padding:8px 12px 12px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
+          現場メンバーが管理する <a href="https://neobudget-liard.vercel.app/" target="_blank" style="color:#5aabf0">経費管理ダッシュボード</a> から、
+          プログラム別の予算/見積/実績を 30秒間隔で自動取得します。
+          <span style="color:var(--tc-amber)">※ 環境変数 NEOBUDGET_SUPABASE_URL / NEOBUDGET_SERVICE_ROLE_KEY を Vercel に設定してください。</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+          <button class="btn btn-p" onclick="BUDGET_DASH.refresh()" style="font-size:10px;padding:4px 10px">🔁 今すぐ更新</button>
+          <label style="font-size:10px;color:var(--text3);display:flex;align-items:center;gap:4px"><input type="checkbox" id="bd-poll-toggle" checked onchange="BUDGET_DASH.togglePoll(this.checked)"> 30秒ごと自動更新</label>
+          <span id="bd-last-updated" style="font-size:10px;color:var(--text3);margin-left:auto"></span>
+        </div>
+        <div id="bd-summary"></div>
+      </div>
+    </details>
+
+    <!-- 経費管理ダッシュボード連携 (Phase 4: 汎用JSON取込) -->
     <details style="margin-top:8px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg2)">
       <summary style="cursor:pointer;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text2);list-style:none;display:flex;align-items:center;gap:6px">
-        <span>🔗 外部経費管理ダッシュボード連携</span>
+        <span>🔗 汎用 JSON 経費連携（オプション）</span>
         <span id="expense-sync-status" style="font-size:10px;font-weight:400;color:var(--text3);margin-left:auto">未設定</span>
       </summary>
       <div style="padding:8px 12px 12px">
         <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
-          別ダッシュボードの経費データ JSON エンドポイントを設定すると、リアルタイム使用額・残予算が表示されます。
-          JSON形式は <code>{ items: [{ category, amount }, ...], total: N, budget: N }</code> を想定。
+          neobudget 以外の任意の JSON エンドポイントを使う場合に使用。
+          形式: <code>{ items: [{ category, amount }, ...], total: N, budget: N }</code>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
           <input type="url" id="expense-api-url" placeholder="https://example.com/api/expenses" style="flex:1;min-width:240px;padding:5px 8px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;font-family:inherit">
@@ -14813,6 +14834,150 @@ document.addEventListener('DOMContentLoaded', function() {
     },
   };
   window.EXPENSE = EXPENSE;
+})();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         BUDGET_DASH (Phase 6): neobudget-liard.vercel.app 連携
+         /api/budget-dash 経由でクロスプロジェクト Supabase からプログラム別予算を取得
+         ════════════════════════════════════════════════════════════════ -->
+    <script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const state = { pollTimer: null, lastData: null, fy: null };
+
+  function fmtJPY(n){
+    const a = Math.abs(Number(n)||0);
+    if (a >= 100000000) return '¥' + (a/100000000).toFixed(2) + '億';
+    if (a >= 10000000)  return '¥' + (a/1000000).toFixed(1) + 'M';
+    if (a >= 10000)     return '¥' + (a/10000).toFixed(0) + '万';
+    return '¥' + Math.round(a).toLocaleString();
+  }
+  function escapeHtml(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function setStatus(msg, color){
+    const el = $('bd-sync-status');
+    if (el){ el.textContent = msg; el.style.color = color || 'var(--text3)'; }
+  }
+
+  function renderSummary(data){
+    const el = $('bd-summary');
+    if (!el) return;
+    if (!data || !Array.isArray(data.programs) || !data.programs.length){
+      el.innerHTML = '<div style="padding:10px;text-align:center;color:var(--text3);font-size:11px">データがありません</div>';
+      return;
+    }
+    const usagePct = data.totalBudget > 0 ? Math.round(data.totalActual / data.totalBudget * 100) : 0;
+    const cls = usagePct <= 80 ? 'good' : usagePct <= 100 ? 'warn' : 'bad';
+    const cn  = cls === 'good' ? 'var(--tc-green)' : cls === 'warn' ? 'var(--tc-amber)' : 'var(--tc-red)';
+
+    let h = `<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:6px 10px;background:var(--bg);border-radius:6px">
+      <div><span style="color:var(--text3);font-size:10px">予算合計</span> <strong>${fmtJPY(data.totalBudget)}</strong></div>
+      <div><span style="color:var(--text3);font-size:10px">実績</span> <strong style="color:var(--tc-amber)">${fmtJPY(data.totalActual)}</strong></div>
+      <div><span style="color:var(--text3);font-size:10px">見積</span> <strong style="color:var(--tc-blue)">${fmtJPY(data.totalEstimate)}</strong></div>
+      <div><span style="color:var(--text3);font-size:10px">収入</span> <strong style="color:var(--tc-green)">${fmtJPY(data.totalRevenue)}</strong></div>
+      <div style="flex:1;min-width:120px;max-width:240px;height:6px;background:var(--bg2);border-radius:3px"><div style="height:100%;width:${Math.min(100,usagePct)}%;background:${cn};border-radius:3px"></div></div>
+      <div><strong style="color:${cn}">${usagePct}%</strong></div>
+    </div>`;
+
+    h += `<div style="overflow-x:auto"><table class="dt" style="font-size:10px;min-width:560px">
+      <thead><tr>
+        <th class="l">プログラム</th>
+        <th>予算</th>
+        <th>見積</th>
+        <th>実績</th>
+        <th>消化率</th>
+        <th>収入</th>
+        <th>粗利</th>
+      </tr></thead><tbody>`;
+    data.programs.forEach(p => {
+      const pct = p.budget > 0 ? Math.round(p.actual / p.budget * 100) : 0;
+      const pColor = pct <= 80 ? 'var(--tc-green)' : pct <= 100 ? 'var(--tc-amber)' : 'var(--tc-red)';
+      const gross = (p.revenue || 0) - p.actual;
+      const gColor = gross >= 0 ? 'var(--tc-green)' : 'var(--tc-red)';
+      h += `<tr>
+        <td class="l">${escapeHtml(p.name)}</td>
+        <td>${fmtJPY(p.budget)}</td>
+        <td style="color:var(--tc-blue)">${fmtJPY(p.estimate)}</td>
+        <td style="color:var(--tc-amber)">${fmtJPY(p.actual)}</td>
+        <td style="color:${pColor};font-weight:700">${pct}%</td>
+        <td style="color:var(--tc-green)">${p.revenue ? fmtJPY(p.revenue) : '—'}</td>
+        <td style="color:${gColor};font-weight:700">${gross >= 0 ? '+' : ''}${fmtJPY(gross)}</td>
+      </tr>`;
+    });
+    h += `</tbody></table></div>`;
+
+    if (data.updatedAt){
+      const upEl = $('bd-last-updated');
+      if (upEl) upEl.textContent = '最終更新 ' + new Date(data.updatedAt).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    }
+    el.innerHTML = h;
+  }
+
+  async function fetchAndRender(silent){
+    const fy = (typeof window.currentYear === 'string') ? parseInt(window.currentYear) : new Date().getFullYear();
+    state.fy = fy;
+    if (!silent) setStatus('取得中...', 'var(--tc-blue)');
+    try {
+      const r = await fetch('/api/budget-dash?year=' + fy, { cache: 'no-store' });
+      if (!r.ok){
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || ('HTTP ' + r.status));
+      }
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error || 'fetch failed');
+      state.lastData = data;
+      renderSummary(data);
+      setStatus('✓ 同期済 ' + new Date().toLocaleTimeString('ja-JP'), 'var(--tc-green)');
+    } catch (e){
+      console.warn('[BUDGET_DASH]', e.message);
+      setStatus('⚠ ' + e.message, 'var(--tc-red)');
+      const el = $('bd-summary');
+      if (el && !state.lastData){
+        el.innerHTML = `<div style="padding:14px;text-align:center;color:var(--text3);font-size:11px">
+          ${escapeHtml(e.message)}<br>
+          <span style="color:var(--tc-amber)">Vercel 環境変数 NEOBUDGET_SUPABASE_URL と NEOBUDGET_SERVICE_ROLE_KEY を設定してください</span>
+        </div>`;
+      }
+    }
+  }
+
+  function startPoll(){
+    stopPoll();
+    state.pollTimer = setInterval(() => fetchAndRender(true), 30000);
+  }
+  function stopPoll(){
+    if (state.pollTimer){ clearInterval(state.pollTimer); state.pollTimer = null; }
+  }
+
+  const BUDGET_DASH = {
+    refresh: () => fetchAndRender(false),
+    togglePoll: function(enabled){ if (enabled) startPoll(); else stopPoll(); },
+    state,
+  };
+  window.BUDGET_DASH = BUDGET_DASH;
+
+  // ページロード後に初回取得 + 自動ポーリング開始 (サマリータブ表示時)
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      fetchAndRender(true);
+      const cb = $('bd-poll-toggle');
+      if (cb && cb.checked) startPoll();
+    }, 1500);
+  });
+
+  // 年度切替時に再取得
+  const origSetYear = window.setYear;
+  if (origSetYear){
+    window.setYear = function(y, el){
+      origSetYear(y, el);
+      setTimeout(() => fetchAndRender(true), 200);
+    };
+  }
 })();
     </script>
 </body>
