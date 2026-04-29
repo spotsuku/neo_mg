@@ -2246,6 +2246,68 @@ function renderExecDashboard(ctx){
       ? `バーンレート ${(ctx.burnrate||0).toLocaleString()}千円/月 ・ 残高 ${ctx.lastCash ? (ctx.lastCash/10).toLocaleString()+'千円' : '—'}`
       : 'バーンレート未確定';
   }
+
+  // ④ アラートエリア (Phase 2.2)
+  const alerts = [];
+  // 残キャッシュ警告
+  if (rwy != null && rwy < 6){
+    const sev = rwy < 3 ? '危険' : '警戒';
+    alerts.push({ tag: 'cash', tagLabel: 'キャッシュ', text: `残キャッシュ${rwy.toFixed(1)}ヶ月 (${sev}水準) — バーンレート見直しを検討` });
+  }
+  // 販管費の予算超過
+  if (ctx.hasActual && ctx.budOpex > 0){
+    const ratio = ctx.cumOpex / ctx.budOpex;
+    if (ratio > 1.1){
+      const overK = Math.round((ctx.cumOpex - ctx.budOpex) / 10); // 千円
+      alerts.push({ tag: 'budget', tagLabel: '予算', text: `累積販管費が予算比 ${Math.round(ratio*100)}% (+${overK.toLocaleString()}千円超過)` });
+    }
+  }
+  // PL 個別科目の累計超過 (>20%)
+  if (ctx.hasActual && typeof DB !== 'undefined' && typeof currentYear !== 'undefined'){
+    const d = DB[currentYear];
+    const labels = { labor:'人件費', outsource:'業務委託', adv:'広告販促', gaichu:'外注費', other:'その他' };
+    for (const k of Object.keys(labels)){
+      const aArr = d?.pl?.actual?.[k] || [];
+      const bArr = d?.pl?.budget?.[k] || [];
+      const aSum = aArr.slice(0, ctx.lastActualIdx + 1).reduce((s,v) => s + (Number(v)||0), 0);
+      const bSum = bArr.slice(0, ctx.lastActualIdx + 1).reduce((s,v) => s + (Number(v)||0), 0);
+      if (bSum > 0 && aSum / bSum > 1.2){
+        const pct = Math.round(aSum / bSum * 100);
+        const overK = Math.round((aSum - bSum) / 10);
+        alerts.push({ tag: 'budget', tagLabel: labels[k], text: `${labels[k]}が予算比 ${pct}% (+${overK.toLocaleString()}千円超過)` });
+      }
+    }
+  }
+  // 工数管理: 充足度80%未満の役割
+  if (window.WF && window.WF.state && Array.isArray(window.WF.BIZ) && Array.isArray(window.WF.ROLES)){
+    const lowList = [];
+    window.WF.BIZ.forEach(biz => window.WF.ROLES.forEach(role => {
+      const f = window.WF.bizRoleFulfillment(biz, role);
+      if (f != null && f < 0.8) lowList.push({ biz, role, pct: Math.round(f*100) });
+    }));
+    if (lowList.length > 0){
+      const top = lowList.sort((a,b) => a.pct - b.pct).slice(0, 3);
+      const text = top.map(x => `${x.biz}×${x.role}(${x.pct}%)`).join(' / ');
+      alerts.push({ tag: 'staff', tagLabel: '人員', text: `充足度80%未満が${lowList.length}件: ${text}${lowList.length > 3 ? ' ほか' : ''}` });
+    }
+  }
+
+  // 描画
+  const alertEl = $('exec-alerts');
+  const listEl  = $('exec-alert-list');
+  if (alertEl && listEl){
+    if (alerts.length === 0){
+      alertEl.style.display = '';
+      alertEl.classList.add('empty');
+      listEl.innerHTML = '<div class="exec-alert" style="color:var(--tc-green);font-weight:600">✓ 経営指標に重大な逸脱はありません</div>';
+    } else {
+      alertEl.style.display = '';
+      alertEl.classList.remove('empty');
+      listEl.innerHTML = alerts.map(a =>
+        `<div class="exec-alert"><span class="exec-alert-tag ${a.tag}">${a.tagLabel}</span><span>${a.text}</span></div>`
+      ).join('');
+    }
+  }
 }
 
 function riskClass(months) {
