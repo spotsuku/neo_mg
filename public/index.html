@@ -498,7 +498,10 @@ input.cells-edit-input {
 #sec-workforce .wf-ful-cell.low .pct{color:#e87070}
 #sec-workforce .wf-ful-cell.over .pct{color:#f0a060}
 #sec-workforce .wf-col-del{background:var(--bg)!important}
-#sec-workforce .wf-delete-btn{background:none;border:none;color:#e87070;cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px}
+#sec-workforce .wf-delete-btn,
+#sec-payroll .wf-delete-btn{background:none;border:none;color:#e87070;cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px}
+#sec-workforce .wf-delete-btn:hover,
+#sec-payroll .wf-delete-btn:hover{background:rgba(232,112,112,0.15)}
 
 /* 設定・ヒートマップ表 */
 #sec-workforce .wf-config-tbl{width:100%;border-collapse:collapse;font-size:11px;min-width:600px}
@@ -1549,7 +1552,8 @@ input.cells-edit-input {
     <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span>💴 メンバー × 月次人件費（千円）</span>
       <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none">編集すると工数管理の年額に自動反映 / リロード後も状態維持</span>
-      <button class="btn" onclick="PAYROLL.copyAcrossMonths()" style="font-size:10px;padding:3px 10px;margin-left:auto" title="行内の全月セルを左端の値で埋める">→ 全月にコピー</button>
+      <button class="btn btn-g" onclick="PAYROLL.openAddMemberModal()" style="font-size:10px;padding:3px 10px;margin-left:auto" title="新しいメンバーを追加 (工数管理と連動)">＋ メンバー追加</button>
+      <button class="btn" onclick="PAYROLL.copyAcrossMonths()" style="font-size:10px;padding:3px 10px" title="行内の全月セルを左端の値で埋める">→ 全月にコピー</button>
       <button class="btn" onclick="PAYROLL.resetToWorkforce()" style="font-size:10px;padding:3px 10px" title="工数管理の年額を12等分してリセット">⟲ 年額から12等分</button>
     </div>
     <div style="overflow-x:auto"><table class="wf-pl-table" id="payroll-table" style="min-width:1200px"></table></div>
@@ -13950,6 +13954,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     let html = '<thead><tr>';
+    html += '<th style="background:var(--text);color:var(--bg);min-width:32px"></th>'; // 削除列
     html += '<th class="member-name-head" style="background:var(--text);color:var(--bg)">メンバー</th>';
     html += '<th style="background:var(--text);color:var(--bg);min-width:46px" title="行内全月に4月の値を反映">→</th>';
     MONTH_LABELS_FY.forEach((lbl, i) => {
@@ -13962,6 +13967,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const monthly = m.costMonthly || Array(12).fill(0);
       const yearTotal = monthly.reduce((s,v) => s + (Number(v)||0), 0);
       html += '<tr>';
+      html += '<td><button class="wf-delete-btn" onclick="PAYROLL.deleteMember(' + idx + ')" title="このメンバーを削除（工数管理にも反映）">🗑</button></td>';
       html += '<td class="member-name">' + escapeHtml(m.name || '') +
         (m.role ? '<br><span style="font-size:9px;color:var(--text3);font-weight:400">' + escapeHtml(m.role) + '</span>' : '') + '</td>';
       html += '<td><button class="btn" onclick="PAYROLL.copyRow(' + idx + ')" style="font-size:9px;padding:2px 6px" title="この行の4月の値を全月にコピー">→</button></td>';
@@ -13978,6 +13984,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const totals = monthTotalsK();
     const grand = totals.reduce((s,v) => s+v, 0);
     html += '<tr class="pay-month-total">';
+    html += '<td></td>';
     html += '<td class="member-name">月別合計（千円）</td>';
     html += '<td></td>';
     totals.forEach(t => { html += '<td>' + fmtK(t) + '</td>'; });
@@ -14083,6 +14090,25 @@ document.addEventListener('DOMContentLoaded', function() {
         m.costMonthly = Array(12).fill(v);
         recalcCostFromMonthly(m);
       });
+      renderAll();
+      if (window.WF && window.WF.renderAll) window.WF.renderAll();
+    },
+    // メンバー追加: 工数管理の既存モーダル (#wf-add-modal) を再利用
+    // → 追加された新メンバーには WF.addMember 内で costMonthly[12] が初期化される
+    openAddMemberModal: function(){
+      if (window.WF && typeof window.WF.openAddModal === 'function'){
+        window.WF.openAddModal();
+      } else {
+        alert('工数管理モジュールが読み込まれていません');
+      }
+    },
+    // メンバー削除: 工数管理と人件費の両方から消える (state.members を共有しているため)
+    deleteMember: function(idx){
+      const members = getMembers();
+      const m = members[idx];
+      if (!m) return;
+      if (!confirm(`「${m.name}」を削除しますか？人件費・工数管理の両方から消えます。`)) return;
+      members.splice(idx, 1);
       renderAll();
       if (window.WF && window.WF.renderAll) window.WF.renderAll();
     },
