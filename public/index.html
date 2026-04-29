@@ -658,6 +658,7 @@ input.cells-edit-input {
         <button class="tab" onclick="sw('sim',this)">🔮 シミュレーション</button>
         <button class="tab" onclick="sw('workforce',this)">⚙️ 工数管理</button>
         <button class="tab" onclick="sw('payroll',this)">💴 人件費</button>
+        <button class="tab" onclick="sw('expense',this)">💳 経費申請</button>
         <button class="tab" onclick="sw('report',this)">📋 月次レポート</button>
         <button class="tab" onclick="sw('pdf',this)">📄 役員PDF</button>
       </div>
@@ -1680,6 +1681,48 @@ input.cells-edit-input {
 </div>
 
 <!-- ──────────────────────────────────────
+     経費申請ワークフロー (Phase 5)
+────────────────────────────────────── -->
+<div class="sec" id="sec-expense">
+  <div class="metrics" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:1rem">
+    <div class="mc"><div class="mc-l">承認待ち</div><div class="mc-v" id="exp-kpi-pending">—</div><div class="mc-s" id="exp-kpi-pending-amt"></div></div>
+    <div class="mc"><div class="mc-l">承認済 (今月)</div><div class="mc-v" id="exp-kpi-approved">—</div><div class="mc-s" id="exp-kpi-approved-amt"></div></div>
+    <div class="mc"><div class="mc-l">却下 (今月)</div><div class="mc-v" id="exp-kpi-rejected">—</div></div>
+    <div class="mc"><div class="mc-l">合計件数</div><div class="mc-v" id="exp-kpi-total">—</div></div>
+  </div>
+
+  <div class="card">
+    <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span>💳 新規申請</span>
+      <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none">承認後は別途 PL 実績へ反映してください (本機能は申請ログのみ)</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:8px">
+      <div><label style="font-size:10px;color:var(--text3)">申請者名 (必須)</label><input type="text" id="exp-form-name" class="wf-config-input" style="width:100%;text-align:left" placeholder="山田太郎"></div>
+      <div><label style="font-size:10px;color:var(--text3)">メール (任意)</label><input type="email" id="exp-form-email" class="wf-config-input" style="width:100%;text-align:left" placeholder="user@example.com"></div>
+      <div><label style="font-size:10px;color:var(--text3)">カテゴリ (必須)</label><input type="text" id="exp-form-category" class="wf-config-input" style="width:100%;text-align:left" placeholder="販管費/旅費交通費 etc."></div>
+      <div><label style="font-size:10px;color:var(--text3)">金額 (円・必須)</label><input type="number" id="exp-form-amount" class="wf-config-input" style="width:100%" placeholder="10000" step="1000"></div>
+      <div style="grid-column:1/-1"><label style="font-size:10px;color:var(--text3)">用途・備考</label><textarea id="exp-form-desc" class="wf-config-input" style="width:100%;text-align:left;min-height:50px;resize:vertical;font-family:inherit" placeholder="例: 福岡-東京 出張 営業先訪問"></textarea></div>
+      <div style="grid-column:1/-1"><label style="font-size:10px;color:var(--text3)">領収書 URL (任意)</label><input type="url" id="exp-form-receipt" class="wf-config-input" style="width:100%;text-align:left" placeholder="https://..."></div>
+    </div>
+    <div style="display:flex;gap:8px"><button class="btn btn-p" onclick="EXPENSE.submitRequest()" style="font-size:11px;padding:5px 14px">📩 申請送信</button><button class="btn" onclick="EXPENSE.clearForm()" style="font-size:11px;padding:5px 14px">クリア</button></div>
+  </div>
+
+  <div class="card">
+    <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span>📋 申請一覧</span>
+      <div class="pa-toggle" style="margin:0 0 0 auto">
+        <button class="pa-btn active" id="exp-filter-pending"  onclick="EXPENSE.setFilter('pending',this)" style="font-size:10px;padding:3px 8px">承認待ち</button>
+        <button class="pa-btn" id="exp-filter-approved"        onclick="EXPENSE.setFilter('approved',this)" style="font-size:10px;padding:3px 8px">承認済</button>
+        <button class="pa-btn" id="exp-filter-rejected"        onclick="EXPENSE.setFilter('rejected',this)" style="font-size:10px;padding:3px 8px">却下</button>
+        <button class="pa-btn" id="exp-filter-all"             onclick="EXPENSE.setFilter('all',this)" style="font-size:10px;padding:3px 8px">全て</button>
+      </div>
+      <button class="btn" onclick="EXPENSE.refresh()" style="font-size:10px;padding:3px 10px">🔁 更新</button>
+    </div>
+    <div style="overflow-x:auto"><table class="wf-config-tbl" id="exp-list-table" style="min-width:900px"></table></div>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────
      月次レポート
 ────────────────────────────────────── -->
 <div class="sec" id="sec-report">
@@ -1962,6 +2005,7 @@ function sw(id, el) {
   if (id === 'weekly') updateWeeklyKPIs();
   if (id === 'workforce' && window.WF) setTimeout(() => window.WF.init(), 30);
   if (id === 'payroll' && window.PAYROLL) setTimeout(() => window.PAYROLL.init(), 30);
+  if (id === 'expense' && window.EXPENSE) setTimeout(() => window.EXPENSE.init(), 30);
 }
 
 function setYear(y, el) {
@@ -10768,7 +10812,7 @@ window.addEventListener('load', async () => {
       const yBtns = document.querySelectorAll('.year-toggle .yt');
       if (yBtns[yIdx]) setYear(savedYear, yBtns[yIdx]);
     }
-    const tabOrder = ['weekly','pl-cf','import','sim','workforce','payroll','report','pdf'];
+    const tabOrder = ['weekly','pl-cf','import','sim','workforce','payroll','expense','report','pdf'];
     const savedTab = localStorage.getItem('neo_active_tab');
     const tIdx = tabOrder.indexOf(savedTab);
     if (tIdx > 0) { // 0='weekly' はデフォルトなのでスキップ
@@ -14572,6 +14616,183 @@ document.addEventListener('DOMContentLoaded', function() {
   window.ExpenseSync = ExpenseSync;
 
   document.addEventListener('DOMContentLoaded', loadInitial);
+})();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         EXPENSE (Phase 5): 経費申請ワークフロー
+         /api/db ベース。Supabase Realtime は今後拡張可。
+         ════════════════════════════════════════════════════════════════ -->
+    <script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const state = { initialized: false, requests: [], filter: 'pending' };
+
+  function escapeHtml(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function fmtJPY(n){
+    const a = Math.abs(Number(n)||0);
+    if (a >= 10000) return (n>=0?'¥':'¥▲') + (a/10000).toFixed(0) + '万';
+    return (n>=0?'¥':'¥▲') + Math.round(a).toLocaleString();
+  }
+  async function api(action, body, isPost){
+    const url = '/api/db?action=' + action + (body && !isPost ? '&' + new URLSearchParams(body).toString() : '');
+    const opts = isPost ? { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) } : {};
+    const r = await fetch(url, opts);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }
+
+  async function loadAll(){
+    try {
+      const r = await api('load_expense_requests');
+      state.requests = (r.ok && r.data) ? r.data : [];
+    } catch (e){
+      console.warn('[EXPENSE] load failed:', e.message);
+      state.requests = [];
+    }
+    renderKPI();
+    renderList();
+  }
+
+  function thisMonthRequests(predicate){
+    const now = new Date();
+    const ym = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+    return state.requests.filter(r => predicate(r) && (r.created_at || '').slice(0,7) === ym);
+  }
+
+  function renderKPI(){
+    const pending = state.requests.filter(r => r.status === 'pending');
+    const apprMonth = thisMonthRequests(r => r.status === 'approved');
+    const rejMonth  = thisMonthRequests(r => r.status === 'rejected');
+    const sumAmt = (arr) => arr.reduce((s,x) => s + (Number(x.amount)||0), 0);
+    if ($('exp-kpi-pending'))     $('exp-kpi-pending').textContent = pending.length + '件';
+    if ($('exp-kpi-pending-amt')) $('exp-kpi-pending-amt').textContent = fmtJPY(sumAmt(pending));
+    if ($('exp-kpi-approved'))    $('exp-kpi-approved').textContent = apprMonth.length + '件';
+    if ($('exp-kpi-approved-amt'))$('exp-kpi-approved-amt').textContent = fmtJPY(sumAmt(apprMonth));
+    if ($('exp-kpi-rejected'))    $('exp-kpi-rejected').textContent = rejMonth.length + '件';
+    if ($('exp-kpi-total'))       $('exp-kpi-total').textContent = state.requests.length + '件';
+  }
+
+  function statusBadge(status){
+    if (status === 'approved') return '<span class="badge bg">承認済</span>';
+    if (status === 'rejected') return '<span class="badge br">却下</span>';
+    return '<span class="badge ba">承認待ち</span>';
+  }
+
+  function renderList(){
+    const tbl = $('exp-list-table');
+    if (!tbl) return;
+    const filtered = state.filter === 'all' ? state.requests : state.requests.filter(r => r.status === state.filter);
+    if (!filtered.length){
+      tbl.innerHTML = '<tr><td style="padding:20px;text-align:center;color:var(--text3);font-size:11px">該当する申請はありません</td></tr>';
+      return;
+    }
+    let html = '<thead><tr>'
+      + '<th style="width:90px">日付</th>'
+      + '<th style="width:110px">申請者</th>'
+      + '<th>カテゴリ</th>'
+      + '<th style="width:90px">金額</th>'
+      + '<th>用途</th>'
+      + '<th style="width:80px">状態</th>'
+      + '<th style="width:160px">操作</th>'
+      + '</tr></thead><tbody>';
+    filtered.forEach(r => {
+      const date = (r.created_at || '').slice(5,10).replace('-','/');
+      const isPending = r.status === 'pending';
+      const receipt = r.receipt_url ? `<a href="${escapeHtml(r.receipt_url)}" target="_blank" style="color:#5aabf0">📎</a>` : '';
+      html += `<tr>
+        <td style="font-size:10px">${date}</td>
+        <td>${escapeHtml(r.requester_name)}${r.requester_email ? `<br><span style="font-size:9px;color:var(--text3)">${escapeHtml(r.requester_email)}</span>` : ''}</td>
+        <td>${escapeHtml(r.category)}</td>
+        <td class="num" style="text-align:right">${fmtJPY(r.amount)}</td>
+        <td style="font-size:10px;color:var(--text2)">${escapeHtml(r.description || '')} ${receipt}</td>
+        <td>${statusBadge(r.status)}${r.approved_by ? `<br><span style="font-size:9px;color:var(--text3)">by ${escapeHtml(r.approved_by)}</span>` : ''}</td>
+        <td>
+          ${isPending ? `<button class="btn btn-g" onclick="EXPENSE.decide(${r.request_id},'approved')" style="font-size:9px;padding:2px 8px">✓ 承認</button>
+                        <button class="btn" onclick="EXPENSE.decide(${r.request_id},'rejected')" style="font-size:9px;padding:2px 8px;color:var(--tc-red);border-color:var(--tc-red)">✗ 却下</button>` : ''}
+          <button class="btn" onclick="EXPENSE.deleteRequest(${r.request_id})" style="font-size:9px;padding:2px 6px;color:var(--tc-red);border-color:var(--tc-red)">🗑</button>
+        </td>
+      </tr>`;
+    });
+    html += '</tbody>';
+    tbl.innerHTML = html;
+  }
+
+  const EXPENSE = {
+    state,
+    init: async function(){
+      state.initialized = true;
+      await loadAll();
+    },
+    refresh: () => loadAll(),
+    setFilter: function(f, btn){
+      state.filter = f;
+      ['pending','approved','rejected','all'].forEach(k => {
+        const b = $('exp-filter-' + k);
+        if (b) b.classList.toggle('active', k === f);
+      });
+      renderList();
+    },
+    clearForm: function(){
+      ['exp-form-name','exp-form-email','exp-form-category','exp-form-amount','exp-form-desc','exp-form-receipt'].forEach(id => {
+        const el = $(id); if (el) el.value = '';
+      });
+    },
+    submitRequest: async function(){
+      const name  = ($('exp-form-name').value || '').trim();
+      const email = ($('exp-form-email').value || '').trim();
+      const category = ($('exp-form-category').value || '').trim();
+      const amount = parseInt($('exp-form-amount').value) || 0;
+      const description = ($('exp-form-desc').value || '').trim();
+      const receipt_url = ($('exp-form-receipt').value || '').trim();
+      if (!name || !category || amount <= 0){
+        alert('申請者名・カテゴリ・金額(>0) は必須です'); return;
+      }
+      try {
+        await api('create_expense_request', {
+          request_id: Date.now(), requester_name: name, requester_email: email || null,
+          category, amount, description, receipt_url: receipt_url || null,
+        }, true);
+        EXPENSE.clearForm();
+        await loadAll();
+        alert('✓ 申請を送信しました');
+      } catch (e){
+        alert('送信に失敗しました: ' + e.message);
+      }
+    },
+    decide: async function(request_id, decision){
+      let approved_by = '';
+      let reject_reason = null;
+      if (decision === 'approved'){
+        approved_by = prompt('承認者名を入力してください', '') || '';
+        if (!approved_by.trim()) return;
+      } else {
+        approved_by = prompt('却下者名を入力してください', '') || '';
+        if (!approved_by.trim()) return;
+        reject_reason = prompt('却下理由 (任意)', '') || '';
+      }
+      try {
+        await api('decide_expense_request', { request_id, decision, approved_by: approved_by.trim(), reject_reason }, true);
+        await loadAll();
+      } catch (e){
+        alert('処理に失敗しました: ' + e.message);
+      }
+    },
+    deleteRequest: async function(request_id){
+      if (!confirm('この申請を削除しますか？')) return;
+      try {
+        await api('delete_expense_request', { request_id }, true);
+        await loadAll();
+      } catch (e){
+        alert('削除に失敗しました: ' + e.message);
+      }
+    },
+  };
+  window.EXPENSE = EXPENSE;
 })();
     </script>
 </body>
