@@ -13739,19 +13739,123 @@ document.addEventListener('DOMContentLoaded', function() {
     return (window.WF && window.WF.state && window.WF.state.members) || [];
   }
 
-  // ── KPI / 表 / グラフのレンダリングは commit ② で実装 ──
+  // ─── ユーティリティ ───
+  function escapeHtml(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function fmtK(n){ return Math.round(Number(n)||0).toLocaleString(); }
+
+  // ─── 月別合計（千円） ───
+  function monthTotalsK(){
+    const totals = Array(12).fill(0);
+    getMembers().forEach(m => {
+      (m.costMonthly || []).forEach((v, i) => { totals[i] += Number(v) || 0; });
+    });
+    return totals;
+  }
+
+  function renderKPI(){
+    const members = getMembers();
+    const totals = monthTotalsK();
+    const yearTotalK = totals.reduce((s,v) => s+v, 0);
+    const avgK       = Math.round(yearTotalK / 12);
+    const activeCount = members.filter(m => (m.costMonthly||[]).some(v => Number(v) > 0)).length;
+    let peakIdx = 0;
+    totals.forEach((v, i) => { if (v > totals[peakIdx]) peakIdx = i; });
+    const peakK = totals[peakIdx] || 0;
+
+    if ($('payroll-kpi-total')) $('payroll-kpi-total').textContent = fmtK(yearTotalK) + '千円';
+    if ($('payroll-kpi-total-sub')) $('payroll-kpi-total-sub').innerHTML =
+      '<span style="color:var(--text3)">年額(円換算): ¥' + fmtK(yearTotalK*1000) + '</span>';
+    if ($('payroll-kpi-avg')) $('payroll-kpi-avg').textContent = fmtK(avgK) + '千円';
+    if ($('payroll-kpi-count')) $('payroll-kpi-count').textContent = activeCount + '名';
+    if ($('payroll-kpi-peak')){
+      $('payroll-kpi-peak').textContent = MONTH_LABELS_FY[peakIdx];
+      if ($('payroll-kpi-peak-sub')) $('payroll-kpi-peak-sub').textContent = fmtK(peakK) + '千円';
+    }
+  }
+
   function renderTable(){
     const tbl = $('payroll-table');
     if (!tbl) return;
-    tbl.innerHTML = '<tr><td style="padding:18px;text-align:center;color:var(--text3);font-size:11px">表は次コミット (renderPayroll) で実装</td></tr>';
+    const members = getMembers();
+    if (!members.length){
+      tbl.innerHTML = '<tr><td style="padding:18px;text-align:center;color:var(--text3);font-size:11px">メンバーがいません。工数管理タブから追加してください。</td></tr>';
+      return;
+    }
+    let html = '<thead><tr>';
+    html += '<th class="member-name-head" style="background:var(--text);color:var(--bg)">メンバー</th>';
+    html += '<th style="background:var(--text);color:var(--bg);min-width:46px" title="行内全月に4月の値を反映">→</th>';
+    MONTH_LABELS_FY.forEach((lbl, i) => {
+      html += '<th class="month-col" style="background:var(--text);color:var(--bg)">' + lbl + '</th>';
+    });
+    html += '<th style="background:var(--bg2);color:var(--text);position:sticky;right:0;z-index:1;min-width:74px">年合計</th>';
+    html += '</tr></thead><tbody>';
+
+    members.forEach((m, idx) => {
+      const monthly = m.costMonthly || Array(12).fill(0);
+      const yearTotal = monthly.reduce((s,v) => s + (Number(v)||0), 0);
+      html += '<tr>';
+      html += '<td class="member-name">' + escapeHtml(m.name || '') +
+        (m.role ? '<br><span style="font-size:9px;color:var(--text3);font-weight:400">' + escapeHtml(m.role) + '</span>' : '') + '</td>';
+      html += '<td><button class="btn" onclick="PAYROLL.copyRow(' + idx + ')" style="font-size:9px;padding:2px 6px" title="この行の4月の値を全月にコピー">→</button></td>';
+      monthly.forEach((v, mi) => {
+        const cls = (Number(v) > 0) ? 'pay-cell has-val' : 'pay-cell zero';
+        html += '<td><input type="number" class="' + cls + '" value="' + (Number(v)||0) +
+          '" min="0" step="1" onchange="PAYROLL.updateCell(' + idx + ',' + mi + ',this.value)"></td>';
+      });
+      html += '<td class="pay-row-total">' + fmtK(yearTotal) + '</td>';
+      html += '</tr>';
+    });
+
+    // 月別合計フッター
+    const totals = monthTotalsK();
+    const grand = totals.reduce((s,v) => s+v, 0);
+    html += '<tr class="pay-month-total">';
+    html += '<td class="member-name">月別合計（千円）</td>';
+    html += '<td></td>';
+    totals.forEach(t => { html += '<td>' + fmtK(t) + '</td>'; });
+    html += '<td class="pay-row-total">' + fmtK(grand) + '</td>';
+    html += '</tr></tbody>';
+
+    tbl.innerHTML = html;
   }
-  function renderKPI(){
-    if ($('payroll-kpi-total')) $('payroll-kpi-total').textContent = '—';
-    if ($('payroll-kpi-avg'))   $('payroll-kpi-avg').textContent = '—';
-    if ($('payroll-kpi-count')) $('payroll-kpi-count').textContent = String(getMembers().length) + '名';
-    if ($('payroll-kpi-peak'))  $('payroll-kpi-peak').textContent = '—';
+
+  function renderTrendChart(){
+    const canvas = $('payroll-trend-chart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    const totals = monthTotalsK();
+    const ctx = canvas.getContext('2d');
+    const tc = getComputedStyle(document.body).getPropertyValue('--text3').trim() || '#888';
+    if (state.chart){ state.chart.destroy(); state.chart = null; }
+    state.chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: MONTH_LABELS_FY,
+        datasets: [{
+          label: '人件費合計（千円）',
+          data: totals,
+          backgroundColor: 'rgba(90,171,240,0.55)',
+          borderColor: '#5aabf0',
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => fmtK(ctx.parsed.y) + ' 千円' } },
+        },
+        scales: {
+          x: { ticks: { color: tc, font: { size: 10 } }, grid: { display: false } },
+          y: { ticks: { color: tc, font: { size: 9 }, callback: (v) => fmtK(v) }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        },
+      },
+    });
   }
-  function renderTrendChart(){ /* commit ② で実装 */ }
 
   function renderAll(){
     ensureCostMonthly(getMembers());
@@ -13778,9 +13882,46 @@ document.addEventListener('DOMContentLoaded', function() {
       state.initialized = true;
       renderAll();
     },
-    // commit ② で実装するハンドラのプレースホルダ
-    updateCell:        function(){},
-    copyAcrossMonths:  function(){ alert('「全月にコピー」は次コミットで実装します'); },
+    // セル編集 (千円) → costMonthly 更新 → 年額 cost を再計算 → WF と PAYROLL を再描画
+    // (WF.renderAll が localStorage への自動保存も担う)
+    updateCell: function(memberIdx, monthIdx, val){
+      const members = getMembers();
+      const m = members[memberIdx];
+      if (!m) return;
+      if (!Array.isArray(m.costMonthly) || m.costMonthly.length !== 12) ensureCostMonthly([m]);
+      m.costMonthly[monthIdx] = Math.max(0, parseInt(val) || 0);
+      recalcCostFromMonthly(m);
+      renderAll(); // PAYROLL 再描画
+      // 工数管理にも自動反映 (WF.renderAll は内部で saveDraftLocal を呼ぶので保存も完了)
+      if (window.WF && window.WF.renderAll) window.WF.renderAll();
+      if ($('payroll-sync-status')) $('payroll-sync-status').textContent = '✓ 自動保存済 ' + new Date().toLocaleTimeString('ja-JP');
+    },
+    // 行内ボタン: 4月の値を全月にコピー
+    copyRow: function(memberIdx){
+      const members = getMembers();
+      const m = members[memberIdx];
+      if (!m) return;
+      if (!Array.isArray(m.costMonthly) || m.costMonthly.length !== 12) ensureCostMonthly([m]);
+      const v = Number(m.costMonthly[0]) || 0;
+      if (!confirm(`「${m.name}」の4月の値（${fmtK(v)}千円）を全12ヶ月にコピーしますか？`)) return;
+      m.costMonthly = Array(12).fill(v);
+      recalcCostFromMonthly(m);
+      renderAll();
+      if (window.WF && window.WF.renderAll) window.WF.renderAll();
+    },
+    // ツールバーボタン: 全メンバーの4月の値を全月にコピー
+    copyAcrossMonths: function(){
+      if (!confirm('全メンバーの4月の値を全12ヶ月にコピーしますか？')) return;
+      const members = getMembers();
+      members.forEach(m => {
+        if (!Array.isArray(m.costMonthly) || m.costMonthly.length !== 12) ensureCostMonthly([m]);
+        const v = Number(m.costMonthly[0]) || 0;
+        m.costMonthly = Array(12).fill(v);
+        recalcCostFromMonthly(m);
+      });
+      renderAll();
+      if (window.WF && window.WF.renderAll) window.WF.renderAll();
+    },
     resetToWorkforce:  function(){
       if (!confirm('工数管理の年額(cost)を12等分して人件費表をリセットしますか？')) return;
       const members = getMembers();
