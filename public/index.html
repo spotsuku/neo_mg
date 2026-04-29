@@ -383,10 +383,25 @@ input.cells-edit-input {
 
 /* wf-panel の表示制御は inline style で切り替え (switchSubtab が style.display を直接操作) */
 
-/* 工数管理: number入力からネイティブの上下スピナーを除去 (スプレッドシート風) */
+/* 工数管理 / 人件費: number入力からネイティブの上下スピナーを除去 (スプレッドシート風) */
 #sec-workforce input[type="number"]::-webkit-outer-spin-button,
-#sec-workforce input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
-#sec-workforce input[type="number"]{ -moz-appearance:textfield; appearance:textfield }
+#sec-workforce input[type="number"]::-webkit-inner-spin-button,
+#sec-payroll input[type="number"]::-webkit-outer-spin-button,
+#sec-payroll input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
+#sec-workforce input[type="number"],
+#sec-payroll input[type="number"]{ -moz-appearance:textfield; appearance:textfield }
+
+/* 人件費タブ: スプレッドシート風セル */
+#sec-payroll .wf-pl-table th,#sec-payroll .wf-pl-table td{padding:4px 6px;font-size:10px}
+#sec-payroll .wf-pl-table th.month-col{min-width:62px;text-align:center}
+#sec-payroll .wf-pl-table td.member-name{position:sticky;left:0;background:var(--bg)!important;z-index:1;text-align:left;font-weight:600;min-width:140px;border-right:2px solid var(--text)}
+#sec-payroll .wf-pl-table thead th.member-name-head{position:sticky;left:0;z-index:2;border-right:2px solid var(--text)}
+#sec-payroll .pay-cell{width:58px;padding:3px 5px;border:1px solid transparent;border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:transparent;color:var(--text);font-family:inherit}
+#sec-payroll .pay-cell:focus{outline:2px solid #5aabf0;background:var(--bg)}
+#sec-payroll .pay-cell.has-val{background:rgba(232,244,255,0.18);font-weight:600}
+#sec-payroll .pay-cell.zero{color:var(--text3);opacity:.45}
+#sec-payroll .pay-row-total{position:sticky;right:0;background:var(--bg2)!important;font-weight:700;color:var(--text);min-width:70px}
+#sec-payroll .pay-month-total td{background:var(--bg2)!important;font-weight:700;border-top:2px solid var(--text)}
 
 /* 役割バッジ */
 #sec-workforce .wf-rb{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600;color:#fff}
@@ -597,6 +612,7 @@ input.cells-edit-input {
         <button class="tab" onclick="sw('import',this)">🔗 MF連携</button>
         <button class="tab" onclick="sw('sim',this)">🔮 シミュレーション</button>
         <button class="tab" onclick="sw('workforce',this)">⚙️ 工数管理</button>
+        <button class="tab" onclick="sw('payroll',this)">💴 人件費</button>
         <button class="tab" onclick="sw('report',this)">📋 月次レポート</button>
         <button class="tab" onclick="sw('pdf',this)">📄 役員PDF</button>
       </div>
@@ -1504,6 +1520,47 @@ input.cells-edit-input {
 </div>
 
 <!-- ──────────────────────────────────────
+     人件費（月次）— メンバー × 12ヶ月の編集表 (千円単位)
+     工数管理タブの cost (年額) はここから自動算出される
+────────────────────────────────────── -->
+<div class="sec" id="sec-payroll">
+  <!-- ツールバー: 年度切替に同期 / 採用中バージョンと連動 -->
+  <div class="wf-toolbar">
+    <div>
+      <span class="wf-current-label">人件費（月次・千円）</span>
+      <span class="wf-current-name" id="payroll-year-label" style="margin-left:6px"></span>
+      <span class="wf-unsaved-badge" id="payroll-unsaved-badge" style="display:none">未保存の変更</span>
+    </div>
+    <span style="font-size:10px;color:var(--text3);margin-left:auto" id="payroll-sync-status">— 自動保存 —</span>
+  </div>
+
+  <!-- KPI: 年度合計人件費 / 月平均 / メンバー数 / ピーク月 -->
+  <div class="metrics" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:1rem">
+    <div class="mc"><div class="mc-l">年度合計人件費</div><div class="mc-v" id="payroll-kpi-total">—</div><div class="mc-s" id="payroll-kpi-total-sub"></div></div>
+    <div class="mc"><div class="mc-l">月平均人件費</div><div class="mc-v" id="payroll-kpi-avg">—</div></div>
+    <div class="mc"><div class="mc-l">メンバー数</div><div class="mc-v" id="payroll-kpi-count">—</div><div class="mc-s">在籍 (cost > 0)</div></div>
+    <div class="mc"><div class="mc-l">ピーク月</div><div class="mc-v" id="payroll-kpi-peak">—</div><div class="mc-s" id="payroll-kpi-peak-sub"></div></div>
+  </div>
+
+  <!-- 月次表 -->
+  <div class="card">
+    <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span>💴 メンバー × 月次人件費（千円）</span>
+      <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none">編集すると工数管理の年額に自動反映 / リロード後も状態維持</span>
+      <button class="btn" onclick="PAYROLL.copyAcrossMonths()" style="font-size:10px;padding:3px 10px;margin-left:auto" title="行内の全月セルを左端の値で埋める">→ 全月にコピー</button>
+      <button class="btn" onclick="PAYROLL.resetToWorkforce()" style="font-size:10px;padding:3px 10px" title="工数管理の年額を12等分してリセット">⟲ 年額から12等分</button>
+    </div>
+    <div style="overflow-x:auto"><table class="wf-pl-table" id="payroll-table" style="min-width:1200px"></table></div>
+  </div>
+
+  <!-- 月別合計の推移グラフ -->
+  <div class="card">
+    <div class="ct">月別人件費合計の推移</div>
+    <div class="ch" style="height:180px"><canvas id="payroll-trend-chart"></canvas></div>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────
      月次レポート
 ────────────────────────────────────── -->
 <div class="sec" id="sec-report">
@@ -1785,6 +1842,7 @@ function sw(id, el) {
   if (id === 'report') renderReportTabs();
   if (id === 'weekly') updateWeeklyKPIs();
   if (id === 'workforce' && window.WF) setTimeout(() => window.WF.init(), 30);
+  if (id === 'payroll' && window.PAYROLL) setTimeout(() => window.PAYROLL.init(), 30);
 }
 
 function setYear(y, el) {
@@ -10455,7 +10513,7 @@ window.addEventListener('load', async () => {
       const yBtns = document.querySelectorAll('.year-toggle .yt');
       if (yBtns[yIdx]) setYear(savedYear, yBtns[yIdx]);
     }
-    const tabOrder = ['weekly','pl-cf','import','sim','workforce','report','pdf'];
+    const tabOrder = ['weekly','pl-cf','import','sim','workforce','payroll','report','pdf'];
     const savedTab = localStorage.getItem('neo_active_tab');
     const tIdx = tabOrder.indexOf(savedTab);
     if (tIdx > 0) { // 0='weekly' はデフォルトなのでスキップ
@@ -13640,6 +13698,102 @@ document.addEventListener('DOMContentLoaded', function() {
     const sm = $('wf-save-modal');
     if (sm) sm.addEventListener('click', e => { if (e.target.id === 'wf-save-modal') sm.classList.remove('show'); });
   });
+})();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         人件費 (Payroll) — メンバー × 月 の編集表 (千円)
+         WF.state.members を共有し、costMonthly[12] を介して工数管理に自動反映
+         ════════════════════════════════════════════════════════════════ -->
+    <script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const MONTH_LABELS_FY = ['4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月'];
+  const PAYROLL_DRAFT_KEY = 'neo_workforce_draft_v1'; // WF と同じ key (state は共有)
+
+  const state = { initialized: false, chart: null };
+
+  // costMonthly が無いメンバーには cost(年額・円) を 12等分して千円で初期化（後方互換）
+  function ensureCostMonthly(members){
+    if (!Array.isArray(members)) return;
+    members.forEach(m => {
+      if (!Array.isArray(m.costMonthly) || m.costMonthly.length !== 12){
+        const annualEn = Number(m.cost) || 0;
+        const monthlyKEn = Math.round(annualEn / 12 / 1000); // 円→千円
+        m.costMonthly = Array(12).fill(monthlyKEn);
+      } else {
+        // 数値化を保証
+        m.costMonthly = m.costMonthly.map(v => Math.max(0, Math.round(Number(v) || 0)));
+      }
+    });
+  }
+
+  // costMonthly から年額(円)を再計算してメンバーの cost を更新
+  function recalcCostFromMonthly(member){
+    if (!member || !Array.isArray(member.costMonthly)) return;
+    const monthlyTotalK = member.costMonthly.reduce((s,v) => s + (Number(v)||0), 0);
+    member.cost = monthlyTotalK * 1000; // 千円→円
+  }
+
+  function getMembers(){
+    return (window.WF && window.WF.state && window.WF.state.members) || [];
+  }
+
+  // ── KPI / 表 / グラフのレンダリングは commit ② で実装 ──
+  function renderTable(){
+    const tbl = $('payroll-table');
+    if (!tbl) return;
+    tbl.innerHTML = '<tr><td style="padding:18px;text-align:center;color:var(--text3);font-size:11px">表は次コミット (renderPayroll) で実装</td></tr>';
+  }
+  function renderKPI(){
+    if ($('payroll-kpi-total')) $('payroll-kpi-total').textContent = '—';
+    if ($('payroll-kpi-avg'))   $('payroll-kpi-avg').textContent = '—';
+    if ($('payroll-kpi-count')) $('payroll-kpi-count').textContent = String(getMembers().length) + '名';
+    if ($('payroll-kpi-peak'))  $('payroll-kpi-peak').textContent = '—';
+  }
+  function renderTrendChart(){ /* commit ② で実装 */ }
+
+  function renderAll(){
+    ensureCostMonthly(getMembers());
+    renderKPI();
+    renderTable();
+    renderTrendChart();
+  }
+
+  const PAYROLL = {
+    state,
+    ensureCostMonthly,
+    recalcCostFromMonthly,
+    getMembers,
+    renderAll,
+    init: async function(){
+      // 初回: WF が初期化されていなければ先に走らせて members を確保
+      if (window.WF && !window.WF.state.initialized){
+        await window.WF.init();
+      }
+      ensureCostMonthly(getMembers());
+      // 年度ラベル (既存 currentYear を参照)
+      const yr = (typeof window.currentYear === 'string') ? window.currentYear : '';
+      if ($('payroll-year-label')) $('payroll-year-label').textContent = yr ? (yr + '年度') : '';
+      state.initialized = true;
+      renderAll();
+    },
+    // commit ② で実装するハンドラのプレースホルダ
+    updateCell:        function(){},
+    copyAcrossMonths:  function(){ alert('「全月にコピー」は次コミットで実装します'); },
+    resetToWorkforce:  function(){
+      if (!confirm('工数管理の年額(cost)を12等分して人件費表をリセットしますか？')) return;
+      const members = getMembers();
+      members.forEach(m => {
+        const annualEn = Number(m.cost) || 0;
+        const monthlyKEn = Math.round(annualEn / 12 / 1000);
+        m.costMonthly = Array(12).fill(monthlyKEn);
+      });
+      renderAll();
+      if (window.WF && window.WF.renderAll) window.WF.renderAll();
+    },
+  };
+  window.PAYROLL = PAYROLL;
 })();
     </script>
 </body>
