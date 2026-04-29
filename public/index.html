@@ -705,11 +705,32 @@ input.cells-edit-input {
         </div>
       </div>
     </div>
-    <!-- アラートは commit ⑧ で実装 -->
+    <!-- アラート -->
     <div class="exec-alerts empty" id="exec-alerts" style="display:none">
       <div class="exec-alerts-head">⚠ アラート</div>
       <div id="exec-alert-list"></div>
     </div>
+
+    <!-- 経費管理ダッシュボード連携 (Phase 4) -->
+    <details style="margin-top:8px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg2)">
+      <summary style="cursor:pointer;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text2);list-style:none;display:flex;align-items:center;gap:6px">
+        <span>🔗 外部経費管理ダッシュボード連携</span>
+        <span id="expense-sync-status" style="font-size:10px;font-weight:400;color:var(--text3);margin-left:auto">未設定</span>
+      </summary>
+      <div style="padding:8px 12px 12px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
+          別ダッシュボードの経費データ JSON エンドポイントを設定すると、リアルタイム使用額・残予算が表示されます。
+          JSON形式は <code>{ items: [{ category, amount }, ...], total: N, budget: N }</code> を想定。
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+          <input type="url" id="expense-api-url" placeholder="https://example.com/api/expenses" style="flex:1;min-width:240px;padding:5px 8px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;font-family:inherit">
+          <button class="btn" onclick="ExpenseSync.saveUrl()" style="font-size:10px;padding:4px 10px">URL保存</button>
+          <button class="btn btn-p" onclick="ExpenseSync.fetchNow()" style="font-size:10px;padding:4px 10px">今すぐ取込</button>
+          <label style="font-size:10px;color:var(--text3);display:flex;align-items:center;gap:4px"><input type="checkbox" id="expense-poll-toggle" onchange="ExpenseSync.togglePoll(this.checked)"> 60秒ごと自動取込</label>
+        </div>
+        <div id="expense-summary" style="font-size:11px"></div>
+      </div>
+    </details>
   </div>
 
   <div class="metrics" style="grid-template-columns:repeat(6,minmax(0,1fr))">
@@ -14414,6 +14435,143 @@ document.addEventListener('DOMContentLoaded', function() {
     },
   };
   window.PAYROLL = PAYROLL;
+})();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         ExpenseSync (Phase 4): 外部経費管理ダッシュボードとの連携
+         URL を localStorage に保存、ポーリング/手動で JSON を取込
+         ════════════════════════════════════════════════════════════════ -->
+    <script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const URL_KEY  = 'neo_expense_api_url';
+  const POLL_KEY = 'neo_expense_poll_enabled';
+  let pollTimer = null;
+
+  function fmtJPY(n){
+    const a = Math.abs(Number(n)||0);
+    if (a >= 100000000) return (n>=0?'¥':'¥▲') + (a/100000000).toFixed(2) + '億';
+    if (a >= 10000000)  return (n>=0?'¥':'¥▲') + (a/1000000).toFixed(1) + 'M';
+    if (a >= 10000)     return (n>=0?'¥':'¥▲') + (a/10000).toFixed(0) + '万';
+    return (n>=0?'¥':'¥▲') + Math.round(a).toLocaleString();
+  }
+
+  function setStatus(msg, color){
+    const el = $('expense-sync-status');
+    if (el){
+      el.textContent = msg;
+      el.style.color = color || 'var(--text3)';
+    }
+  }
+
+  function renderSummary(payload){
+    const el = $('expense-summary');
+    if (!el) return;
+    if (!payload){
+      el.innerHTML = '<span style="color:var(--text3)">取込履歴なし</span>';
+      return;
+    }
+    const total = Number(payload.total) || 0;
+    const budget = Number(payload.budget) || 0;
+    const usagePct = budget > 0 ? Math.round(total/budget*100) : 0;
+    const cls = usagePct <= 80 ? 'good' : usagePct <= 100 ? 'warn' : 'bad';
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    let h = `<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+      <div><span style="color:var(--text3)">使用</span> <strong>${fmtJPY(total*1000)}</strong></div>
+      <div><span style="color:var(--text3)">予算</span> <strong>${fmtJPY(budget*1000)}</strong></div>
+      <div><span style="color:var(--text3)">残</span> <strong>${fmtJPY((budget-total)*1000)}</strong></div>
+      <div class="exec-card-bar" style="flex:1;min-width:120px;max-width:240px;height:6px;margin:0">
+        <div class="exec-card-bar-fill ${cls}" style="width:${Math.min(100,usagePct)}%"></div>
+      </div>
+      <div><strong class="${cls === 'good' ? '' : cls === 'warn' ? 'a' : 'r'}">${usagePct}%</strong></div>
+    </div>`;
+    if (items.length){
+      h += '<div style="font-size:10px;color:var(--text3);max-height:120px;overflow-y:auto;border-top:1px solid var(--border);padding-top:4px">';
+      items.slice(0, 8).forEach(it => {
+        h += `<div style="display:flex;justify-content:space-between;padding:2px 0">
+          <span>${escapeHtml(it.category||'(未分類)')}</span>
+          <span>${fmtJPY((it.amount||0)*1000)}</span>
+        </div>`;
+      });
+      if (items.length > 8) h += `<div style="text-align:center;color:var(--text3)">…他 ${items.length-8} 件</div>`;
+      h += '</div>';
+    }
+    el.innerHTML = h;
+  }
+
+  function escapeHtml(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  async function fetchAndRender(silent){
+    const url = (localStorage.getItem(URL_KEY) || '').trim();
+    if (!url){
+      if (!silent) alert('URL が未設定です');
+      setStatus('未設定');
+      return;
+    }
+    try {
+      setStatus('取込中…');
+      const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      // 期待 schema: { items: [{category, amount}], total, budget }
+      // 千円単位を想定 (ない場合はそのまま)
+      try { localStorage.setItem('neo_expense_last', JSON.stringify({ data, savedAt: new Date().toISOString() })); } catch(e){}
+      renderSummary(data);
+      setStatus('✓ ' + new Date().toLocaleTimeString('ja-JP'), 'var(--tc-green)');
+    } catch (e){
+      console.warn('[ExpenseSync] fetch failed:', e.message);
+      setStatus('⚠ ' + e.message, 'var(--tc-red)');
+      if (!silent) alert('取込に失敗しました: ' + e.message);
+    }
+  }
+
+  function loadInitial(){
+    const url = localStorage.getItem(URL_KEY) || '';
+    const urlEl = $('expense-api-url');
+    if (urlEl) urlEl.value = url;
+    const pollEnabled = localStorage.getItem(POLL_KEY) === '1';
+    const pollEl = $('expense-poll-toggle');
+    if (pollEl) pollEl.checked = pollEnabled;
+    // 直近の取込結果を表示 (オフライン時のフォールバック)
+    try {
+      const cached = JSON.parse(localStorage.getItem('neo_expense_last') || 'null');
+      if (cached && cached.data){
+        renderSummary(cached.data);
+        setStatus('キャッシュ ' + new Date(cached.savedAt).toLocaleTimeString('ja-JP'));
+      }
+    } catch(e){}
+    if (pollEnabled) startPoll();
+  }
+
+  function startPoll(){
+    stopPoll();
+    pollTimer = setInterval(() => fetchAndRender(true), 60000);
+    fetchAndRender(true);
+  }
+  function stopPoll(){
+    if (pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  const ExpenseSync = {
+    saveUrl: function(){
+      const url = ($('expense-api-url').value || '').trim();
+      try { localStorage.setItem(URL_KEY, url); } catch(e){}
+      setStatus(url ? 'URL保存済' : '未設定');
+    },
+    fetchNow: () => fetchAndRender(false),
+    togglePoll: function(enabled){
+      try { localStorage.setItem(POLL_KEY, enabled ? '1' : '0'); } catch(e){}
+      if (enabled) startPoll(); else stopPoll();
+    },
+  };
+  window.ExpenseSync = ExpenseSync;
+
+  document.addEventListener('DOMContentLoaded', loadInitial);
 })();
     </script>
 </body>
