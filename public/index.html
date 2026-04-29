@@ -446,9 +446,12 @@ input.cells-edit-input {
 /* 役割バッジ */
 #sec-workforce .wf-rb{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600;color:#fff}
 #sec-workforce .wf-r-営業{background:#D13020}
-#sec-workforce .wf-r-納品{background:#007aff}
+#sec-workforce .wf-r-運営{background:#007aff}
+#sec-workforce .wf-r-納品{background:#007aff} /* 後方互換 (旧表記) */
 #sec-workforce .wf-r-CS{background:#34c759}
 #sec-workforce .wf-r-企画{background:#ff9500}
+#sec-workforce .wf-r-総務{background:#6366f1}
+#sec-workforce .wf-r-PR{background:#ec4899}
 
 /* PL表 */
 #sec-workforce .wf-pl-table{width:100%;border-collapse:collapse;font-size:11px;min-width:900px}
@@ -506,13 +509,21 @@ input.cells-edit-input {
 #sec-workforce .wf-grid-cell-input.zero{color:var(--text3);opacity:.4}
 #sec-workforce .wf-grid-cell-input.has-val{background:rgba(232,244,255,0.18);color:var(--text);font-weight:600}
 #sec-workforce td.wf-role-営業{background:rgba(255,245,245,0.10)!important}
+#sec-workforce td.wf-role-運営,
 #sec-workforce td.wf-role-納品{background:rgba(240,248,255,0.10)!important}
 #sec-workforce td.wf-role-CS{background:rgba(240,255,244,0.10)!important}
 #sec-workforce td.wf-role-企画{background:rgba(255,248,240,0.10)!important}
+#sec-workforce td.wf-role-総務{background:rgba(238,242,255,0.10)!important}
+#sec-workforce td.wf-role-PR{background:rgba(252,231,243,0.10)!important}
 #sec-workforce td.wf-role-営業 .wf-grid-cell-input.has-val{background:rgba(255,214,214,0.30)}
+#sec-workforce td.wf-role-運営 .wf-grid-cell-input.has-val,
 #sec-workforce td.wf-role-納品 .wf-grid-cell-input.has-val{background:rgba(214,233,255,0.30)}
 #sec-workforce td.wf-role-CS .wf-grid-cell-input.has-val{background:rgba(214,245,220,0.30)}
 #sec-workforce td.wf-role-企画 .wf-grid-cell-input.has-val{background:rgba(255,238,214,0.30)}
+#sec-workforce td.wf-role-総務 .wf-grid-cell-input.has-val{background:rgba(199,210,254,0.30)}
+#sec-workforce td.wf-role-PR .wf-grid-cell-input.has-val{background:rgba(251,207,232,0.30)}
+/* 必要月工数=0の役割セルは薄くしてプログラムでこの役割が不要なことを示唆 */
+#sec-workforce td.wf-role-disabled{opacity:.35}
 #sec-workforce td.wf-biz-end,#sec-workforce th.wf-biz-end{border-right:2px solid var(--text)!important}
 #sec-workforce .wf-name-input{border:1px solid transparent;background:transparent;font-size:11px;font-weight:600;padding:2px 4px;border-radius:3px;width:100%;color:var(--text);font-family:inherit}
 #sec-workforce .wf-role-input{border:1px solid transparent;background:transparent;font-size:9px;color:var(--text3);padding:1px 4px;border-radius:3px;width:100%;font-family:inherit}
@@ -1544,9 +1555,11 @@ input.cells-edit-input {
       <div class="wf-legend">
         <span>役割色:</span>
         <span class="wf-legend-item"><span class="wf-swatch" style="background:#fff5f5"></span>営業</span>
-        <span class="wf-legend-item"><span class="wf-swatch" style="background:#f0f8ff"></span>納品</span>
+        <span class="wf-legend-item"><span class="wf-swatch" style="background:#f0f8ff"></span>運営</span>
         <span class="wf-legend-item"><span class="wf-swatch" style="background:#f0fff4"></span>CS</span>
         <span class="wf-legend-item"><span class="wf-swatch" style="background:#fff8f0"></span>企画</span>
+        <span class="wf-legend-item"><span class="wf-swatch" style="background:#eef2ff"></span>総務</span>
+        <span class="wf-legend-item"><span class="wf-swatch" style="background:#fce7f3"></span>PR</span>
         <span style="margin-left:8px">単位：人月</span>
       </div>
       <div class="wf-grid-wrap"><table class="wf-grid" id="wf-grid-table"></table></div>
@@ -1583,7 +1596,7 @@ input.cells-edit-input {
       <div class="ct">事業 × 役割 ヒートマップ</div>
       <div style="overflow-x:auto">
         <table class="wf-config-tbl">
-          <thead><tr><th>事業＼役割</th><th><span class="wf-rb wf-r-営業">営業</span></th><th><span class="wf-rb wf-r-納品">納品</span></th><th><span class="wf-rb wf-r-CS">CS</span></th><th><span class="wf-rb wf-r-企画">企画</span></th></tr></thead>
+          <thead><tr><th>事業＼役割</th><th><span class="wf-rb wf-r-営業">営業</span></th><th><span class="wf-rb wf-r-運営">運営</span></th><th><span class="wf-rb wf-r-CS">CS</span></th><th><span class="wf-rb wf-r-企画">企画</span></th><th><span class="wf-rb wf-r-総務">総務</span></th><th><span class="wf-rb wf-r-PR">PR</span></th></tr></thead>
           <tbody id="wf-heatmap-body"></tbody>
         </table>
       </div>
@@ -1592,7 +1605,7 @@ input.cells-edit-input {
       <div class="ct">必要月工数設定</div>
       <div style="overflow-x:auto">
         <table class="wf-config-tbl">
-          <thead><tr><th>事業</th><th>営業</th><th>納品</th><th>CS</th><th>企画</th><th>合計</th></tr></thead>
+          <thead><tr><th>事業</th><th>営業</th><th>運営</th><th>CS</th><th>企画</th><th>総務</th><th>PR</th><th>合計</th></tr></thead>
           <tbody id="wf-fte-body"></tbody>
         </table>
       </div>
@@ -1627,7 +1640,7 @@ input.cells-edit-input {
       <div class="ct">役割ウェイトマトリクス（事業内の売上配分）</div>
       <div style="overflow-x:auto">
         <table class="wf-config-tbl">
-          <thead><tr><th>事業</th><th>営業</th><th>納品</th><th>CS</th><th>企画</th><th>合計</th></tr></thead>
+          <thead><tr><th>事業</th><th>営業</th><th>運営</th><th>CS</th><th>企画</th><th>総務</th><th>PR</th><th>合計</th></tr></thead>
           <tbody id="wf-weight-body"></tbody>
         </table>
       </div>
@@ -12703,7 +12716,9 @@ document.addEventListener('DOMContentLoaded', function() {
   // ─── 定数 ───
   const BIZ = ['NEOアカデミア','イベント','研修','事業開発'];
   const BIZ_SHORT = {'NEOアカデミア':'アカデミア','イベント':'イベント','研修':'研修','事業開発':'事業開発'};
-  const ROLES = ['営業','納品','CS','企画'];
+  // ロール: 6 つに拡張 (旧 '納品' は '運営' にリネーム)
+  // 不要なロールはそのプログラムで requiredFTE=0 にすれば effectiveWeight が自動で除外する。
+  const ROLES = ['営業','運営','CS','企画','総務','PR'];
 
   // ─── デフォルト値（プロトタイプ v14 と一致） ───
   const DEFAULT_BIZ_PROGRAMS = {
@@ -12767,18 +12782,22 @@ document.addEventListener('DOMContentLoaded', function() {
     {name:'その他',                          amount:2400000},
   ];
 
+  // 役割ウェイト (合計100% / 事業内の売上配分)
+  // 総務/PR は標準では小さめに、未使用なら必要月工数を 0 にして除外する運用
   const DEFAULT_ROLE_WEIGHTS = {
-    'NEOアカデミア': {'営業': 30, '納品': 25, 'CS': 35, '企画': 10},
-    'イベント':     {'営業': 10, '納品': 60, 'CS': 20, '企画': 10},
-    '研修':         {'営業': 40, '納品': 30, 'CS': 20, '企画': 10},
-    '事業開発':     {'営業': 30, '納品': 10, 'CS': 10, '企画': 50},
+    'NEOアカデミア': {'営業': 25, '運営': 25, 'CS': 30, '企画': 10, '総務': 5, 'PR': 5},
+    'イベント':     {'営業': 10, '運営': 50, 'CS': 20, '企画': 10, '総務': 5, 'PR': 5},
+    '研修':         {'営業': 35, '運営': 25, 'CS': 20, '企画': 10, '総務': 5, 'PR': 5},
+    '事業開発':     {'営業': 25, '運営': 10, 'CS': 10, '企画': 45, '総務': 5, 'PR': 5},
   };
 
+  // 必要月工数 (人月)
+  // プログラム別に「不要」にしたい場合は 0 にする → effectiveWeight で売上配分から自動除外
   const DEFAULT_REQUIRED_FTE = {
-    'NEOアカデミア': {'営業': 1.0, '納品': 1.5, 'CS': 2.0, '企画': 1.0},
-    'イベント':     {'営業': 0.3, '納品': 1.5, 'CS': 0.5, '企画': 0.5},
-    '研修':         {'営業': 2.0, '納品': 2.0, 'CS': 1.0, '企画': 0.5},
-    '事業開発':     {'営業': 1.0, '納品': 0.3, 'CS': 0.3, '企画': 1.0},
+    'NEOアカデミア': {'営業': 1.0, '運営': 1.5, 'CS': 2.0, '企画': 1.0, '総務': 0, 'PR': 0},
+    'イベント':     {'営業': 0.3, '運営': 1.5, 'CS': 0.5, '企画': 0.5, '総務': 0, 'PR': 0},
+    '研修':         {'営業': 2.0, '運営': 2.0, 'CS': 1.0, '企画': 0.5, '総務': 0, 'PR': 0},
+    '事業開発':     {'営業': 1.0, '運営': 0.3, 'CS': 0.3, '企画': 1.0, '総務': 0, 'PR': 0},
   };
 
   function makeAllocMatrix(setter){
@@ -12796,7 +12815,7 @@ document.addEventListener('DOMContentLoaded', function() {
     })},
     {name:'三木 浩江', role:'',       cost:5460000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
       m['NEOアカデミア']['CS'] = 50;
-      m['イベント']['納品'] = 20;
+      m['イベント']['運営'] = 20;
     })},
     {name:'副事務局長', role:'未稼働', cost:0,       ability:1.0, allocMatrix: makeAllocMatrix()},
     {name:'CS/SL MG', role:'カスタマーサクセス', cost:3000000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
@@ -12810,40 +12829,40 @@ document.addEventListener('DOMContentLoaded', function() {
       m['研修']['営業'] = 50;
     })},
     {name:'古野',   role:'営業/納品', cost:3360000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
-      m['NEOアカデミア']['納品'] = 30;
-      m['研修']['営業'] = 25; m['研修']['納品'] = 25;
+      m['NEOアカデミア']['運営'] = 30;
+      m['研修']['営業'] = 25; m['研修']['運営'] = 25;
     })},
     {name:'國武',   role:'',         cost:1800000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
       m['NEOアカデミア']['CS'] = 100;
     })},
     {name:'森',     role:'',         cost:5400000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
-      m['NEOアカデミア']['納品'] = 50;
-      m['イベント']['納品'] = 30;
-      m['研修']['納品'] = 20;
+      m['NEOアカデミア']['運営'] = 50;
+      m['イベント']['運営'] = 30;
+      m['研修']['運営'] = 20;
     })},
     {name:'面川',   role:'',         cost:4200000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
-      m['NEOアカデミア']['納品'] = 40;
-      m['イベント']['納品'] = 30;
-      m['研修']['納品'] = 30;
+      m['NEOアカデミア']['運営'] = 40;
+      m['イベント']['運営'] = 30;
+      m['研修']['運営'] = 30;
     })},
     {name:'中島',   role:'',         cost:3600000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
-      m['NEOアカデミア']['納品'] = 100;
+      m['NEOアカデミア']['運営'] = 100;
     })},
     {name:'増田',   role:'',         cost:5400000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
-      m['NEOアカデミア']['納品'] = 60;
-      m['イベント']['納品'] = 40;
+      m['NEOアカデミア']['運営'] = 60;
+      m['イベント']['運営'] = 40;
     })},
     {name:'イベント外注', role:'', cost:4000000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
-      m['NEOアカデミア']['納品'] = 20;
-      m['イベント']['納品'] = 80;
+      m['NEOアカデミア']['運営'] = 20;
+      m['イベント']['運営'] = 80;
     })},
     {name:'エリア担当', role:'各県1名', cost:25200000, ability:1.0, allocMatrix: makeAllocMatrix()},
     {name:'エリアCM',   role:'各県1名', cost:10800000, ability:1.0, allocMatrix: makeAllocMatrix()},
     {name:'菅', role:'', cost:1200000, ability:1.0, allocMatrix: makeAllocMatrix(m => {
-      m['NEOアカデミア']['納品'] = 100;
+      m['NEOアカデミア']['運営'] = 100;
     })},
-    {name:'研修事務',         role:'', cost:3600000, ability:1.0, allocMatrix: makeAllocMatrix(m => { m['研修']['納品'] = 100; })},
-    {name:'ファシリテーター', role:'', cost:2400000, ability:1.0, allocMatrix: makeAllocMatrix(m => { m['研修']['納品'] = 100; })},
+    {name:'研修事務',         role:'', cost:3600000, ability:1.0, allocMatrix: makeAllocMatrix(m => { m['研修']['運営'] = 100; })},
+    {name:'ファシリテーター', role:'', cost:2400000, ability:1.0, allocMatrix: makeAllocMatrix(m => { m['研修']['運営'] = 100; })},
   ];
 
   // ─── 状態 ───
@@ -13131,20 +13150,33 @@ document.addEventListener('DOMContentLoaded', function() {
       Object.keys(BIZ_SHORT).forEach(k => delete BIZ_SHORT[k]);
       Object.assign(BIZ_SHORT, snap.bizShort);
     }
-    // 全メンバーの allocMatrix が現在の BIZ をすべて含むようにする (整合性保証)
+    // ── マイグレーション: 旧ロール「納品」→「運営」 + 不足ロールを 0 で補完 ──
+    const migrateRolesObj = (obj) => {
+      if (!obj || typeof obj !== 'object') return;
+      if (obj['納品'] != null && obj['運営'] == null){
+        obj['運営'] = obj['納品'];
+        delete obj['納品'];
+      } else if (obj['納品'] != null){
+        delete obj['納品']; // 両方あれば運営優先
+      }
+      ROLES.forEach(r => { if (obj[r] == null) obj[r] = 0; });
+    };
+    // 全メンバーの allocMatrix が現在の BIZ × ROLES をすべて含むようにする (整合性保証)
     state.members.forEach(m => {
       if (!m.allocMatrix) m.allocMatrix = {};
       BIZ.forEach(b => {
         if (!m.allocMatrix[b]) m.allocMatrix[b] = {};
-        ROLES.forEach(r => { if (m.allocMatrix[b][r] == null) m.allocMatrix[b][r] = 0; });
+        migrateRolesObj(m.allocMatrix[b]);
       });
     });
-    // 設定マップにも同じ保証
+    // 設定マップにも同じ保証 + ロールマイグレーション
     BIZ.forEach(b => {
       if (!state.bizPrograms[b]) state.bizPrograms[b] = [];
       if (!state.bizCosts[b])    state.bizCosts[b]    = [];
-      if (!state.roleWeights[b]) state.roleWeights[b] = { '営業': 25, '納品': 25, 'CS': 25, '企画': 25 };
-      if (!state.requiredFTE[b]) state.requiredFTE[b] = { '営業': 0, '納品': 0, 'CS': 0, '企画': 0 };
+      if (!state.roleWeights[b]) state.roleWeights[b] = {};
+      if (!state.requiredFTE[b]) state.requiredFTE[b] = {};
+      migrateRolesObj(state.roleWeights[b]);
+      migrateRolesObj(state.requiredFTE[b]);
     });
   }
 
@@ -14295,8 +14327,8 @@ document.addEventListener('DOMContentLoaded', function() {
       // 設定値を初期化
       if (!state.bizPrograms[name]) state.bizPrograms[name] = [];
       if (!state.bizCosts[name])    state.bizCosts[name]    = [];
-      if (!state.roleWeights[name]) state.roleWeights[name] = { '営業': 25, '納品': 25, 'CS': 25, '企画': 25 };
-      if (!state.requiredFTE[name]) state.requiredFTE[name] = { '営業': 0, '納品': 0, 'CS': 0, '企画': 0 };
+      if (!state.roleWeights[name]) state.roleWeights[name] = { '営業': 20, '運営': 20, 'CS': 20, '企画': 20, '総務': 10, 'PR': 10 };
+      if (!state.requiredFTE[name]) state.requiredFTE[name] = { '営業': 0, '運営': 0, 'CS': 0, '企画': 0, '総務': 0, 'PR': 0 };
       renderAll();
     },
     deleteBusiness: function(name){
