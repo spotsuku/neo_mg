@@ -1553,6 +1553,15 @@ input.cells-edit-input {
         </table>
       </div>
     </div>
+
+    <!-- 配置サジェスト (Phase 3.2) -->
+    <div class="card">
+      <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>💡 配置サジェスト (β) — 不足ロールの埋め方候補</span>
+        <button class="btn btn-p" onclick="WF.runSuggest()" style="font-size:10px;padding:3px 10px;margin-left:auto">🔁 再計算</button>
+      </div>
+      <div id="wf-suggest-list" style="font-size:11px;color:var(--text3)">「再計算」を押すと、能力係数と現在の配分余剰から最適な振替候補を表示します</div>
+    </div>
   </div>
 
   <!-- ④ 設定 -->
@@ -14045,6 +14054,67 @@ document.addEventListener('DOMContentLoaded', function() {
     deleteSGA: function(i){ if (!confirm(`「${state.sgaItems[i].name}」を削除しますか？`)) return; state.sgaItems.splice(i, 1); renderAll(); },
     updateFTE:    function(biz, role, val){ state.requiredFTE[biz][role] = parseFloat(val) || 0; renderAll(); },
     updateWeight: function(biz, role, val){ state.roleWeights[biz][role] = parseInt(val) || 0; renderAll(); },
+    // ── 配置サジェスト (Phase 3.2) ──
+    // 貪欲法: 充足度が最も低い役割から、能力×配分余剰が大きいメンバーを優先的に充てがう
+    runSuggest: function(){
+      const list = document.getElementById('wf-suggest-list');
+      if (!list) return;
+      // 不足ロール抽出 (required > 0 かつ 充足度 < 80%)
+      const shortages = [];
+      BIZ.forEach(biz => ROLES.forEach(role => {
+        const req = state.requiredFTE[biz][role] || 0;
+        if (req <= 0) return;
+        const inv = bizRoleInvestedFTE(biz, role);
+        const f = inv / req;
+        if (f < 0.8){
+          shortages.push({ biz, role, req, inv, gap: req - inv, fulfillment: f });
+        }
+      }));
+      if (!shortages.length){
+        list.innerHTML = '<div style="color:var(--tc-green);font-weight:600">✓ 充足度80%未満のロールはありません — 現状の配置は適正です</div>';
+        return;
+      }
+      shortages.sort((a,b) => a.fulfillment - b.fulfillment);
+      // 各メンバーの「配分余剰」と能力を計算
+      const candidates = state.members.map((m, idx) => ({
+        idx, name: m.name, ability: m.ability||1.0,
+        slack: 100 - memberTotalPct(idx),  // 配分計の余裕
+      })).filter(c => c.slack > 0)
+        .sort((a,b) => b.ability - a.ability);
+      const suggestions = [];
+      shortages.forEach(s => {
+        const need = s.gap; // 必要追加 FTE
+        let remaining = need;
+        const picks = [];
+        for (const c of candidates){
+          if (c.slack <= 0) continue;
+          // c.slack の % で投入できる FTE = (slack/100) * ability
+          const couldAdd = Math.min(c.slack / 100 * c.ability, remaining);
+          if (couldAdd < 0.05) continue;
+          // 何%必要か逆算: pct = need / ability * 100
+          const pctNeeded = Math.min(c.slack, Math.ceil(remaining / c.ability * 100));
+          if (pctNeeded < 5) continue;
+          picks.push({ name: c.name, pct: pctNeeded });
+          c.slack -= pctNeeded;
+          remaining -= pctNeeded / 100 * c.ability;
+          if (remaining <= 0.05) break;
+        }
+        if (picks.length){
+          suggestions.push({ ...s, picks });
+        }
+      });
+      if (!suggestions.length){
+        list.innerHTML = '<div style="color:var(--tc-amber);font-weight:600">⚠ 余剰メンバーが不足しています — 採用が必要です</div>';
+        return;
+      }
+      list.innerHTML = suggestions.map(s => {
+        const picksHtml = s.picks.map(p => `<strong>${escapeHtml(p.name)}</strong> +${p.pct}%`).join(' ／ ');
+        return `<div style="padding:6px 0;border-bottom:1px solid var(--border)">
+          <div><span class="wf-rb wf-r-${s.role}">${s.role}</span> <strong>${s.biz}</strong> — 充足度 ${(s.fulfillment*100).toFixed(0)}% (必要 ${s.req.toFixed(1)} / 投入 ${s.inv.toFixed(2)})</div>
+          <div style="margin-top:3px;color:var(--text2)">→ ${picksHtml}</div>
+        </div>`;
+      }).join('') + '<div style="margin-top:6px;font-size:10px;color:var(--text3)">※ 提案は能力係数と配分余剰のみから算出した参考値です。手動で配分%を調整してください。</div>';
+    },
     // JSON 入出力（ローカルバックアップ）
     exportJSON: function(){
       const data = { snapshot: takeSnapshot(), exportedAt: new Date().toISOString() };
