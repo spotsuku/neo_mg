@@ -460,6 +460,55 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      // ────────────────────────────────────────────────────────────
+      //  経費申請ワークフロー (expense_requests / Phase 5)
+      // ────────────────────────────────────────────────────────────
+
+      case 'load_expense_requests': {
+        const status = req.query.status; // 'pending' | 'approved' | 'rejected' | undefined
+        let q = supabase.from('expense_requests').select('*').order('created_at', { ascending: false }).limit(200);
+        if (status) q = q.eq('status', String(status));
+        const { data, error } = await q;
+        if (error) throw error;
+        return res.status(200).json({ ok: true, data: data || [] });
+      }
+
+      case 'create_expense_request': {
+        const { request_id, requester_name, requester_email, category, amount, description, receipt_url } = req.body;
+        const { error } = await supabase.from('expense_requests').insert({
+          request_id, requester_name, requester_email: requester_email || null,
+          category, amount: Number(amount) || 0, description: description || null,
+          status: 'pending', receipt_url: receipt_url || null,
+          created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        });
+        if (error) throw error;
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'decide_expense_request': {
+        const { request_id, decision, approved_by, reject_reason } = req.body;
+        if (!['approved','rejected'].includes(decision)) {
+          return res.status(400).json({ error: 'invalid decision' });
+        }
+        const payload = {
+          status: decision,
+          approved_by: approved_by || null,
+          approved_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        if (decision === 'rejected') payload.reject_reason = reject_reason || null;
+        const { error } = await supabase.from('expense_requests').update(payload).eq('request_id', request_id);
+        if (error) throw error;
+        return res.status(200).json({ ok: true });
+      }
+
+      case 'delete_expense_request': {
+        const { request_id } = req.body;
+        const { error } = await supabase.from('expense_requests').delete().eq('request_id', request_id);
+        if (error) throw error;
+        return res.status(200).json({ ok: true });
+      }
+
       default:
         return res.status(400).json({ error: `Unknown action: ${action}` });
     }

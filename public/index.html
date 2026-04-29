@@ -373,6 +373,46 @@ input.cells-edit-input {
 .preset-active{background:var(--bg-blue)!important;color:var(--tc-blue)!important;border-color:var(--tc-blue)!important}
 
 /* ════════════════════════════════════════════════════════════════
+   経営者ダッシュボード (Phase 2) — サマリー先頭の現状把握ブロック
+   既存KPI 6カードはそのまま下に残置
+   ════════════════════════════════════════════════════════════════ */
+.exec-dash{background:linear-gradient(135deg,rgba(90,171,240,0.06),rgba(93,189,126,0.04));border:1px solid var(--border);border-radius:var(--rl);padding:12px 14px;margin-bottom:14px}
+.exec-dash-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.exec-dash-head .lbl{font-size:11px;font-weight:700;color:var(--text);letter-spacing:.4px}
+.exec-dash-head .sub{font-size:10px;color:var(--text3)}
+.exec-dash-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:8px}
+@media (max-width:760px){.exec-dash-grid{grid-template-columns:1fr}}
+.exec-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:11px 13px;display:flex;gap:12px;align-items:center;min-height:86px}
+.exec-card-icon{width:48px;height:48px;flex-shrink:0;display:grid;place-items:center;border-radius:50%;font-size:22px}
+.exec-card-icon.good{background:var(--bg-green);color:var(--tc-green)}
+.exec-card-icon.warn{background:var(--bg-amber);color:var(--tc-amber)}
+.exec-card-icon.bad{background:var(--bg-red);color:var(--tc-red)}
+.exec-card-icon.info{background:var(--bg-blue);color:var(--tc-blue)}
+.exec-card-body{flex:1;min-width:0}
+.exec-card-l{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;font-weight:600;margin-bottom:2px}
+.exec-card-v{font-size:21px;font-weight:700;line-height:1.1}
+.exec-card-v.good{color:var(--tc-green)}
+.exec-card-v.warn{color:var(--tc-amber)}
+.exec-card-v.bad{color:var(--tc-red)}
+.exec-card-s{font-size:10px;color:var(--text3);margin-top:3px}
+.exec-card-bar{height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-top:4px}
+.exec-card-bar-fill{height:100%;border-radius:3px;transition:width .3s ease}
+.exec-card-bar-fill.good{background:var(--tc-green)}
+.exec-card-bar-fill.warn{background:var(--tc-amber)}
+.exec-card-bar-fill.bad{background:var(--tc-red)}
+
+/* アラートエリア */
+.exec-alerts{margin-top:8px;padding:8px 12px;background:var(--bg2);border-radius:var(--r);border-left:3px solid var(--tc-amber);min-height:44px}
+.exec-alerts.empty{border-left-color:var(--tc-green)}
+.exec-alerts-head{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.exec-alert{font-size:11px;padding:4px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.exec-alert:last-child{border-bottom:none}
+.exec-alert-tag{font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;flex-shrink:0}
+.exec-alert-tag.budget{background:var(--bg-red);color:var(--tc-red)}
+.exec-alert-tag.staff{background:var(--bg-amber);color:var(--tc-amber)}
+.exec-alert-tag.cash{background:var(--bg-red);color:var(--tc-red)}
+
+/* ════════════════════════════════════════════════════════════════
    工数管理 (Workforce) — sec-workforce 内のスタイル
    ════════════════════════════════════════════════════════════════ */
 #sec-workforce .wf-toolbar{background:var(--bg2);padding:9px 12px;border-radius:var(--rl);margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-left:3px solid #007aff}
@@ -383,10 +423,25 @@ input.cells-edit-input {
 
 /* wf-panel の表示制御は inline style で切り替え (switchSubtab が style.display を直接操作) */
 
-/* 工数管理: number入力からネイティブの上下スピナーを除去 (スプレッドシート風) */
+/* 工数管理 / 人件費: number入力からネイティブの上下スピナーを除去 (スプレッドシート風) */
 #sec-workforce input[type="number"]::-webkit-outer-spin-button,
-#sec-workforce input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
-#sec-workforce input[type="number"]{ -moz-appearance:textfield; appearance:textfield }
+#sec-workforce input[type="number"]::-webkit-inner-spin-button,
+#sec-payroll input[type="number"]::-webkit-outer-spin-button,
+#sec-payroll input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
+#sec-workforce input[type="number"],
+#sec-payroll input[type="number"]{ -moz-appearance:textfield; appearance:textfield }
+
+/* 人件費タブ: スプレッドシート風セル */
+#sec-payroll .wf-pl-table th,#sec-payroll .wf-pl-table td{padding:4px 6px;font-size:10px}
+#sec-payroll .wf-pl-table th.month-col{min-width:62px;text-align:center}
+#sec-payroll .wf-pl-table td.member-name{position:sticky;left:0;background:var(--bg)!important;z-index:1;text-align:left;font-weight:600;min-width:140px;border-right:2px solid var(--text)}
+#sec-payroll .wf-pl-table thead th.member-name-head{position:sticky;left:0;z-index:2;border-right:2px solid var(--text)}
+#sec-payroll .pay-cell{width:58px;padding:3px 5px;border:1px solid transparent;border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:transparent;color:var(--text);font-family:inherit}
+#sec-payroll .pay-cell:focus{outline:2px solid #5aabf0;background:var(--bg)}
+#sec-payroll .pay-cell.has-val{background:rgba(232,244,255,0.18);font-weight:600}
+#sec-payroll .pay-cell.zero{color:var(--text3);opacity:.45}
+#sec-payroll .pay-row-total{position:sticky;right:0;background:var(--bg2)!important;font-weight:700;color:var(--text);min-width:70px}
+#sec-payroll .pay-month-total td{background:var(--bg2)!important;font-weight:700;border-top:2px solid var(--text)}
 
 /* 役割バッジ */
 #sec-workforce .wf-rb{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600;color:#fff}
@@ -463,6 +518,8 @@ input.cells-edit-input {
 #sec-workforce .wf-role-input{border:1px solid transparent;background:transparent;font-size:9px;color:var(--text3);padding:1px 4px;border-radius:3px;width:100%;font-family:inherit}
 #sec-workforce .wf-name-input:focus,#sec-workforce .wf-role-input:focus,#sec-workforce .wf-cost-input:focus,#sec-workforce .wf-ability-input:focus{outline:1px solid #5aabf0;background:var(--bg)}
 #sec-workforce .wf-cost-input{width:72px;padding:3px 4px;border:1px solid var(--border2);border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:var(--bg);color:var(--text);font-family:inherit}
+#sec-workforce .wf-cost-readonly{cursor:pointer;font-size:10px;line-height:1.2;font-weight:600}
+#sec-workforce .wf-cost-readonly:hover{background:rgba(90,171,240,0.10)!important;outline:1px solid #5aabf0}
 #sec-workforce .wf-ability-input{width:48px;padding:3px 4px;border:1px solid var(--border2);border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:var(--bg);color:var(--text);font-family:inherit}
 #sec-workforce .wf-ability-input.high{background:rgba(255,224,230,0.30);color:#e87070;font-weight:700}
 #sec-workforce .wf-ability-input.low{background:rgba(180,180,180,0.15);color:var(--text3)}
@@ -481,7 +538,10 @@ input.cells-edit-input {
 #sec-workforce .wf-ful-cell.low .pct{color:#e87070}
 #sec-workforce .wf-ful-cell.over .pct{color:#f0a060}
 #sec-workforce .wf-col-del{background:var(--bg)!important}
-#sec-workforce .wf-delete-btn{background:none;border:none;color:#e87070;cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px}
+#sec-workforce .wf-delete-btn,
+#sec-payroll .wf-delete-btn{background:none;border:none;color:#e87070;cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px}
+#sec-workforce .wf-delete-btn:hover,
+#sec-payroll .wf-delete-btn:hover{background:rgba(232,112,112,0.15)}
 
 /* 設定・ヒートマップ表 */
 #sec-workforce .wf-config-tbl{width:100%;border-collapse:collapse;font-size:11px;min-width:600px}
@@ -597,6 +657,8 @@ input.cells-edit-input {
         <button class="tab" onclick="sw('import',this)">🔗 MF連携</button>
         <button class="tab" onclick="sw('sim',this)">🔮 シミュレーション</button>
         <button class="tab" onclick="sw('workforce',this)">⚙️ 工数管理</button>
+        <button class="tab" onclick="sw('payroll',this)">💴 人件費</button>
+        <button class="tab" onclick="sw('expense',this)">💳 経費申請</button>
         <button class="tab" onclick="sw('report',this)">📋 月次レポート</button>
         <button class="tab" onclick="sw('pdf',this)">📄 役員PDF</button>
       </div>
@@ -608,6 +670,70 @@ input.cells-edit-input {
      WEEKLY KPI
 ────────────────────────────────────── -->
 <div class="sec on" id="sec-weekly">
+  <!-- ── 経営者ダッシュボード (Phase 2) — 現状把握ブロック ── -->
+  <div class="exec-dash">
+    <div class="exec-dash-head">
+      <span class="lbl">🎯 経営者ダッシュボード</span>
+      <span class="sub" id="exec-dash-period">— 最新月の経営健全性</span>
+    </div>
+    <div class="exec-dash-grid">
+      <!-- 予算消費率 (販管費) -->
+      <div class="exec-card">
+        <div class="exec-card-icon info" id="exec-budget-icon">📊</div>
+        <div class="exec-card-body">
+          <div class="exec-card-l">予算消費率（累積販管費）</div>
+          <div class="exec-card-v" id="exec-budget-val">—</div>
+          <div class="exec-card-bar"><div class="exec-card-bar-fill good" id="exec-budget-bar" style="width:0"></div></div>
+          <div class="exec-card-s" id="exec-budget-sub">—</div>
+        </div>
+      </div>
+      <!-- 人件費生産性 (工数管理) -->
+      <div class="exec-card">
+        <div class="exec-card-icon info" id="exec-prod-icon">👥</div>
+        <div class="exec-card-body">
+          <div class="exec-card-l">人件費生産性</div>
+          <div class="exec-card-v" id="exec-prod-val">—</div>
+          <div class="exec-card-s" id="exec-prod-sub">目標 3.0倍以上</div>
+        </div>
+      </div>
+      <!-- 残キャッシュ + バーンレート -->
+      <div class="exec-card">
+        <div class="exec-card-icon info" id="exec-runway-icon">💰</div>
+        <div class="exec-card-body">
+          <div class="exec-card-l">残キャッシュ期間</div>
+          <div class="exec-card-v" id="exec-runway-val">—</div>
+          <div class="exec-card-s" id="exec-runway-sub">—</div>
+        </div>
+      </div>
+    </div>
+    <!-- アラート -->
+    <div class="exec-alerts empty" id="exec-alerts" style="display:none">
+      <div class="exec-alerts-head">⚠ アラート</div>
+      <div id="exec-alert-list"></div>
+    </div>
+
+    <!-- 経費管理ダッシュボード連携 (Phase 4) -->
+    <details style="margin-top:8px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg2)">
+      <summary style="cursor:pointer;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text2);list-style:none;display:flex;align-items:center;gap:6px">
+        <span>🔗 外部経費管理ダッシュボード連携</span>
+        <span id="expense-sync-status" style="font-size:10px;font-weight:400;color:var(--text3);margin-left:auto">未設定</span>
+      </summary>
+      <div style="padding:8px 12px 12px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
+          別ダッシュボードの経費データ JSON エンドポイントを設定すると、リアルタイム使用額・残予算が表示されます。
+          JSON形式は <code>{ items: [{ category, amount }, ...], total: N, budget: N }</code> を想定。
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+          <input type="url" id="expense-api-url" placeholder="https://example.com/api/expenses" style="flex:1;min-width:240px;padding:5px 8px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;font-family:inherit">
+          <button class="btn" onclick="ExpenseSync.saveUrl()" style="font-size:10px;padding:4px 10px">URL保存</button>
+          <button class="btn btn-p" onclick="ExpenseSync.fetchNow()" style="font-size:10px;padding:4px 10px">今すぐ取込</button>
+          <label style="font-size:10px;color:var(--text3);display:flex;align-items:center;gap:4px"><input type="checkbox" id="expense-poll-toggle" onchange="ExpenseSync.togglePoll(this.checked)"> 60秒ごと自動取込</label>
+        </div>
+        <div id="expense-summary" style="font-size:11px"></div>
+      </div>
+    </details>
+  </div>
+
   <div class="metrics" style="grid-template-columns:repeat(6,minmax(0,1fr))">
     <div class="mc"><div class="mc-l">現金残高</div><div class="mc-v" id="kpi-cash">—</div><div class="mc-s" id="kpi-cash-s"></div></div>
     <div class="mc"><div class="mc-l">売上（累積）</div><div class="mc-v" id="kpi-rev">—</div><div class="mc-s" id="kpi-rev-s"></div></div>
@@ -1449,6 +1575,15 @@ input.cells-edit-input {
         </table>
       </div>
     </div>
+
+    <!-- 配置サジェスト (Phase 3.2) -->
+    <div class="card">
+      <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>💡 配置サジェスト (β) — 不足ロールの埋め方候補</span>
+        <button class="btn btn-p" onclick="WF.runSuggest()" style="font-size:10px;padding:3px 10px;margin-left:auto">🔁 再計算</button>
+      </div>
+      <div id="wf-suggest-list" style="font-size:11px;color:var(--text3)">「再計算」を押すと、能力係数と現在の配分余剰から最適な振替候補を表示します</div>
+    </div>
   </div>
 
   <!-- ④ 設定 -->
@@ -1500,6 +1635,90 @@ input.cells-edit-input {
         <button class="btn btn-p" onclick="WF.confirmSaveVersion()">保存</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────
+     人件費（月次）— メンバー × 12ヶ月の編集表 (千円単位)
+     工数管理タブの cost (年額) はここから自動算出される
+────────────────────────────────────── -->
+<div class="sec" id="sec-payroll">
+  <!-- ツールバー: 年度切替に同期 / 採用中バージョンと連動 -->
+  <div class="wf-toolbar">
+    <div>
+      <span class="wf-current-label">人件費（月次・千円）</span>
+      <span class="wf-current-name" id="payroll-year-label" style="margin-left:6px"></span>
+      <span class="wf-unsaved-badge" id="payroll-unsaved-badge" style="display:none">未保存の変更</span>
+    </div>
+    <span style="font-size:10px;color:var(--text3);margin-left:auto" id="payroll-sync-status">— 自動保存 —</span>
+  </div>
+
+  <!-- KPI: 年度合計人件費 / 月平均 / メンバー数 / ピーク月 -->
+  <div class="metrics" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:1rem">
+    <div class="mc"><div class="mc-l">年度合計人件費</div><div class="mc-v" id="payroll-kpi-total">—</div><div class="mc-s" id="payroll-kpi-total-sub"></div></div>
+    <div class="mc"><div class="mc-l">月平均人件費</div><div class="mc-v" id="payroll-kpi-avg">—</div></div>
+    <div class="mc"><div class="mc-l">メンバー数</div><div class="mc-v" id="payroll-kpi-count">—</div><div class="mc-s">在籍 (cost > 0)</div></div>
+    <div class="mc"><div class="mc-l">ピーク月</div><div class="mc-v" id="payroll-kpi-peak">—</div><div class="mc-s" id="payroll-kpi-peak-sub"></div></div>
+  </div>
+
+  <!-- 月次表 -->
+  <div class="card">
+    <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span>💴 メンバー × 月次人件費（千円）</span>
+      <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none">編集すると工数管理の年額に自動反映 / リロード後も状態維持</span>
+      <button class="btn btn-g" onclick="PAYROLL.openAddMemberModal()" style="font-size:10px;padding:3px 10px;margin-left:auto" title="新しいメンバーを追加 (工数管理と連動)">＋ メンバー追加</button>
+      <button class="btn" onclick="PAYROLL.copyAcrossMonths()" style="font-size:10px;padding:3px 10px" title="行内の全月セルを左端の値で埋める">→ 全月にコピー</button>
+      <button class="btn" onclick="PAYROLL.resetToWorkforce()" style="font-size:10px;padding:3px 10px" title="工数管理の年額を12等分してリセット">⟲ 年額から12等分</button>
+    </div>
+    <div style="overflow-x:auto"><table class="wf-pl-table" id="payroll-table" style="min-width:1200px"></table></div>
+  </div>
+
+  <!-- 月別合計の推移グラフ -->
+  <div class="card">
+    <div class="ct">月別人件費合計の推移</div>
+    <div class="ch" style="height:180px"><canvas id="payroll-trend-chart"></canvas></div>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────
+     経費申請ワークフロー (Phase 5)
+────────────────────────────────────── -->
+<div class="sec" id="sec-expense">
+  <div class="metrics" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:1rem">
+    <div class="mc"><div class="mc-l">承認待ち</div><div class="mc-v" id="exp-kpi-pending">—</div><div class="mc-s" id="exp-kpi-pending-amt"></div></div>
+    <div class="mc"><div class="mc-l">承認済 (今月)</div><div class="mc-v" id="exp-kpi-approved">—</div><div class="mc-s" id="exp-kpi-approved-amt"></div></div>
+    <div class="mc"><div class="mc-l">却下 (今月)</div><div class="mc-v" id="exp-kpi-rejected">—</div></div>
+    <div class="mc"><div class="mc-l">合計件数</div><div class="mc-v" id="exp-kpi-total">—</div></div>
+  </div>
+
+  <div class="card">
+    <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span>💳 新規申請</span>
+      <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none">承認後は別途 PL 実績へ反映してください (本機能は申請ログのみ)</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:8px">
+      <div><label style="font-size:10px;color:var(--text3)">申請者名 (必須)</label><input type="text" id="exp-form-name" class="wf-config-input" style="width:100%;text-align:left" placeholder="山田太郎"></div>
+      <div><label style="font-size:10px;color:var(--text3)">メール (任意)</label><input type="email" id="exp-form-email" class="wf-config-input" style="width:100%;text-align:left" placeholder="user@example.com"></div>
+      <div><label style="font-size:10px;color:var(--text3)">カテゴリ (必須)</label><input type="text" id="exp-form-category" class="wf-config-input" style="width:100%;text-align:left" placeholder="販管費/旅費交通費 etc."></div>
+      <div><label style="font-size:10px;color:var(--text3)">金額 (円・必須)</label><input type="number" id="exp-form-amount" class="wf-config-input" style="width:100%" placeholder="10000" step="1000"></div>
+      <div style="grid-column:1/-1"><label style="font-size:10px;color:var(--text3)">用途・備考</label><textarea id="exp-form-desc" class="wf-config-input" style="width:100%;text-align:left;min-height:50px;resize:vertical;font-family:inherit" placeholder="例: 福岡-東京 出張 営業先訪問"></textarea></div>
+      <div style="grid-column:1/-1"><label style="font-size:10px;color:var(--text3)">領収書 URL (任意)</label><input type="url" id="exp-form-receipt" class="wf-config-input" style="width:100%;text-align:left" placeholder="https://..."></div>
+    </div>
+    <div style="display:flex;gap:8px"><button class="btn btn-p" onclick="EXPENSE.submitRequest()" style="font-size:11px;padding:5px 14px">📩 申請送信</button><button class="btn" onclick="EXPENSE.clearForm()" style="font-size:11px;padding:5px 14px">クリア</button></div>
+  </div>
+
+  <div class="card">
+    <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span>📋 申請一覧</span>
+      <div class="pa-toggle" style="margin:0 0 0 auto">
+        <button class="pa-btn active" id="exp-filter-pending"  onclick="EXPENSE.setFilter('pending',this)" style="font-size:10px;padding:3px 8px">承認待ち</button>
+        <button class="pa-btn" id="exp-filter-approved"        onclick="EXPENSE.setFilter('approved',this)" style="font-size:10px;padding:3px 8px">承認済</button>
+        <button class="pa-btn" id="exp-filter-rejected"        onclick="EXPENSE.setFilter('rejected',this)" style="font-size:10px;padding:3px 8px">却下</button>
+        <button class="pa-btn" id="exp-filter-all"             onclick="EXPENSE.setFilter('all',this)" style="font-size:10px;padding:3px 8px">全て</button>
+      </div>
+      <button class="btn" onclick="EXPENSE.refresh()" style="font-size:10px;padding:3px 10px">🔁 更新</button>
+    </div>
+    <div style="overflow-x:auto"><table class="wf-config-tbl" id="exp-list-table" style="min-width:900px"></table></div>
   </div>
 </div>
 
@@ -1785,6 +2004,8 @@ function sw(id, el) {
   if (id === 'report') renderReportTabs();
   if (id === 'weekly') updateWeeklyKPIs();
   if (id === 'workforce' && window.WF) setTimeout(() => window.WF.init(), 30);
+  if (id === 'payroll' && window.PAYROLL) setTimeout(() => window.PAYROLL.init(), 30);
+  if (id === 'expense' && window.EXPENSE) setTimeout(() => window.EXPENSE.init(), 30);
 }
 
 function setYear(y, el) {
@@ -2025,6 +2246,142 @@ function updateWeeklyKPIs() {
   // charts
   initWeeklyCharts(d, lastActualIdx);
   renderAnnualSummary();
+
+  // 経営者ダッシュボード (Phase 2)
+  renderExecDashboard({
+    cumOpex, budOpex, hasActual, lastActualIdx,
+    months: d.months, lastCash, runway, burnrate,
+  });
+}
+
+// ── 経営者ダッシュボード (Phase 2.1): 現状把握ブロックの主要3指標 ──
+// 入力は updateWeeklyKPIs で計算済の変数を受け取り、新規計算は最小限。
+function renderExecDashboard(ctx){
+  const $ = (id) => document.getElementById(id);
+  const fmt1 = (v) => Math.round((Number(v)||0) * 10) / 10;
+
+  // 期間ラベル
+  const monthLbl = (ctx.lastActualIdx >= 0 && ctx.months && ctx.months[ctx.lastActualIdx])
+    ? (MONTH_LABELS[ctx.months[ctx.lastActualIdx]] || '')
+    : '';
+  if ($('exec-dash-period')){
+    $('exec-dash-period').textContent = monthLbl
+      ? `— ${monthLbl}末時点の経営健全性`
+      : '— データ未入力';
+  }
+
+  // ① 予算消費率（累積販管費 = cumOpex / budOpex）
+  // 月割で見ると分かりやすいので「実績累計 vs 予算累計（lastActualIdx月分）」で算出
+  const budgetPct = ctx.budOpex > 0 ? Math.round(ctx.cumOpex / ctx.budOpex * 100) : 0;
+  const budgetCls = !ctx.hasActual ? 'info' : budgetPct <= 80 ? 'good' : budgetPct <= 100 ? 'warn' : 'bad';
+  if ($('exec-budget-val')){
+    $('exec-budget-val').textContent = ctx.hasActual ? `${budgetPct}%` : '—';
+    $('exec-budget-val').className = 'exec-card-v ' + (budgetCls === 'info' ? '' : budgetCls);
+  }
+  if ($('exec-budget-bar')){
+    $('exec-budget-bar').style.width = Math.min(100, budgetPct) + '%';
+    $('exec-budget-bar').className = 'exec-card-bar-fill ' + (budgetCls === 'info' ? 'good' : budgetCls);
+  }
+  if ($('exec-budget-icon')) $('exec-budget-icon').className = 'exec-card-icon ' + budgetCls;
+  if ($('exec-budget-sub')){
+    $('exec-budget-sub').textContent = ctx.hasActual
+      ? `実績 ${(ctx.cumOpex/10).toLocaleString()}千円 / 予算 ${Math.round(ctx.budOpex/10).toLocaleString()}千円`
+      : '販管費の予算/実績データ未入力';
+  }
+
+  // ② 人件費生産性（実現売上 ÷ 総人件費）— 工数管理から取得
+  let prodRatio = null, prodSub = '工数管理タブで設定';
+  if (window.WF && typeof window.WF.totalRealizedRev === 'function' && typeof window.WF.totalCost === 'function'){
+    const realRev = window.WF.totalRealizedRev();
+    const costAll = window.WF.totalCost();
+    if (costAll > 0){
+      prodRatio = realRev / costAll;
+      prodSub = `売上${(realRev/10000).toFixed(0)}万 ÷ 人件費${(costAll/10000).toFixed(0)}万`;
+    }
+  }
+  const prodCls = prodRatio == null ? 'info' : prodRatio >= 3 ? 'good' : prodRatio >= 1.5 ? 'warn' : 'bad';
+  if ($('exec-prod-val')){
+    $('exec-prod-val').textContent = prodRatio != null ? `${fmt1(prodRatio)}倍` : '—';
+    $('exec-prod-val').className = 'exec-card-v ' + (prodCls === 'info' ? '' : prodCls);
+  }
+  if ($('exec-prod-icon')) $('exec-prod-icon').className = 'exec-card-icon ' + prodCls;
+  if ($('exec-prod-sub')) $('exec-prod-sub').textContent = prodSub;
+
+  // ③ 残キャッシュ期間 + バーンレート
+  const rwy = ctx.lastCash ? parseFloat(ctx.runway) : null;
+  const rwyCls = rwy == null ? 'info' : rwy >= 12 ? 'good' : rwy >= 6 ? 'warn' : 'bad';
+  if ($('exec-runway-val')){
+    $('exec-runway-val').textContent = rwy != null ? `約${rwy}ヶ月` : '—';
+    $('exec-runway-val').className = 'exec-card-v ' + (rwyCls === 'info' ? '' : rwyCls);
+  }
+  if ($('exec-runway-icon')) $('exec-runway-icon').className = 'exec-card-icon ' + rwyCls;
+  if ($('exec-runway-sub')){
+    $('exec-runway-sub').textContent = ctx.hasActual
+      ? `バーンレート ${(ctx.burnrate||0).toLocaleString()}千円/月 ・ 残高 ${ctx.lastCash ? (ctx.lastCash/10).toLocaleString()+'千円' : '—'}`
+      : 'バーンレート未確定';
+  }
+
+  // ④ アラートエリア (Phase 2.2)
+  const alerts = [];
+  // 残キャッシュ警告
+  if (rwy != null && rwy < 6){
+    const sev = rwy < 3 ? '危険' : '警戒';
+    alerts.push({ tag: 'cash', tagLabel: 'キャッシュ', text: `残キャッシュ${rwy.toFixed(1)}ヶ月 (${sev}水準) — バーンレート見直しを検討` });
+  }
+  // 販管費の予算超過
+  if (ctx.hasActual && ctx.budOpex > 0){
+    const ratio = ctx.cumOpex / ctx.budOpex;
+    if (ratio > 1.1){
+      const overK = Math.round((ctx.cumOpex - ctx.budOpex) / 10); // 千円
+      alerts.push({ tag: 'budget', tagLabel: '予算', text: `累積販管費が予算比 ${Math.round(ratio*100)}% (+${overK.toLocaleString()}千円超過)` });
+    }
+  }
+  // PL 個別科目の累計超過 (>20%)
+  if (ctx.hasActual && typeof DB !== 'undefined' && typeof currentYear !== 'undefined'){
+    const d = DB[currentYear];
+    const labels = { labor:'人件費', outsource:'業務委託', adv:'広告販促', gaichu:'外注費', other:'その他' };
+    for (const k of Object.keys(labels)){
+      const aArr = d?.pl?.actual?.[k] || [];
+      const bArr = d?.pl?.budget?.[k] || [];
+      const aSum = aArr.slice(0, ctx.lastActualIdx + 1).reduce((s,v) => s + (Number(v)||0), 0);
+      const bSum = bArr.slice(0, ctx.lastActualIdx + 1).reduce((s,v) => s + (Number(v)||0), 0);
+      if (bSum > 0 && aSum / bSum > 1.2){
+        const pct = Math.round(aSum / bSum * 100);
+        const overK = Math.round((aSum - bSum) / 10);
+        alerts.push({ tag: 'budget', tagLabel: labels[k], text: `${labels[k]}が予算比 ${pct}% (+${overK.toLocaleString()}千円超過)` });
+      }
+    }
+  }
+  // 工数管理: 充足度80%未満の役割
+  if (window.WF && window.WF.state && Array.isArray(window.WF.BIZ) && Array.isArray(window.WF.ROLES)){
+    const lowList = [];
+    window.WF.BIZ.forEach(biz => window.WF.ROLES.forEach(role => {
+      const f = window.WF.bizRoleFulfillment(biz, role);
+      if (f != null && f < 0.8) lowList.push({ biz, role, pct: Math.round(f*100) });
+    }));
+    if (lowList.length > 0){
+      const top = lowList.sort((a,b) => a.pct - b.pct).slice(0, 3);
+      const text = top.map(x => `${x.biz}×${x.role}(${x.pct}%)`).join(' / ');
+      alerts.push({ tag: 'staff', tagLabel: '人員', text: `充足度80%未満が${lowList.length}件: ${text}${lowList.length > 3 ? ' ほか' : ''}` });
+    }
+  }
+
+  // 描画
+  const alertEl = $('exec-alerts');
+  const listEl  = $('exec-alert-list');
+  if (alertEl && listEl){
+    if (alerts.length === 0){
+      alertEl.style.display = '';
+      alertEl.classList.add('empty');
+      listEl.innerHTML = '<div class="exec-alert" style="color:var(--tc-green);font-weight:600">✓ 経営指標に重大な逸脱はありません</div>';
+    } else {
+      alertEl.style.display = '';
+      alertEl.classList.remove('empty');
+      listEl.innerHTML = alerts.map(a =>
+        `<div class="exec-alert"><span class="exec-alert-tag ${a.tag}">${a.tagLabel}</span><span>${a.text}</span></div>`
+      ).join('');
+    }
+  }
 }
 
 function riskClass(months) {
@@ -9856,10 +10213,30 @@ async function genAI(type) {
   const d = DB[currentYear];
   const cumRev = (d.pl.actual.rev || []).reduce((s, v) => s + (Number(v) || 0), 0);
   const cumOpex = [...(d.pl.actual.labor||[]),...(d.pl.actual.outsource||[]),...(d.pl.actual.adv||[]),...(d.pl.actual.other||[])].reduce((s, v) => s + (Number(v) || 0), 0) / 4;
+  // 工数管理・経費申請のリアルタイム指標を取り込む (Phase 5.3)
+  let prodLine = '', staffLine = '', expenseLine = '';
+  if (window.WF && typeof window.WF.totalRealizedRev === 'function'){
+    const realRev = window.WF.totalRealizedRev();
+    const costAll = window.WF.totalCost();
+    const ratio = costAll > 0 ? (realRev/costAll).toFixed(2) : '—';
+    prodLine = ` / 人件費生産性:${ratio}倍 (実現売上${(realRev/10000).toFixed(0)}万 ÷ 人件費${(costAll/10000).toFixed(0)}万)`;
+    if (Array.isArray(window.WF.BIZ) && Array.isArray(window.WF.ROLES)){
+      const lows = [];
+      window.WF.BIZ.forEach(b => window.WF.ROLES.forEach(r => {
+        const f = window.WF.bizRoleFulfillment(b, r);
+        if (f != null && f < 0.8) lows.push(`${b}×${r}(${Math.round(f*100)}%)`);
+      }));
+      if (lows.length) staffLine = ` / 充足度低役割:${lows.slice(0,3).join('・')}${lows.length>3?'…':''}`;
+    }
+  }
+  if (window.EXPENSE && Array.isArray(window.EXPENSE.state.requests)){
+    const pending = window.EXPENSE.state.requests.filter(r => r.status === 'pending');
+    if (pending.length) expenseLine = ` / 経費申請承認待ち:${pending.length}件 (合計${pending.reduce((s,x)=>s+(Number(x.amount)||0),0).toLocaleString()}円)`;
+  }
 
   const prompts = {
-    weekly: `NEO福岡の経営コンサルタントとして、以下データをもとに週次ブリーフィングを箇条書き3点で作成してください（①CFリスク、②最重要アクション、③中期的注目点）。\n累積売上:${cumRev.toLocaleString()}千円 / 累積販管費概算:${Math.round(cumOpex).toLocaleString()}千円 / 現金:5,371万円（7.5ヶ月分） / OKR:8/10完了 / AI研修45名・粗利500万円達成 / 採用リード獲得が課題`,
-    report: `NEO福岡の代表取締役CEOとして、役員会議用の月次経営方針コメントを400〜500字で作成してください（①成果評価、②財務・資金対策、③来月の重点方針）。\n累積売上:${cumRev.toLocaleString()}千円（予算比103%）/ 累積販管費概算:${Math.round(cumOpex).toLocaleString()}千円 / 現金:5,371万円 / AI研修45名・粗利500万円 / 既存契約更新14社完了 / 課題:採用リード・研修商品最終化`,
+    weekly: `NEO福岡のCFOアドバイザーとして、以下の経営指標をもとに週次ブリーフィングを箇条書き4点で作成してください（①CFリスク、②人員配置の課題、③予算逸脱、④最重要アクション）。\n累積売上:${cumRev.toLocaleString()}千円 / 累積販管費概算:${Math.round(cumOpex).toLocaleString()}千円${prodLine}${staffLine}${expenseLine}`,
+    report: `NEO福岡の代表取締役CEOとして、役員会議用の月次経営方針コメントを400〜500字で作成してください（①成果評価、②財務・資金対策、③人員配置と生産性、④来月の重点方針）。\n累積売上:${cumRev.toLocaleString()}千円（予算比103%）/ 累積販管費概算:${Math.round(cumOpex).toLocaleString()}千円${prodLine}${staffLine}${expenseLine}`,
     'sim-pl': (() => {
       const months = getSimMonths();
       const labels = getSimLabels();
@@ -10455,7 +10832,7 @@ window.addEventListener('load', async () => {
       const yBtns = document.querySelectorAll('.year-toggle .yt');
       if (yBtns[yIdx]) setYear(savedYear, yBtns[yIdx]);
     }
-    const tabOrder = ['weekly','pl-cf','import','sim','workforce','report','pdf'];
+    const tabOrder = ['weekly','pl-cf','import','sim','workforce','payroll','expense','report','pdf'];
     const savedTab = localStorage.getItem('neo_active_tab');
     const tIdx = tabOrder.indexOf(savedTab);
     if (tIdx > 0) { // 0='weekly' はデフォルトなのでスキップ
@@ -12532,22 +12909,82 @@ document.addEventListener('DOMContentLoaded', function() {
   function totalOperatingProfit(){ return BIZ.reduce((s,b) => s + bizOperatingProfit(b), 0); }
 
   // ─── 自動保存 (localStorage) ───
-  // 編集のたびに即座に localStorage に保存する。リロード後は自動復元される。
-  // 名前付きバージョン (workforce_versions) は別軸で「明示的に保存したスナップショット」として管理。
+  // 編集のたびに localStorage + Supabase + BroadcastChannel に保存。
+  // - localStorage: 即時 (200ms debounce)、リロード時に最優先で復元
+  // - Supabase:    1.5s debounce、workforce_versions の version_id=0 を下書きスロットに使用
+  //                (履歴一覧表示からは除外)
+  // - BroadcastChannel: 同一ブラウザの他タブを即時同期
+  // 名前付きバージョン (version_id != 0) は別軸で「明示的に保存したスナップショット」として管理。
   const DRAFT_KEY = 'neo_workforce_draft_v1';
+  const DRAFT_VERSION_ID = 0;
+  const DRAFT_NAME = '__autosave__';
   let _draftSaveTimer = null;
+  let _draftSupabaseTimer = null;
+  let _suppressNextRemoteApply = false; // 自分の保存通知を再適用しないためのフラグ
+
+  // BroadcastChannel: 同一ブラウザの別タブ間で即時同期
+  const _bc = (typeof BroadcastChannel === 'function') ? new BroadcastChannel('neo_workforce') : null;
+  if (_bc){
+    _bc.onmessage = (ev) => {
+      if (!ev.data || ev.data.type !== 'draft-update') return;
+      if (ev.data.savedAt && state._lastDraftSavedAt && ev.data.savedAt <= state._lastDraftSavedAt) return;
+      if (ev.data.snapshot){
+        _suppressNextRemoteApply = true;
+        restoreSnapshot(ev.data.snapshot);
+        if (ev.data.currentVersionId != null) state.currentVersionId = ev.data.currentVersionId;
+        state._lastDraftSavedAt = ev.data.savedAt || new Date().toISOString();
+        // ループ防止のため saveDraftLocal は呼ばない、UI だけ再描画
+        renderKPI(); renderPL(); renderGrid();
+        renderHeatmap(); renderFulSummary();
+        renderFTEMatrix(); renderWeightMatrix(); renderSGABody();
+        updateDirtyFlag(); renderVersionUI();
+        if (window.PAYROLL && window.PAYROLL.state.initialized) window.PAYROLL.renderAll();
+      }
+    };
+  }
+
   function saveDraftLocal(){
     if (_draftSaveTimer) clearTimeout(_draftSaveTimer);
     _draftSaveTimer = setTimeout(() => {
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        const payload = {
           snapshot: takeSnapshot(),
           currentVersionId: state.currentVersionId,
           savedAt: new Date().toISOString(),
-        }));
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+        state._lastDraftSavedAt = payload.savedAt;
+        state._lastLocalSaveAt = Date.now(); // Realtime echo 防止用
+        // 同一ブラウザの他タブにブロードキャスト
+        if (_bc){
+          try { _bc.postMessage({ type: 'draft-update', ...payload }); } catch(e){}
+        }
+        // Supabase に 1.5s debounce で upsert (他デバイスへの伝播)
+        scheduleSupabaseDraftSave(payload);
       } catch(e){ console.warn('[WF] saveDraftLocal failed:', e.message); }
     }, 200);
   }
+
+  function scheduleSupabaseDraftSave(payload){
+    if (_draftSupabaseTimer) clearTimeout(_draftSupabaseTimer);
+    _draftSupabaseTimer = setTimeout(async () => {
+      try {
+        await apiCall('save_workforce_version', {
+          version_id: DRAFT_VERSION_ID,
+          name: DRAFT_NAME,
+          memo: '',
+          snapshot: payload.snapshot,
+        }, true);
+        const ind = $('payroll-sync-status');
+        if (ind) ind.textContent = '✓ クラウド同期 ' + new Date().toLocaleTimeString('ja-JP');
+      } catch(e){
+        console.warn('[WF] supabase draft save failed:', e.message);
+        const ind = $('payroll-sync-status');
+        if (ind) ind.textContent = '⚠ クラウド同期失敗 (ローカルは保存済)';
+      }
+    }, 1500);
+  }
+
   function loadDraftLocal(){
     try {
       const s = localStorage.getItem(DRAFT_KEY);
@@ -12560,6 +12997,56 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function clearDraftLocal(){
     try { localStorage.removeItem(DRAFT_KEY); } catch(e){}
+  }
+
+  // ─── Supabase Realtime: 別デバイスの編集を即時反映 ───
+  function getSbClient(){
+    try { return (typeof sbClient !== 'undefined') ? sbClient : (window.sbClient || null); }
+    catch(e){ return window.sbClient || null; }
+  }
+
+  function handleRealtimeDraftEvent(payload){
+    // 自分が直近 3秒以内に保存していたら echo とみなしてスキップ
+    if (state._lastLocalSaveAt && (Date.now() - state._lastLocalSaveAt) < 3000) return;
+    const row = payload && payload.new;
+    if (!row || !row.snapshot) return;
+    // 既知の savedAt より古ければスキップ
+    if (state._lastDraftSavedAt && row.saved_at && row.saved_at <= state._lastDraftSavedAt) return;
+    console.log('[WF] Realtime: applying remote draft', row.saved_at);
+    restoreSnapshot(row.snapshot);
+    state._lastDraftSavedAt = row.saved_at;
+    // 全UI再描画 (saveDraftLocal は呼ばない、ループ防止)
+    renderKPI(); renderPL(); renderGrid();
+    renderHeatmap(); renderFulSummary();
+    renderFTEMatrix(); renderWeightMatrix(); renderSGABody();
+    updateDirtyFlag(); renderVersionUI();
+    if (window.PAYROLL && window.PAYROLL.state.initialized) window.PAYROLL.renderAll();
+    const ind = document.getElementById('payroll-sync-status');
+    if (ind) ind.textContent = '↺ 別デバイスから同期 ' + new Date().toLocaleTimeString('ja-JP');
+  }
+
+  let _realtimeChannel = null;
+  function setupRealtimeSync(){
+    if (_realtimeChannel) return; // 二重購読防止
+    const sb = getSbClient();
+    if (!sb || typeof sb.channel !== 'function'){
+      // sbClient 未初期化なら 2秒後に再試行 (config 取得後に来るかもしれない)
+      setTimeout(() => { if (!_realtimeChannel) setupRealtimeSync(); }, 2000);
+      return;
+    }
+    try {
+      _realtimeChannel = sb
+        .channel('workforce_draft_sync')
+        .on('postgres_changes', {
+          event: '*', schema: 'public', table: 'workforce_versions',
+          filter: 'version_id=eq.' + DRAFT_VERSION_ID,
+        }, handleRealtimeDraftEvent)
+        .subscribe((status) => {
+          console.log('[WF] Realtime status:', status);
+        });
+    } catch (e) {
+      console.warn('[WF] Realtime subscription failed:', e.message);
+    }
   }
 
   // ─── スナップショット ───
@@ -12858,7 +13345,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <input type="text" class="wf-name-input" value="${escapeHtml(m.name)}" onchange="WF.updateName(${idx}, this.value)">
         <input type="text" class="wf-role-input" value="${escapeHtml(m.role||'')}" onchange="WF.updateRole(${idx}, this.value)" placeholder="役職">
       </td>`;
-      tbody += `<td class="wf-col-cost"><input type="number" class="wf-cost-input" value="${m.cost}" oninput="WF.updateCost(${idx}, this.value)" step="100000"></td>`;
+      tbody += `<td class="wf-col-cost wf-cost-readonly" onclick="WF.gotoPayroll(${idx})" title="人件費タブで月次編集">¥${(Number(m.cost)||0).toLocaleString()}<br><span style="font-size:8px;color:var(--text3);font-weight:400">📝 月次編集</span></td>`;
       tbody += `<td class="wf-col-ability"><input type="number" class="wf-ability-input ${abilityCls}" value="${ability}" onchange="WF.updateAbility(${idx}, this.value)" step="0.1" min="0.1" max="5"></td>`;
       BIZ.forEach((b, bi) => ROLES.forEach((r, ri) => {
         const v = m.allocMatrix[b][r] || 0;
@@ -13025,7 +13512,9 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
       const r = await apiCall('load_workforce_versions');
       if (r.ok && Array.isArray(r.data)){
-        state.versions = r.data;
+        // 自動保存スロット (version_id=0) は state.draftRemote に分離して、履歴一覧には含めない
+        state.draftRemote = r.data.find(v => Number(v.version_id) === DRAFT_VERSION_ID) || null;
+        state.versions = r.data.filter(v => Number(v.version_id) !== DRAFT_VERSION_ID);
         // 「現在採用中」フラグから currentVersionId を復元
         const cur = state.versions.find(v => v.is_current);
         if (cur && !state.currentVersionId) state.currentVersionId = cur.version_id;
@@ -13500,9 +13989,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const cost = parseInt($('wf-new-cost').value) || 0;
     const ability = parseFloat($('wf-new-ability').value) || 1.0;
     if (!name){ alert('名前を入力してください'); return; }
-    state.members.push({ name, role, cost, ability, allocMatrix: makeAllocMatrix() });
+    // 年額 cost (円) を 12等分して costMonthly (千円) に
+    const monthlyKEn = Math.round(cost / 12 / 1000);
+    const costMonthly = Array(12).fill(monthlyKEn);
+    state.members.push({ name, role, cost, ability, costMonthly, allocMatrix: makeAllocMatrix() });
     $('wf-add-modal').classList.remove('show');
     renderAll();
+    if (window.PAYROLL && window.PAYROLL.state.initialized) window.PAYROLL.renderAll();
     showWfStatus(`「${name}」を追加しました`);
   }
 
@@ -13524,16 +14017,28 @@ document.addEventListener('DOMContentLoaded', function() {
       if (main) main.style.display = 'block';
       if (state.initialized) { renderAll(); return; }
       state.initialized = true;
-      // 1. localStorage の下書きが最優先（リロード時の編集状態を維持）
-      const draft = loadDraftLocal();
-      // 2. Supabase からバージョン一覧を取得（履歴UI用）
+      // 復元優先順位:
+      //  1. Supabase 下書き (version_id=0) と localStorage 下書きを比較し、新しい方を採用
+      //     → 別デバイスで編集 → リロードで取込 (リアルタイム同期の最低限)
+      //  2. どちらもなければ採用中バージョン (is_current)
+      //  3. それもなければデフォルト値
+      const localDraft = loadDraftLocal();
       const ok = await loadVersionsFromSupabase();
-      if (draft && draft.snapshot){
-        restoreSnapshot(draft.snapshot);
-        if (draft.currentVersionId) state.currentVersionId = draft.currentVersionId;
-        console.log('[WF] init: restored from localStorage draft');
+      const remoteDraft = state.draftRemote; // 上で分離済
+      const localTs  = localDraft && localDraft.savedAt ? localDraft.savedAt : '';
+      const remoteTs = remoteDraft && remoteDraft.saved_at ? remoteDraft.saved_at : '';
+      let chosen = null;
+      if (localTs && (!remoteTs || localTs >= remoteTs)){
+        chosen = { source: 'local', snapshot: localDraft.snapshot, currentVersionId: localDraft.currentVersionId };
+      } else if (remoteTs){
+        chosen = { source: 'supabase', snapshot: remoteDraft.snapshot, currentVersionId: null };
+      }
+      if (chosen && chosen.snapshot){
+        restoreSnapshot(chosen.snapshot);
+        if (chosen.currentVersionId) state.currentVersionId = chosen.currentVersionId;
+        state._lastDraftSavedAt = (chosen.source === 'local' ? localTs : remoteTs);
+        console.log('[WF] init: restored from', chosen.source, 'draft');
       } else if (ok){
-        // 下書きが無ければ採用中バージョンを復元
         const cur = state.versions.find(v => v.is_current);
         if (cur){
           restoreSnapshot(cur.snapshot);
@@ -13541,7 +14046,13 @@ document.addEventListener('DOMContentLoaded', function() {
           console.log('[WF] init: restored from is_current version');
         }
       }
+      // 全メンバーに costMonthly[12] を保証 (人件費タブを開かなくても揃う)
+      if (window.PAYROLL && window.PAYROLL.ensureCostMonthly){
+        window.PAYROLL.ensureCostMonthly(state.members);
+      }
       renderAll();
+      // Supabase Realtime 購読を開始 (sbClient 未初期化なら自動リトライ)
+      setupRealtimeSync();
     },
     toggleSection: function(key){ state.collapsed[key] = !state.collapsed[key]; renderPL(); },
     switchSubtab: function(name, btn){
@@ -13583,7 +14094,35 @@ document.addEventListener('DOMContentLoaded', function() {
     // テーブル内のインライン編集ハンドラ (簡易実装、本実装は B4)
     updateName: function(idx, val){ state.members[idx].name = val; },
     updateRole: function(idx, val){ state.members[idx].role = val; },
-    updateCost: function(idx, val){ state.members[idx].cost = parseInt(val) || 0; renderAll(); },
+    // cost (年額・円) は人件費タブの costMonthly[12] (千円) から自動算出される
+    // この関数はモーダル/外部から年額を直接書き換えたいケース用 (12等分して反映)
+    updateCost: function(idx, val){
+      const m = state.members[idx];
+      if (!m) return;
+      const annualEn = parseInt(val) || 0;
+      m.cost = annualEn;
+      const monthlyKEn = Math.round(annualEn / 12 / 1000);
+      m.costMonthly = Array(12).fill(monthlyKEn);
+      renderAll();
+      if (window.PAYROLL && window.PAYROLL.state.initialized) window.PAYROLL.renderAll();
+    },
+    // 工数管理から人件費タブへジャンプ: 該当メンバーの行へスクロール
+    gotoPayroll: function(memberIdx){
+      const tab = document.querySelector('.tabs .tab[onclick*="payroll"]');
+      if (tab) tab.click();
+      setTimeout(() => {
+        const tbl = document.getElementById('payroll-table');
+        if (!tbl) return;
+        const rows = tbl.querySelectorAll('tbody tr');
+        const row = rows[memberIdx];
+        if (row){
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          row.style.transition = 'background .8s';
+          row.style.background = 'rgba(90,171,240,0.20)';
+          setTimeout(() => { row.style.background = ''; }, 1200);
+        }
+      }, 100);
+    },
     updateAbility: function(idx, val){ let v = parseFloat(val) || 1; v = Math.max(0.1, Math.min(5, v)); state.members[idx].ability = v; renderAll(); },
     updateAllocPct: function(idx, biz, role, val){ let v = parseInt(val) || 0; v = Math.max(0, Math.min(100, v)); state.members[idx].allocMatrix[biz][role] = v; renderAll(); },
     deleteMember: function(idx){ if (!confirm(`「${state.members[idx].name}」を削除しますか？`)) return; state.members.splice(idx, 1); renderAll(); },
@@ -13600,6 +14139,67 @@ document.addEventListener('DOMContentLoaded', function() {
     deleteSGA: function(i){ if (!confirm(`「${state.sgaItems[i].name}」を削除しますか？`)) return; state.sgaItems.splice(i, 1); renderAll(); },
     updateFTE:    function(biz, role, val){ state.requiredFTE[biz][role] = parseFloat(val) || 0; renderAll(); },
     updateWeight: function(biz, role, val){ state.roleWeights[biz][role] = parseInt(val) || 0; renderAll(); },
+    // ── 配置サジェスト (Phase 3.2) ──
+    // 貪欲法: 充足度が最も低い役割から、能力×配分余剰が大きいメンバーを優先的に充てがう
+    runSuggest: function(){
+      const list = document.getElementById('wf-suggest-list');
+      if (!list) return;
+      // 不足ロール抽出 (required > 0 かつ 充足度 < 80%)
+      const shortages = [];
+      BIZ.forEach(biz => ROLES.forEach(role => {
+        const req = state.requiredFTE[biz][role] || 0;
+        if (req <= 0) return;
+        const inv = bizRoleInvestedFTE(biz, role);
+        const f = inv / req;
+        if (f < 0.8){
+          shortages.push({ biz, role, req, inv, gap: req - inv, fulfillment: f });
+        }
+      }));
+      if (!shortages.length){
+        list.innerHTML = '<div style="color:var(--tc-green);font-weight:600">✓ 充足度80%未満のロールはありません — 現状の配置は適正です</div>';
+        return;
+      }
+      shortages.sort((a,b) => a.fulfillment - b.fulfillment);
+      // 各メンバーの「配分余剰」と能力を計算
+      const candidates = state.members.map((m, idx) => ({
+        idx, name: m.name, ability: m.ability||1.0,
+        slack: 100 - memberTotalPct(idx),  // 配分計の余裕
+      })).filter(c => c.slack > 0)
+        .sort((a,b) => b.ability - a.ability);
+      const suggestions = [];
+      shortages.forEach(s => {
+        const need = s.gap; // 必要追加 FTE
+        let remaining = need;
+        const picks = [];
+        for (const c of candidates){
+          if (c.slack <= 0) continue;
+          // c.slack の % で投入できる FTE = (slack/100) * ability
+          const couldAdd = Math.min(c.slack / 100 * c.ability, remaining);
+          if (couldAdd < 0.05) continue;
+          // 何%必要か逆算: pct = need / ability * 100
+          const pctNeeded = Math.min(c.slack, Math.ceil(remaining / c.ability * 100));
+          if (pctNeeded < 5) continue;
+          picks.push({ name: c.name, pct: pctNeeded });
+          c.slack -= pctNeeded;
+          remaining -= pctNeeded / 100 * c.ability;
+          if (remaining <= 0.05) break;
+        }
+        if (picks.length){
+          suggestions.push({ ...s, picks });
+        }
+      });
+      if (!suggestions.length){
+        list.innerHTML = '<div style="color:var(--tc-amber);font-weight:600">⚠ 余剰メンバーが不足しています — 採用が必要です</div>';
+        return;
+      }
+      list.innerHTML = suggestions.map(s => {
+        const picksHtml = s.picks.map(p => `<strong>${escapeHtml(p.name)}</strong> +${p.pct}%`).join(' ／ ');
+        return `<div style="padding:6px 0;border-bottom:1px solid var(--border)">
+          <div><span class="wf-rb wf-r-${s.role}">${s.role}</span> <strong>${s.biz}</strong> — 充足度 ${(s.fulfillment*100).toFixed(0)}% (必要 ${s.req.toFixed(1)} / 投入 ${s.inv.toFixed(2)})</div>
+          <div style="margin-top:3px;color:var(--text2)">→ ${picksHtml}</div>
+        </div>`;
+      }).join('') + '<div style="margin-top:6px;font-size:10px;color:var(--text3)">※ 提案は能力係数と配分余剰のみから算出した参考値です。手動で配分%を調整してください。</div>';
+    },
     // JSON 入出力（ローカルバックアップ）
     exportJSON: function(){
       const data = { snapshot: takeSnapshot(), exportedAt: new Date().toISOString() };
@@ -13640,6 +14240,579 @@ document.addEventListener('DOMContentLoaded', function() {
     const sm = $('wf-save-modal');
     if (sm) sm.addEventListener('click', e => { if (e.target.id === 'wf-save-modal') sm.classList.remove('show'); });
   });
+})();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         人件費 (Payroll) — メンバー × 月 の編集表 (千円)
+         WF.state.members を共有し、costMonthly[12] を介して工数管理に自動反映
+         ════════════════════════════════════════════════════════════════ -->
+    <script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const MONTH_LABELS_FY = ['4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月'];
+  const PAYROLL_DRAFT_KEY = 'neo_workforce_draft_v1'; // WF と同じ key (state は共有)
+
+  const state = { initialized: false, chart: null };
+
+  // costMonthly が無いメンバーには cost(年額・円) を 12等分して千円で初期化（後方互換）
+  function ensureCostMonthly(members){
+    if (!Array.isArray(members)) return;
+    members.forEach(m => {
+      if (!Array.isArray(m.costMonthly) || m.costMonthly.length !== 12){
+        const annualEn = Number(m.cost) || 0;
+        const monthlyKEn = Math.round(annualEn / 12 / 1000); // 円→千円
+        m.costMonthly = Array(12).fill(monthlyKEn);
+      } else {
+        // 数値化を保証
+        m.costMonthly = m.costMonthly.map(v => Math.max(0, Math.round(Number(v) || 0)));
+      }
+    });
+  }
+
+  // costMonthly から年額(円)を再計算してメンバーの cost を更新
+  function recalcCostFromMonthly(member){
+    if (!member || !Array.isArray(member.costMonthly)) return;
+    const monthlyTotalK = member.costMonthly.reduce((s,v) => s + (Number(v)||0), 0);
+    member.cost = monthlyTotalK * 1000; // 千円→円
+  }
+
+  function getMembers(){
+    return (window.WF && window.WF.state && window.WF.state.members) || [];
+  }
+
+  // ─── ユーティリティ ───
+  function escapeHtml(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function fmtK(n){ return Math.round(Number(n)||0).toLocaleString(); }
+
+  // ─── 月別合計（千円） ───
+  function monthTotalsK(){
+    const totals = Array(12).fill(0);
+    getMembers().forEach(m => {
+      (m.costMonthly || []).forEach((v, i) => { totals[i] += Number(v) || 0; });
+    });
+    return totals;
+  }
+
+  function renderKPI(){
+    const members = getMembers();
+    const totals = monthTotalsK();
+    const yearTotalK = totals.reduce((s,v) => s+v, 0);
+    const avgK       = Math.round(yearTotalK / 12);
+    const activeCount = members.filter(m => (m.costMonthly||[]).some(v => Number(v) > 0)).length;
+    let peakIdx = 0;
+    totals.forEach((v, i) => { if (v > totals[peakIdx]) peakIdx = i; });
+    const peakK = totals[peakIdx] || 0;
+
+    if ($('payroll-kpi-total')) $('payroll-kpi-total').textContent = fmtK(yearTotalK) + '千円';
+    if ($('payroll-kpi-total-sub')) $('payroll-kpi-total-sub').innerHTML =
+      '<span style="color:var(--text3)">年額(円換算): ¥' + fmtK(yearTotalK*1000) + '</span>';
+    if ($('payroll-kpi-avg')) $('payroll-kpi-avg').textContent = fmtK(avgK) + '千円';
+    if ($('payroll-kpi-count')) $('payroll-kpi-count').textContent = activeCount + '名';
+    if ($('payroll-kpi-peak')){
+      $('payroll-kpi-peak').textContent = MONTH_LABELS_FY[peakIdx];
+      if ($('payroll-kpi-peak-sub')) $('payroll-kpi-peak-sub').textContent = fmtK(peakK) + '千円';
+    }
+  }
+
+  function renderTable(){
+    const tbl = $('payroll-table');
+    if (!tbl) return;
+    const members = getMembers();
+    if (!members.length){
+      tbl.innerHTML = '<tr><td style="padding:18px;text-align:center;color:var(--text3);font-size:11px">メンバーがいません。工数管理タブから追加してください。</td></tr>';
+      return;
+    }
+    let html = '<thead><tr>';
+    html += '<th style="background:var(--text);color:var(--bg);min-width:32px"></th>'; // 削除列
+    html += '<th class="member-name-head" style="background:var(--text);color:var(--bg)">メンバー</th>';
+    html += '<th style="background:var(--text);color:var(--bg);min-width:46px" title="行内全月に4月の値を反映">→</th>';
+    MONTH_LABELS_FY.forEach((lbl, i) => {
+      html += '<th class="month-col" style="background:var(--text);color:var(--bg)">' + lbl + '</th>';
+    });
+    html += '<th style="background:var(--bg2);color:var(--text);position:sticky;right:0;z-index:1;min-width:74px">年合計</th>';
+    html += '</tr></thead><tbody>';
+
+    members.forEach((m, idx) => {
+      const monthly = m.costMonthly || Array(12).fill(0);
+      const yearTotal = monthly.reduce((s,v) => s + (Number(v)||0), 0);
+      html += '<tr>';
+      html += '<td><button class="wf-delete-btn" onclick="PAYROLL.deleteMember(' + idx + ')" title="このメンバーを削除（工数管理にも反映）">🗑</button></td>';
+      html += '<td class="member-name">' + escapeHtml(m.name || '') +
+        (m.role ? '<br><span style="font-size:9px;color:var(--text3);font-weight:400">' + escapeHtml(m.role) + '</span>' : '') + '</td>';
+      html += '<td><button class="btn" onclick="PAYROLL.copyRow(' + idx + ')" style="font-size:9px;padding:2px 6px" title="この行の4月の値を全月にコピー">→</button></td>';
+      monthly.forEach((v, mi) => {
+        const cls = (Number(v) > 0) ? 'pay-cell has-val' : 'pay-cell zero';
+        html += '<td><input type="number" class="' + cls + '" value="' + (Number(v)||0) +
+          '" min="0" step="1" onchange="PAYROLL.updateCell(' + idx + ',' + mi + ',this.value)"></td>';
+      });
+      html += '<td class="pay-row-total">' + fmtK(yearTotal) + '</td>';
+      html += '</tr>';
+    });
+
+    // 月別合計フッター
+    const totals = monthTotalsK();
+    const grand = totals.reduce((s,v) => s+v, 0);
+    html += '<tr class="pay-month-total">';
+    html += '<td></td>';
+    html += '<td class="member-name">月別合計（千円）</td>';
+    html += '<td></td>';
+    totals.forEach(t => { html += '<td>' + fmtK(t) + '</td>'; });
+    html += '<td class="pay-row-total">' + fmtK(grand) + '</td>';
+    html += '</tr></tbody>';
+
+    tbl.innerHTML = html;
+  }
+
+  function renderTrendChart(){
+    const canvas = $('payroll-trend-chart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    const totals = monthTotalsK();
+    const ctx = canvas.getContext('2d');
+    const tc = getComputedStyle(document.body).getPropertyValue('--text3').trim() || '#888';
+    if (state.chart){ state.chart.destroy(); state.chart = null; }
+    state.chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: MONTH_LABELS_FY,
+        datasets: [{
+          label: '人件費合計（千円）',
+          data: totals,
+          backgroundColor: 'rgba(90,171,240,0.55)',
+          borderColor: '#5aabf0',
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => fmtK(ctx.parsed.y) + ' 千円' } },
+        },
+        scales: {
+          x: { ticks: { color: tc, font: { size: 10 } }, grid: { display: false } },
+          y: { ticks: { color: tc, font: { size: 9 }, callback: (v) => fmtK(v) }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        },
+      },
+    });
+  }
+
+  function renderAll(){
+    ensureCostMonthly(getMembers());
+    renderKPI();
+    renderTable();
+    renderTrendChart();
+  }
+
+  const PAYROLL = {
+    state,
+    ensureCostMonthly,
+    recalcCostFromMonthly,
+    getMembers,
+    renderAll,
+    init: async function(){
+      // 初回: WF が初期化されていなければ先に走らせて members を確保
+      if (window.WF && !window.WF.state.initialized){
+        await window.WF.init();
+      }
+      ensureCostMonthly(getMembers());
+      // 年度ラベル (既存 currentYear を参照)
+      const yr = (typeof window.currentYear === 'string') ? window.currentYear : '';
+      if ($('payroll-year-label')) $('payroll-year-label').textContent = yr ? (yr + '年度') : '';
+      state.initialized = true;
+      renderAll();
+    },
+    // セル編集 (千円) → costMonthly 更新 → 年額 cost を再計算 → WF と PAYROLL を再描画
+    // (WF.renderAll が localStorage への自動保存も担う)
+    updateCell: function(memberIdx, monthIdx, val){
+      const members = getMembers();
+      const m = members[memberIdx];
+      if (!m) return;
+      if (!Array.isArray(m.costMonthly) || m.costMonthly.length !== 12) ensureCostMonthly([m]);
+      m.costMonthly[monthIdx] = Math.max(0, parseInt(val) || 0);
+      recalcCostFromMonthly(m);
+      renderAll(); // PAYROLL 再描画
+      // 工数管理にも自動反映 (WF.renderAll は内部で saveDraftLocal を呼ぶので保存も完了)
+      if (window.WF && window.WF.renderAll) window.WF.renderAll();
+      if ($('payroll-sync-status')) $('payroll-sync-status').textContent = '✓ 自動保存済 ' + new Date().toLocaleTimeString('ja-JP');
+    },
+    // 行内ボタン: 4月の値を全月にコピー
+    copyRow: function(memberIdx){
+      const members = getMembers();
+      const m = members[memberIdx];
+      if (!m) return;
+      if (!Array.isArray(m.costMonthly) || m.costMonthly.length !== 12) ensureCostMonthly([m]);
+      const v = Number(m.costMonthly[0]) || 0;
+      if (!confirm(`「${m.name}」の4月の値（${fmtK(v)}千円）を全12ヶ月にコピーしますか？`)) return;
+      m.costMonthly = Array(12).fill(v);
+      recalcCostFromMonthly(m);
+      renderAll();
+      if (window.WF && window.WF.renderAll) window.WF.renderAll();
+    },
+    // ツールバーボタン: 全メンバーの4月の値を全月にコピー
+    copyAcrossMonths: function(){
+      if (!confirm('全メンバーの4月の値を全12ヶ月にコピーしますか？')) return;
+      const members = getMembers();
+      members.forEach(m => {
+        if (!Array.isArray(m.costMonthly) || m.costMonthly.length !== 12) ensureCostMonthly([m]);
+        const v = Number(m.costMonthly[0]) || 0;
+        m.costMonthly = Array(12).fill(v);
+        recalcCostFromMonthly(m);
+      });
+      renderAll();
+      if (window.WF && window.WF.renderAll) window.WF.renderAll();
+    },
+    // メンバー追加: 工数管理の既存モーダル (#wf-add-modal) を再利用
+    // → 追加された新メンバーには WF.addMember 内で costMonthly[12] が初期化される
+    openAddMemberModal: function(){
+      if (window.WF && typeof window.WF.openAddModal === 'function'){
+        window.WF.openAddModal();
+      } else {
+        alert('工数管理モジュールが読み込まれていません');
+      }
+    },
+    // メンバー削除: 工数管理と人件費の両方から消える (state.members を共有しているため)
+    deleteMember: function(idx){
+      const members = getMembers();
+      const m = members[idx];
+      if (!m) return;
+      if (!confirm(`「${m.name}」を削除しますか？人件費・工数管理の両方から消えます。`)) return;
+      members.splice(idx, 1);
+      renderAll();
+      if (window.WF && window.WF.renderAll) window.WF.renderAll();
+    },
+    resetToWorkforce:  function(){
+      if (!confirm('工数管理の年額(cost)を12等分して人件費表をリセットしますか？')) return;
+      const members = getMembers();
+      members.forEach(m => {
+        const annualEn = Number(m.cost) || 0;
+        const monthlyKEn = Math.round(annualEn / 12 / 1000);
+        m.costMonthly = Array(12).fill(monthlyKEn);
+      });
+      renderAll();
+      if (window.WF && window.WF.renderAll) window.WF.renderAll();
+    },
+  };
+  window.PAYROLL = PAYROLL;
+})();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         ExpenseSync (Phase 4): 外部経費管理ダッシュボードとの連携
+         URL を localStorage に保存、ポーリング/手動で JSON を取込
+         ════════════════════════════════════════════════════════════════ -->
+    <script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const URL_KEY  = 'neo_expense_api_url';
+  const POLL_KEY = 'neo_expense_poll_enabled';
+  let pollTimer = null;
+
+  function fmtJPY(n){
+    const a = Math.abs(Number(n)||0);
+    if (a >= 100000000) return (n>=0?'¥':'¥▲') + (a/100000000).toFixed(2) + '億';
+    if (a >= 10000000)  return (n>=0?'¥':'¥▲') + (a/1000000).toFixed(1) + 'M';
+    if (a >= 10000)     return (n>=0?'¥':'¥▲') + (a/10000).toFixed(0) + '万';
+    return (n>=0?'¥':'¥▲') + Math.round(a).toLocaleString();
+  }
+
+  function setStatus(msg, color){
+    const el = $('expense-sync-status');
+    if (el){
+      el.textContent = msg;
+      el.style.color = color || 'var(--text3)';
+    }
+  }
+
+  function renderSummary(payload){
+    const el = $('expense-summary');
+    if (!el) return;
+    if (!payload){
+      el.innerHTML = '<span style="color:var(--text3)">取込履歴なし</span>';
+      return;
+    }
+    const total = Number(payload.total) || 0;
+    const budget = Number(payload.budget) || 0;
+    const usagePct = budget > 0 ? Math.round(total/budget*100) : 0;
+    const cls = usagePct <= 80 ? 'good' : usagePct <= 100 ? 'warn' : 'bad';
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    let h = `<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+      <div><span style="color:var(--text3)">使用</span> <strong>${fmtJPY(total*1000)}</strong></div>
+      <div><span style="color:var(--text3)">予算</span> <strong>${fmtJPY(budget*1000)}</strong></div>
+      <div><span style="color:var(--text3)">残</span> <strong>${fmtJPY((budget-total)*1000)}</strong></div>
+      <div class="exec-card-bar" style="flex:1;min-width:120px;max-width:240px;height:6px;margin:0">
+        <div class="exec-card-bar-fill ${cls}" style="width:${Math.min(100,usagePct)}%"></div>
+      </div>
+      <div><strong class="${cls === 'good' ? '' : cls === 'warn' ? 'a' : 'r'}">${usagePct}%</strong></div>
+    </div>`;
+    if (items.length){
+      h += '<div style="font-size:10px;color:var(--text3);max-height:120px;overflow-y:auto;border-top:1px solid var(--border);padding-top:4px">';
+      items.slice(0, 8).forEach(it => {
+        h += `<div style="display:flex;justify-content:space-between;padding:2px 0">
+          <span>${escapeHtml(it.category||'(未分類)')}</span>
+          <span>${fmtJPY((it.amount||0)*1000)}</span>
+        </div>`;
+      });
+      if (items.length > 8) h += `<div style="text-align:center;color:var(--text3)">…他 ${items.length-8} 件</div>`;
+      h += '</div>';
+    }
+    el.innerHTML = h;
+  }
+
+  function escapeHtml(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  async function fetchAndRender(silent){
+    const url = (localStorage.getItem(URL_KEY) || '').trim();
+    if (!url){
+      if (!silent) alert('URL が未設定です');
+      setStatus('未設定');
+      return;
+    }
+    try {
+      setStatus('取込中…');
+      const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      // 期待 schema: { items: [{category, amount}], total, budget }
+      // 千円単位を想定 (ない場合はそのまま)
+      try { localStorage.setItem('neo_expense_last', JSON.stringify({ data, savedAt: new Date().toISOString() })); } catch(e){}
+      renderSummary(data);
+      setStatus('✓ ' + new Date().toLocaleTimeString('ja-JP'), 'var(--tc-green)');
+    } catch (e){
+      console.warn('[ExpenseSync] fetch failed:', e.message);
+      setStatus('⚠ ' + e.message, 'var(--tc-red)');
+      if (!silent) alert('取込に失敗しました: ' + e.message);
+    }
+  }
+
+  function loadInitial(){
+    const url = localStorage.getItem(URL_KEY) || '';
+    const urlEl = $('expense-api-url');
+    if (urlEl) urlEl.value = url;
+    const pollEnabled = localStorage.getItem(POLL_KEY) === '1';
+    const pollEl = $('expense-poll-toggle');
+    if (pollEl) pollEl.checked = pollEnabled;
+    // 直近の取込結果を表示 (オフライン時のフォールバック)
+    try {
+      const cached = JSON.parse(localStorage.getItem('neo_expense_last') || 'null');
+      if (cached && cached.data){
+        renderSummary(cached.data);
+        setStatus('キャッシュ ' + new Date(cached.savedAt).toLocaleTimeString('ja-JP'));
+      }
+    } catch(e){}
+    if (pollEnabled) startPoll();
+  }
+
+  function startPoll(){
+    stopPoll();
+    pollTimer = setInterval(() => fetchAndRender(true), 60000);
+    fetchAndRender(true);
+  }
+  function stopPoll(){
+    if (pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  const ExpenseSync = {
+    saveUrl: function(){
+      const url = ($('expense-api-url').value || '').trim();
+      try { localStorage.setItem(URL_KEY, url); } catch(e){}
+      setStatus(url ? 'URL保存済' : '未設定');
+    },
+    fetchNow: () => fetchAndRender(false),
+    togglePoll: function(enabled){
+      try { localStorage.setItem(POLL_KEY, enabled ? '1' : '0'); } catch(e){}
+      if (enabled) startPoll(); else stopPoll();
+    },
+  };
+  window.ExpenseSync = ExpenseSync;
+
+  document.addEventListener('DOMContentLoaded', loadInitial);
+})();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         EXPENSE (Phase 5): 経費申請ワークフロー
+         /api/db ベース。Supabase Realtime は今後拡張可。
+         ════════════════════════════════════════════════════════════════ -->
+    <script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const state = { initialized: false, requests: [], filter: 'pending' };
+
+  function escapeHtml(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function fmtJPY(n){
+    const a = Math.abs(Number(n)||0);
+    if (a >= 10000) return (n>=0?'¥':'¥▲') + (a/10000).toFixed(0) + '万';
+    return (n>=0?'¥':'¥▲') + Math.round(a).toLocaleString();
+  }
+  async function api(action, body, isPost){
+    const url = '/api/db?action=' + action + (body && !isPost ? '&' + new URLSearchParams(body).toString() : '');
+    const opts = isPost ? { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) } : {};
+    const r = await fetch(url, opts);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }
+
+  async function loadAll(){
+    try {
+      const r = await api('load_expense_requests');
+      state.requests = (r.ok && r.data) ? r.data : [];
+    } catch (e){
+      console.warn('[EXPENSE] load failed:', e.message);
+      state.requests = [];
+    }
+    renderKPI();
+    renderList();
+  }
+
+  function thisMonthRequests(predicate){
+    const now = new Date();
+    const ym = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+    return state.requests.filter(r => predicate(r) && (r.created_at || '').slice(0,7) === ym);
+  }
+
+  function renderKPI(){
+    const pending = state.requests.filter(r => r.status === 'pending');
+    const apprMonth = thisMonthRequests(r => r.status === 'approved');
+    const rejMonth  = thisMonthRequests(r => r.status === 'rejected');
+    const sumAmt = (arr) => arr.reduce((s,x) => s + (Number(x.amount)||0), 0);
+    if ($('exp-kpi-pending'))     $('exp-kpi-pending').textContent = pending.length + '件';
+    if ($('exp-kpi-pending-amt')) $('exp-kpi-pending-amt').textContent = fmtJPY(sumAmt(pending));
+    if ($('exp-kpi-approved'))    $('exp-kpi-approved').textContent = apprMonth.length + '件';
+    if ($('exp-kpi-approved-amt'))$('exp-kpi-approved-amt').textContent = fmtJPY(sumAmt(apprMonth));
+    if ($('exp-kpi-rejected'))    $('exp-kpi-rejected').textContent = rejMonth.length + '件';
+    if ($('exp-kpi-total'))       $('exp-kpi-total').textContent = state.requests.length + '件';
+  }
+
+  function statusBadge(status){
+    if (status === 'approved') return '<span class="badge bg">承認済</span>';
+    if (status === 'rejected') return '<span class="badge br">却下</span>';
+    return '<span class="badge ba">承認待ち</span>';
+  }
+
+  function renderList(){
+    const tbl = $('exp-list-table');
+    if (!tbl) return;
+    const filtered = state.filter === 'all' ? state.requests : state.requests.filter(r => r.status === state.filter);
+    if (!filtered.length){
+      tbl.innerHTML = '<tr><td style="padding:20px;text-align:center;color:var(--text3);font-size:11px">該当する申請はありません</td></tr>';
+      return;
+    }
+    let html = '<thead><tr>'
+      + '<th style="width:90px">日付</th>'
+      + '<th style="width:110px">申請者</th>'
+      + '<th>カテゴリ</th>'
+      + '<th style="width:90px">金額</th>'
+      + '<th>用途</th>'
+      + '<th style="width:80px">状態</th>'
+      + '<th style="width:160px">操作</th>'
+      + '</tr></thead><tbody>';
+    filtered.forEach(r => {
+      const date = (r.created_at || '').slice(5,10).replace('-','/');
+      const isPending = r.status === 'pending';
+      const receipt = r.receipt_url ? `<a href="${escapeHtml(r.receipt_url)}" target="_blank" style="color:#5aabf0">📎</a>` : '';
+      html += `<tr>
+        <td style="font-size:10px">${date}</td>
+        <td>${escapeHtml(r.requester_name)}${r.requester_email ? `<br><span style="font-size:9px;color:var(--text3)">${escapeHtml(r.requester_email)}</span>` : ''}</td>
+        <td>${escapeHtml(r.category)}</td>
+        <td class="num" style="text-align:right">${fmtJPY(r.amount)}</td>
+        <td style="font-size:10px;color:var(--text2)">${escapeHtml(r.description || '')} ${receipt}</td>
+        <td>${statusBadge(r.status)}${r.approved_by ? `<br><span style="font-size:9px;color:var(--text3)">by ${escapeHtml(r.approved_by)}</span>` : ''}</td>
+        <td>
+          ${isPending ? `<button class="btn btn-g" onclick="EXPENSE.decide(${r.request_id},'approved')" style="font-size:9px;padding:2px 8px">✓ 承認</button>
+                        <button class="btn" onclick="EXPENSE.decide(${r.request_id},'rejected')" style="font-size:9px;padding:2px 8px;color:var(--tc-red);border-color:var(--tc-red)">✗ 却下</button>` : ''}
+          <button class="btn" onclick="EXPENSE.deleteRequest(${r.request_id})" style="font-size:9px;padding:2px 6px;color:var(--tc-red);border-color:var(--tc-red)">🗑</button>
+        </td>
+      </tr>`;
+    });
+    html += '</tbody>';
+    tbl.innerHTML = html;
+  }
+
+  const EXPENSE = {
+    state,
+    init: async function(){
+      state.initialized = true;
+      await loadAll();
+    },
+    refresh: () => loadAll(),
+    setFilter: function(f, btn){
+      state.filter = f;
+      ['pending','approved','rejected','all'].forEach(k => {
+        const b = $('exp-filter-' + k);
+        if (b) b.classList.toggle('active', k === f);
+      });
+      renderList();
+    },
+    clearForm: function(){
+      ['exp-form-name','exp-form-email','exp-form-category','exp-form-amount','exp-form-desc','exp-form-receipt'].forEach(id => {
+        const el = $(id); if (el) el.value = '';
+      });
+    },
+    submitRequest: async function(){
+      const name  = ($('exp-form-name').value || '').trim();
+      const email = ($('exp-form-email').value || '').trim();
+      const category = ($('exp-form-category').value || '').trim();
+      const amount = parseInt($('exp-form-amount').value) || 0;
+      const description = ($('exp-form-desc').value || '').trim();
+      const receipt_url = ($('exp-form-receipt').value || '').trim();
+      if (!name || !category || amount <= 0){
+        alert('申請者名・カテゴリ・金額(>0) は必須です'); return;
+      }
+      try {
+        await api('create_expense_request', {
+          request_id: Date.now(), requester_name: name, requester_email: email || null,
+          category, amount, description, receipt_url: receipt_url || null,
+        }, true);
+        EXPENSE.clearForm();
+        await loadAll();
+        alert('✓ 申請を送信しました');
+      } catch (e){
+        alert('送信に失敗しました: ' + e.message);
+      }
+    },
+    decide: async function(request_id, decision){
+      let approved_by = '';
+      let reject_reason = null;
+      if (decision === 'approved'){
+        approved_by = prompt('承認者名を入力してください', '') || '';
+        if (!approved_by.trim()) return;
+      } else {
+        approved_by = prompt('却下者名を入力してください', '') || '';
+        if (!approved_by.trim()) return;
+        reject_reason = prompt('却下理由 (任意)', '') || '';
+      }
+      try {
+        await api('decide_expense_request', { request_id, decision, approved_by: approved_by.trim(), reject_reason }, true);
+        await loadAll();
+      } catch (e){
+        alert('処理に失敗しました: ' + e.message);
+      }
+    },
+    deleteRequest: async function(request_id){
+      if (!confirm('この申請を削除しますか？')) return;
+      try {
+        await api('delete_expense_request', { request_id }, true);
+        await loadAll();
+      } catch (e){
+        alert('削除に失敗しました: ' + e.message);
+      }
+    },
+  };
+  window.EXPENSE = EXPENSE;
 })();
     </script>
 </body>
