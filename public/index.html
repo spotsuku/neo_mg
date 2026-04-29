@@ -479,8 +479,35 @@ input.cells-edit-input {
 #sec-workforce .wf-ratio-cell.warn{color:#f0a060}
 #sec-workforce .wf-ratio-cell.bad{color:#e87070}
 
-/* グリッド */
+/* グリッド (編集モード) */
 #sec-workforce .wf-grid-wrap{overflow:auto;max-height:75vh;position:relative;border:1px solid var(--border);border-radius:var(--rl)}
+
+/* グリッド (可視化モード) */
+#sec-workforce .wf-viz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:10px}
+#sec-workforce .wf-viz-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--rl);padding:11px 13px}
+#sec-workforce .wf-viz-card.dim{opacity:.5}
+#sec-workforce .wf-viz-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+#sec-workforce .wf-viz-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#5aabf0,#af52de);display:grid;place-items:center;color:#fff;font-weight:700;font-size:11px;flex-shrink:0}
+#sec-workforce .wf-viz-name{font-size:13px;font-weight:700}
+#sec-workforce .wf-viz-role-label{font-size:10px;color:var(--text3)}
+#sec-workforce .wf-viz-cost{font-size:10px;color:var(--text3);margin-left:auto;font-family:monospace}
+#sec-workforce .wf-viz-total{font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px}
+#sec-workforce .wf-viz-total.full{background:var(--bg-green);color:var(--tc-green)}
+#sec-workforce .wf-viz-total.under{background:var(--bg-amber);color:var(--tc-amber)}
+#sec-workforce .wf-viz-total.over{background:var(--bg-red);color:var(--tc-red)}
+#sec-workforce .wf-viz-total.zero{background:var(--bg2);color:var(--text3)}
+#sec-workforce .wf-viz-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--bg2);margin-bottom:8px}
+#sec-workforce .wf-viz-seg{height:100%;transition:filter .1s}
+#sec-workforce .wf-viz-seg:hover{filter:brightness(1.3)}
+#sec-workforce .wf-viz-list{display:flex;flex-wrap:wrap;gap:4px}
+#sec-workforce .wf-viz-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:5px;background:var(--bg2);border:1px solid var(--border);font-size:10px;line-height:1.2}
+#sec-workforce .wf-viz-chip .wf-rb{font-size:9px;padding:1px 5px}
+#sec-workforce .wf-viz-chip-biz{color:var(--text2);font-weight:600}
+#sec-workforce .wf-viz-chip-pct{font-weight:700;color:var(--text);font-family:monospace;margin-left:2px}
+#sec-workforce .wf-viz-empty{color:var(--text3);font-size:10px;font-style:italic}
+#sec-workforce .wf-viz-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;font-size:10px;color:var(--text3)}
+#sec-workforce .wf-viz-controls input[type="search"]{padding:5px 9px;border:1px solid var(--border2);border-radius:5px;background:var(--bg);color:var(--text);font-size:11px;font-family:inherit;min-width:160px}
+#sec-workforce .wf-viz-controls select{padding:5px 9px;border:1px solid var(--border2);border-radius:5px;background:var(--bg);color:var(--text);font-size:11px;font-family:inherit}
 #sec-workforce .wf-legend{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:10px;color:var(--text3);margin-bottom:6px}
 #sec-workforce .wf-legend-item{display:flex;align-items:center;gap:4px}
 #sec-workforce .wf-swatch{width:11px;height:11px;border-radius:2px;border:1px solid var(--border2)}
@@ -1545,7 +1572,11 @@ input.cells-edit-input {
     <div class="card">
       <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span>👥 メンバー工数配分</span>
-        <button class="btn btn-g" onclick="WF.openAddModal()" style="font-size:10px;padding:3px 10px;margin-left:auto">＋ メンバー追加</button>
+        <div class="pa-toggle" style="margin:0 0 0 auto" id="wf-grid-mode-toggle">
+          <button class="pa-btn active" data-mode="edit" onclick="WF.setGridMode('edit')" style="font-size:10px;padding:3px 10px">📝 数値記入</button>
+          <button class="pa-btn"        data-mode="viz"  onclick="WF.setGridMode('viz')"  style="font-size:10px;padding:3px 10px">👁 担当可視化</button>
+        </div>
+        <button class="btn btn-g" onclick="WF.openAddModal()" style="font-size:10px;padding:3px 10px">＋ メンバー追加</button>
         <button class="btn" onclick="WF.resetToInitial()" style="font-size:10px;padding:3px 10px">初期値に戻す</button>
         <button class="btn" onclick="WF.resetAllAbility()" style="font-size:10px;padding:3px 10px">能力係数を全部1に</button>
         <button class="btn" onclick="WF.exportJSON()" style="font-size:10px;padding:3px 10px" title="現在の状態を JSON でダウンロード">⬇ JSON出力</button>
@@ -1562,7 +1593,8 @@ input.cells-edit-input {
         <span class="wf-legend-item"><span class="wf-swatch" style="background:#fce7f3"></span>PR</span>
         <span style="margin-left:8px">単位：人月</span>
       </div>
-      <div class="wf-grid-wrap"><table class="wf-grid" id="wf-grid-table"></table></div>
+      <div class="wf-grid-wrap" id="wf-grid-edit-wrap"><table class="wf-grid" id="wf-grid-table"></table></div>
+      <div id="wf-grid-viz-wrap" style="display:none"></div>
     </div>
   </div>
 
@@ -13396,7 +13428,124 @@ document.addEventListener('DOMContentLoaded', function() {
       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
+  // ─── グリッド可視化モード: メンバーカード表示 ───
+  // 各メンバーを 1カードに、配分%をスタックドバー + ロール×事業チップで一覧表示。
+  // 「誰がどこにどのくらい工数を置いてるか」を一目で把握可能。
+  const ROLE_BAR_COLOR = {
+    '営業': '#D13020', '運営': '#007aff', '納品': '#007aff',
+    'CS': '#34c759', '企画': '#ff9500', '総務': '#6366f1', 'PR': '#ec4899',
+  };
+  function renderGridViz(){
+    const wrap = $('wf-grid-viz-wrap');
+    if (!wrap) return;
+    const sortKey = (state._vizSort || 'load');
+    const filter  = (state._vizFilter || '').toLowerCase().trim();
+
+    // メンバー配列を整形 (filter, sort)
+    const items = state.members.map((m, idx) => {
+      const totalPct = memberTotalPct(idx);
+      const segs = [];
+      BIZ.forEach(b => ROLES.forEach(r => {
+        const v = Number(m.allocMatrix?.[b]?.[r]) || 0;
+        if (v > 0) segs.push({ biz: b, role: r, pct: v });
+      }));
+      // 大きい順
+      segs.sort((a,b) => b.pct - a.pct);
+      const ratio = memberRatio(idx);
+      return { idx, m, totalPct, segs, ratio };
+    });
+
+    let filtered = items;
+    if (filter){
+      filtered = items.filter(it => {
+        const hay = (String(it.m.name||'') + ' ' + (it.m.role||'') + ' ' + it.segs.map(s => s.biz + ' ' + s.role).join(' ')).toLowerCase();
+        return hay.includes(filter);
+      });
+    }
+    if (sortKey === 'load') filtered.sort((a,b) => b.totalPct - a.totalPct);
+    else if (sortKey === 'cost') filtered.sort((a,b) => (b.m.cost||0) - (a.m.cost||0));
+    else if (sortKey === 'ratio') filtered.sort((a,b) => b.ratio - a.ratio);
+    else if (sortKey === 'name') filtered.sort((a,b) => String(a.m.name||'').localeCompare(String(b.m.name||''), 'ja'));
+
+    let html = `<div class="wf-viz-controls">
+      <input type="search" id="wf-viz-search" placeholder="🔍 名前/役職/事業/役割で検索" value="${escapeHtml(state._vizFilter||'')}" oninput="WF.setVizFilter(this.value)">
+      <span>並び順:</span>
+      <select onchange="WF.setVizSort(this.value)">
+        <option value="load"${sortKey==='load'?' selected':''}>配分計の多い順</option>
+        <option value="cost"${sortKey==='cost'?' selected':''}>人件費の高い順</option>
+        <option value="ratio"${sortKey==='ratio'?' selected':''}>生産性倍率の高い順</option>
+        <option value="name"${sortKey==='name'?' selected':''}>名前順</option>
+      </select>
+      <span style="margin-left:auto">${filtered.length} / ${items.length} 名</span>
+    </div>`;
+
+    if (!filtered.length){
+      html += '<div style="text-align:center;padding:30px;color:var(--text3);font-size:11px">該当するメンバーがいません</div>';
+      wrap.innerHTML = html;
+      return;
+    }
+
+    html += '<div class="wf-viz-grid">';
+    filtered.forEach(it => {
+      const m = it.m;
+      const totalPct = it.totalPct;
+      let totalCls = 'zero';
+      if (totalPct === 100) totalCls = 'full';
+      else if (totalPct > 100) totalCls = 'over';
+      else if (totalPct > 0) totalCls = 'under';
+      const initial = (m.name || '?').slice(0, 1);
+      const cls = totalPct === 0 ? 'wf-viz-card dim' : 'wf-viz-card';
+
+      // バー (各セグメントの幅は pct を 100 を上限としてそのまま使う)
+      const barTotal = Math.min(100, totalPct);
+      let bar = '';
+      if (it.segs.length){
+        const widthFactor = totalPct > 100 ? (100 / totalPct) : 1;
+        it.segs.forEach(s => {
+          const w = s.pct * widthFactor;
+          const color = ROLE_BAR_COLOR[s.role] || '#888';
+          bar += `<div class="wf-viz-seg" style="width:${w}%;background:${color}" title="${escapeHtml(s.biz)} × ${s.role} ${s.pct}%"></div>`;
+        });
+      }
+
+      // チップ
+      const chips = it.segs.length
+        ? it.segs.map(s => {
+            const bizShort = BIZ_SHORT[s.biz] || s.biz;
+            return `<span class="wf-viz-chip"><span class="wf-rb wf-r-${s.role}">${s.role}</span><span class="wf-viz-chip-biz">${escapeHtml(bizShort)}</span><span class="wf-viz-chip-pct">${s.pct}%</span></span>`;
+          }).join('')
+        : '<span class="wf-viz-empty">未配分</span>';
+
+      const ratioColor = it.ratio >= 3 ? 'var(--tc-green)' : it.ratio >= 1 ? 'var(--tc-amber)' : 'var(--tc-red)';
+
+      html += `<div class="${cls}">
+        <div class="wf-viz-head">
+          <span class="wf-viz-avatar" title="${escapeHtml(m.name||'')}">${escapeHtml(initial)}</span>
+          <span class="wf-viz-name">${escapeHtml(m.name||'')}</span>
+          ${m.role ? `<span class="wf-viz-role-label">${escapeHtml(m.role)}</span>` : ''}
+          <span class="wf-viz-cost">¥${(Number(m.cost)||0).toLocaleString()} / 倍率<span style="color:${ratioColor};font-weight:700">${it.ratio.toFixed(1)}</span></span>
+          <span class="wf-viz-total ${totalCls}">配分計 ${totalPct}%</span>
+        </div>
+        <div class="wf-viz-bar">${bar}</div>
+        <div class="wf-viz-list">${chips}</div>
+      </div>`;
+    });
+    html += '</div>';
+    wrap.innerHTML = html;
+  }
+
   function renderGrid(){
+    // モードに応じて切り替え
+    const mode = state.gridMode || 'edit';
+    const editWrap = $('wf-grid-edit-wrap');
+    const vizWrap  = $('wf-grid-viz-wrap');
+    if (editWrap) editWrap.style.display = mode === 'edit' ? '' : 'none';
+    if (vizWrap)  vizWrap.style.display  = mode === 'viz'  ? '' : 'none';
+    if (mode === 'viz'){
+      renderGridViz();
+      return;
+    }
+    // ── 以下は既存の編集モードレンダリング ──
     const tbl = $('wf-grid-table');
     if (!tbl) return;
     let thead = '<thead>';
@@ -14178,6 +14327,12 @@ document.addEventListener('DOMContentLoaded', function() {
       // 確実に PL+グリッド panel を表示
       const main = $('wf-panel-main');
       if (main) main.style.display = 'block';
+      // グリッド表示モードを localStorage から復元
+      try { state.gridMode = localStorage.getItem('wf_grid_mode') || 'edit'; } catch(e){ state.gridMode = 'edit'; }
+      const tg = document.getElementById('wf-grid-mode-toggle');
+      if (tg){
+        tg.querySelectorAll('.pa-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === state.gridMode));
+      }
       if (state.initialized) { renderAll(); return; }
       state.initialized = true;
       // 復元優先順位:
@@ -14332,6 +14487,27 @@ document.addEventListener('DOMContentLoaded', function() {
     deleteSGA: function(i){ if (!confirm(`「${state.sgaItems[i].name}」を削除しますか？`)) return; state.sgaItems.splice(i, 1); renderAll(); },
     updateFTE:    function(biz, role, val){ state.requiredFTE[biz][role] = parseFloat(val) || 0; renderAll(); },
     // ── 事業マスタ操作 ──
+    // ── グリッド表示モード切替 ──
+    setGridMode: function(mode){
+      state.gridMode = (mode === 'viz') ? 'viz' : 'edit';
+      try { localStorage.setItem('wf_grid_mode', state.gridMode); } catch(e){}
+      // トグルボタンのアクティブ状態
+      const tg = document.getElementById('wf-grid-mode-toggle');
+      if (tg){
+        tg.querySelectorAll('.pa-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.mode === state.gridMode);
+        });
+      }
+      renderGrid();
+    },
+    setVizFilter: function(s){
+      state._vizFilter = s || '';
+      renderGridViz();
+    },
+    setVizSort: function(k){
+      state._vizSort = k || 'load';
+      renderGridViz();
+    },
     addBusinessPrompt: function(){
       const name = (prompt('追加する事業名を入力してください\n例: AI研修, EC事業 など', '') || '').trim();
       if (!name) return;
