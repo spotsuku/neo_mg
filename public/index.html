@@ -604,13 +604,14 @@ input.cells-edit-input {
 #sec-workforce .wf-diff-arrow{color:var(--text3);margin:0 6px}
 
 /* モーダル */
-#sec-workforce .wf-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:200;align-items:center;justify-content:center}
-#sec-workforce .wf-modal-bg.show{display:flex}
-#sec-workforce .wf-modal{background:var(--bg);padding:22px;border-radius:var(--rl);width:90%;max-width:460px;max-height:90vh;overflow-y:auto;border:1px solid var(--border)}
-#sec-workforce .wf-modal h3{margin-bottom:14px;font-size:14px}
-#sec-workforce .wf-modal label{display:block;font-size:11px;margin-bottom:4px;color:var(--text3)}
-#sec-workforce .wf-modal input{width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;margin-bottom:10px;font-size:12px;background:var(--bg);color:var(--text);font-family:inherit}
-#sec-workforce .wf-modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+/* モーダル: sec-workforce 外にもあるためグローバルスコープに */
+.wf-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:200;align-items:center;justify-content:center}
+.wf-modal-bg.show{display:flex}
+.wf-modal{background:var(--bg);padding:22px;border-radius:var(--rl);width:90%;max-width:460px;max-height:90vh;overflow-y:auto;border:1px solid var(--border)}
+.wf-modal h3{margin-bottom:14px;font-size:14px}
+.wf-modal label{display:block;font-size:11px;margin-bottom:4px;color:var(--text3)}
+.wf-modal input{width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;margin-bottom:10px;font-size:12px;background:var(--bg);color:var(--text);font-family:inherit}
+.wf-modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
 </style>
 </head>
 <body>
@@ -1629,32 +1630,49 @@ input.cells-edit-input {
       <button class="btn btn-g" style="margin-top:8px;font-size:11px;padding:4px 12px" onclick="WF.addSGA()">＋ 販管費項目を追加</button>
     </div>
   </div>
+</div>
 
-  <!-- メンバー追加モーダル -->
-  <div class="wf-modal-bg" id="wf-add-modal">
-    <div class="wf-modal">
-      <h3 style="margin-bottom:14px">メンバーを追加</h3>
-      <label>名前</label><input type="text" id="wf-new-name" placeholder="例: 山田太郎">
-      <label>役職（任意）</label><input type="text" id="wf-new-role" placeholder="例: 営業マネージャー">
-      <label>人件費（円・年額）</label><input type="number" id="wf-new-cost" value="3600000" step="100000">
-      <label>能力係数（0.5〜3.0、デフォルト1.0）</label><input type="number" id="wf-new-ability" value="1.0" step="0.1" min="0.1" max="5.0">
-      <div class="wf-modal-actions">
-        <button class="btn" onclick="WF.closeAddModal()">キャンセル</button>
-        <button class="btn btn-p" onclick="WF.addMember()">追加</button>
-      </div>
+<!-- メンバー追加 / 編集 / 保存 モーダル群 (sec-workforce 外に配置 → 全タブから開ける) -->
+<div class="wf-modal-bg" id="wf-add-modal">
+  <div class="wf-modal">
+    <h3 style="margin-bottom:14px">メンバーを追加</h3>
+    <label>名前</label><input type="text" id="wf-new-name" placeholder="例: 山田太郎">
+    <label>役職（任意）</label><input type="text" id="wf-new-role" placeholder="例: 営業マネージャー">
+    <label>人件費（円・年額）</label><input type="number" id="wf-new-cost" value="3600000" step="100000">
+    <label>能力係数（0.5〜3.0、デフォルト1.0）</label><input type="number" id="wf-new-ability" value="1.0" step="0.1" min="0.1" max="5.0">
+    <div class="wf-modal-actions">
+      <button class="btn" onclick="WF.closeAddModal()">キャンセル</button>
+      <button class="btn btn-p" onclick="WF.addMember()">追加</button>
     </div>
   </div>
+</div>
 
-  <!-- バージョン保存モーダル -->
-  <div class="wf-modal-bg" id="wf-save-modal">
-    <div class="wf-modal">
-      <h3 id="wf-save-modal-title" style="margin-bottom:14px">新しいバージョンとして保存</h3>
-      <label>バージョン名（必須）</label><input type="text" id="wf-version-name" placeholder="例: 2026年4月度配置 / Q2見直し版">
-      <label>メモ・変更点（任意）</label><textarea id="wf-version-memo" placeholder="例: 三木さんの研修営業を増加、佐藤を新規追加" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:6px;margin-bottom:12px;font-size:13px;font-family:inherit;min-height:80px;resize:vertical;background:var(--bg);color:var(--text)"></textarea>
-      <div class="wf-modal-actions">
-        <button class="btn" onclick="WF.closeSaveModal()">キャンセル</button>
-        <button class="btn btn-p" onclick="WF.confirmSaveVersion()">保存</button>
-      </div>
+<!-- バージョン保存モーダル -->
+<div class="wf-modal-bg" id="wf-save-modal">
+  <div class="wf-modal">
+    <h3 id="wf-save-modal-title" style="margin-bottom:14px">新しいバージョンとして保存</h3>
+    <label>バージョン名（必須）</label><input type="text" id="wf-version-name" placeholder="例: 2026年4月度配置 / Q2見直し版">
+    <label>メモ・変更点（任意）</label><textarea id="wf-version-memo" placeholder="例: 三木さんの研修営業を増加、佐藤を新規追加" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:6px;margin-bottom:12px;font-size:13px;font-family:inherit;min-height:80px;resize:vertical;background:var(--bg);color:var(--text)"></textarea>
+    <div class="wf-modal-actions">
+      <button class="btn" onclick="WF.closeSaveModal()">キャンセル</button>
+      <button class="btn btn-p" onclick="WF.confirmSaveVersion()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- メンバー編集モーダル (人件費タブから既存メンバーを編集) -->
+<div class="wf-modal-bg" id="wf-edit-modal">
+  <div class="wf-modal">
+    <h3 style="margin-bottom:14px">メンバー情報を編集</h3>
+    <label>名前</label><input type="text" id="wf-edit-name" placeholder="例: 山田太郎">
+    <label>役職（任意）</label><input type="text" id="wf-edit-role" placeholder="例: 営業マネージャー">
+    <label>能力係数（0.5〜3.0、デフォルト1.0）</label><input type="number" id="wf-edit-ability" value="1.0" step="0.1" min="0.1" max="5.0">
+    <div style="margin-top:8px;padding:8px 10px;background:var(--bg2);border-radius:6px;font-size:11px;color:var(--text3)">
+      💡 月次人件費は表のセルで直接編集してください（年額は12ヶ月の合計から自動算出）
+    </div>
+    <div class="wf-modal-actions">
+      <button class="btn" onclick="WF.closeEditModal()">キャンセル</button>
+      <button class="btn btn-p" onclick="WF.saveEditMember()">保存</button>
     </div>
   </div>
 </div>
@@ -14098,6 +14116,36 @@ document.addEventListener('DOMContentLoaded', function() {
     },
     closeAddModal:   function(){ $('wf-add-modal').classList.remove('show'); },
     closeSaveModal:  function(){ $('wf-save-modal').classList.remove('show'); },
+    closeEditModal:  function(){ $('wf-edit-modal').classList.remove('show'); state._editIdx = -1; },
+    // 既存メンバーの編集 (人件費タブから呼出)
+    openEditModal: function(idx){
+      const m = state.members[idx];
+      if (!m) return;
+      state._editIdx = idx;
+      $('wf-edit-name').value    = m.name || '';
+      $('wf-edit-role').value    = m.role || '';
+      $('wf-edit-ability').value = m.ability != null ? m.ability : 1.0;
+      $('wf-edit-modal').classList.add('show');
+      setTimeout(() => $('wf-edit-name').focus(), 50);
+    },
+    saveEditMember: function(){
+      const idx = state._editIdx;
+      if (idx == null || idx < 0) return;
+      const m = state.members[idx];
+      if (!m) return;
+      const name = ($('wf-edit-name').value || '').trim();
+      if (!name){ alert('名前は必須です'); return; }
+      m.name = name;
+      m.role = ($('wf-edit-role').value || '').trim();
+      let ab = parseFloat($('wf-edit-ability').value) || 1.0;
+      ab = Math.max(0.1, Math.min(5, ab));
+      m.ability = ab;
+      $('wf-edit-modal').classList.remove('show');
+      state._editIdx = -1;
+      renderAll();
+      if (window.PAYROLL && window.PAYROLL.state.initialized) window.PAYROLL.renderAll();
+      showWfStatus(`「${name}」を更新しました`);
+    },
     openAddModal:    openAddModal,
     addMember:       addMember,
     confirmSaveVersion: confirmSaveVersion,
@@ -14260,6 +14308,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (am) am.addEventListener('click', e => { if (e.target.id === 'wf-add-modal') am.classList.remove('show'); });
     const sm = $('wf-save-modal');
     if (sm) sm.addEventListener('click', e => { if (e.target.id === 'wf-save-modal') sm.classList.remove('show'); });
+    const em = $('wf-edit-modal');
+    if (em) em.addEventListener('click', e => { if (e.target.id === 'wf-edit-modal') em.classList.remove('show'); });
   });
 })();
     </script>
@@ -14363,8 +14413,9 @@ document.addEventListener('DOMContentLoaded', function() {
       const yearTotal = monthly.reduce((s,v) => s + (Number(v)||0), 0);
       html += '<tr>';
       html += '<td><button class="wf-delete-btn" onclick="PAYROLL.deleteMember(' + idx + ')" title="このメンバーを削除（工数管理にも反映）">🗑</button></td>';
-      html += '<td class="member-name">' + escapeHtml(m.name || '') +
-        (m.role ? '<br><span style="font-size:9px;color:var(--text3);font-weight:400">' + escapeHtml(m.role) + '</span>' : '') + '</td>';
+      html += '<td class="member-name" onclick="PAYROLL.editMember(' + idx + ')" style="cursor:pointer" title="クリックして名前・役職・能力を編集">' + escapeHtml(m.name || '') +
+        (m.role ? '<br><span style="font-size:9px;color:var(--text3);font-weight:400">' + escapeHtml(m.role) + '</span>' : '') +
+        ' <span style="font-size:9px;color:var(--text3);opacity:.6">✎</span></td>';
       html += '<td><button class="btn" onclick="PAYROLL.copyRow(' + idx + ')" style="font-size:9px;padding:2px 6px" title="この行の4月の値を全月にコピー">→</button></td>';
       monthly.forEach((v, mi) => {
         const cls = (Number(v) > 0) ? 'pay-cell has-val' : 'pay-cell zero';
@@ -14506,6 +14557,14 @@ document.addEventListener('DOMContentLoaded', function() {
       members.splice(idx, 1);
       renderAll();
       if (window.WF && window.WF.renderAll) window.WF.renderAll();
+    },
+    // メンバー編集: 工数管理の編集モーダルを呼び出す（名前・役職・能力係数）
+    editMember: function(idx){
+      if (window.WF && typeof window.WF.openEditModal === 'function'){
+        window.WF.openEditModal(idx);
+      } else {
+        alert('工数管理モジュールが読み込まれていません');
+      }
     },
     resetToWorkforce:  function(){
       if (!confirm('工数管理の年額(cost)を12等分して人件費表をリセットしますか？')) return;
