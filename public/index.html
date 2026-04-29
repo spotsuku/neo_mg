@@ -2805,6 +2805,24 @@ function renderAnnualCF(d) {
   const sA = (key) => sR(cfGet('actual', key));
   const sB = (key) => sR(cfGet('budget', key));
 
+  // 売上入金は詳細内訳 (cfInFee + cfInTraining + cfInEvent + cfInOther + cfInMembership) の合計を優先、
+  // 詳細が無ければ親 cfIn にフォールバック (renderCashFlowForecast と同じロジック)
+  const inDetailKeys = ['cfInFee','cfInTraining','cfInEvent','cfInOther','cfInMembership'];
+  const sIn = (sec) => {
+    let detail = 0, parent = 0;
+    for (let i = start; i <= end; i++){
+      const det = inDetailKeys.reduce((t,k) => t + (Number(cfGet(sec, k)?.[i]) || 0), 0);
+      const par = Number(cfGet(sec, 'cfIn')?.[i]) || 0;
+      detail += det;
+      parent += par;
+      // 月次レベルで内訳がなければその月だけ親値を使う
+      if (det === 0 && par > 0) detail += par;
+    }
+    return detail || parent;
+  };
+  const cfInA = sIn('actual');
+  const cfInB = sIn('budget');
+
   const opexKeys = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
     'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
     'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay'];
@@ -2825,7 +2843,13 @@ function renderAnnualCF(d) {
     if (Number(revArr[i]) > 0) { lastActIdx = i; break; }
   }
   const finOutKeys = ['investPay','loanOut','warrantPay','finOtherPay'];
-  const inflowKeys = ['cfIn','loanIn','capitalIn'];
+  // cfIn は 詳細内訳 (cfInFee/Training/Event/Other/Membership) と 親 cfIn のうち大きい方を採用
+  const monthInflow = (sec, i) => {
+    const get = (k) => Number(cfGet(sec, k)?.[i]) || 0;
+    const det = inDetailKeys.reduce((t,k) => t + get(k), 0);
+    const cfInVal = det > 0 ? det : get('cfIn');
+    return cfInVal + get('loanIn') + get('capitalIn');
+  };
   const getA = (k, i) => Number((cfGet('actual', k)||[])[i]) || 0;
   const getB = (k, i) => Number((cfGet('budget', k)||[])[i]) || 0;
   const bsActualMap = d.bs?.actual || {};
@@ -2848,13 +2872,13 @@ function renderAnnualCF(d) {
       if (Number.isFinite(bsCi) && bsCi !== 0) {
         closeA = Math.round(bsCi);
       } else {
-        const inflow = inflowKeys.reduce((t,k)=>t+getA(k,i),0);
+        const inflow = monthInflow('actual', i);
         const opex_  = opexKeys.reduce((t,k)=>t+getA(k,i),0);
         const finOut_= finOutKeys.reduce((t,k)=>t+getA(k,i),0);
         closeA += inflow - opex_ - finOut_;
       }
     } else {
-      const inflow = inflowKeys.reduce((t,k)=>t+getB(k,i),0);
+      const inflow = monthInflow('budget', i);
       const opex_  = opexKeys.reduce((t,k)=>t+getB(k,i),0);
       const finOut_= finOutKeys.reduce((t,k)=>t+getB(k,i),0);
       closeA += inflow - opex_ - finOut_;
@@ -2862,24 +2886,24 @@ function renderAnnualCF(d) {
   }
   closeA = Math.round(closeA);
 
-  // 予算期間末残高（期間初残高 + 期間内純CF）
+  // 予算期間末残高（期間初残高 + 期間内純CF）— 詳細内訳対応
   const bOpenArr = cfGet('budget','open');
-  const bInArr   = cfGet('budget','cfIn');
   let closeB = Number(bOpenArr[start]) || 0;
   for (let i = start; i <= end; i++) {
     const out = opexKeys.reduce((t,k)=>t+(Number((cfGet('budget',k)||[])[i])||0),0);
-    closeB += (Number(bInArr[i])||0) - out;
+    const inflow = monthInflow('budget', i);
+    closeB += inflow - out;
   }
 
   const rows = [
-    { label:'売上入金',     a:sA('cfIn'),   b:sB('cfIn'),   isRev:true,  isTot:true },
+    { label:'売上入金',     a:cfInA,        b:cfInB,        isRev:true,  isTot:true },
     { label:'販管費合計',   a:opexA,        b:opexB,        isOut:true,  isTot:true },
     { label:'　固定費',     a:fixedA,       b:fixedB,       isOut:true  },
     { label:'　変動費',     a:varA,         b:varB,         isOut:true  },
     { label:'事業投資',     a:sA('investPay'),b:sB('investPay'),isOut:true },
     { label:'新規借入',     a:sA('loanIn'), b:sB('loanIn'), isRev:true  },
     { label:'借入返済',     a:sA('loanOut'),b:sB('loanOut'),isOut:true  },
-    { label:'営業CF',       a:sA('cfIn')-opexA, b:sB('cfIn')-opexB, isTot:true, isCF:true },
+    { label:'営業CF',       a:cfInA-opexA,  b:cfInB-opexB,  isTot:true, isCF:true },
     { label:'期末残高',     a:closeA, b:Math.round(closeB), isTot:true, noSign:true },
   ];
   document.getElementById('annual-cf-table').innerHTML = buildAnnualTable(rows, '千円');
