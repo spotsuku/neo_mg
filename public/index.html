@@ -373,6 +373,46 @@ input.cells-edit-input {
 .preset-active{background:var(--bg-blue)!important;color:var(--tc-blue)!important;border-color:var(--tc-blue)!important}
 
 /* ════════════════════════════════════════════════════════════════
+   経営者ダッシュボード (Phase 2) — サマリー先頭の現状把握ブロック
+   既存KPI 6カードはそのまま下に残置
+   ════════════════════════════════════════════════════════════════ */
+.exec-dash{background:linear-gradient(135deg,rgba(90,171,240,0.06),rgba(93,189,126,0.04));border:1px solid var(--border);border-radius:var(--rl);padding:12px 14px;margin-bottom:14px}
+.exec-dash-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.exec-dash-head .lbl{font-size:11px;font-weight:700;color:var(--text);letter-spacing:.4px}
+.exec-dash-head .sub{font-size:10px;color:var(--text3)}
+.exec-dash-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:8px}
+@media (max-width:760px){.exec-dash-grid{grid-template-columns:1fr}}
+.exec-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:11px 13px;display:flex;gap:12px;align-items:center;min-height:86px}
+.exec-card-icon{width:48px;height:48px;flex-shrink:0;display:grid;place-items:center;border-radius:50%;font-size:22px}
+.exec-card-icon.good{background:var(--bg-green);color:var(--tc-green)}
+.exec-card-icon.warn{background:var(--bg-amber);color:var(--tc-amber)}
+.exec-card-icon.bad{background:var(--bg-red);color:var(--tc-red)}
+.exec-card-icon.info{background:var(--bg-blue);color:var(--tc-blue)}
+.exec-card-body{flex:1;min-width:0}
+.exec-card-l{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;font-weight:600;margin-bottom:2px}
+.exec-card-v{font-size:21px;font-weight:700;line-height:1.1}
+.exec-card-v.good{color:var(--tc-green)}
+.exec-card-v.warn{color:var(--tc-amber)}
+.exec-card-v.bad{color:var(--tc-red)}
+.exec-card-s{font-size:10px;color:var(--text3);margin-top:3px}
+.exec-card-bar{height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-top:4px}
+.exec-card-bar-fill{height:100%;border-radius:3px;transition:width .3s ease}
+.exec-card-bar-fill.good{background:var(--tc-green)}
+.exec-card-bar-fill.warn{background:var(--tc-amber)}
+.exec-card-bar-fill.bad{background:var(--tc-red)}
+
+/* アラートエリア */
+.exec-alerts{margin-top:8px;padding:8px 12px;background:var(--bg2);border-radius:var(--r);border-left:3px solid var(--tc-amber);min-height:44px}
+.exec-alerts.empty{border-left-color:var(--tc-green)}
+.exec-alerts-head{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.exec-alert{font-size:11px;padding:4px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.exec-alert:last-child{border-bottom:none}
+.exec-alert-tag{font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;flex-shrink:0}
+.exec-alert-tag.budget{background:var(--bg-red);color:var(--tc-red)}
+.exec-alert-tag.staff{background:var(--bg-amber);color:var(--tc-amber)}
+.exec-alert-tag.cash{background:var(--bg-red);color:var(--tc-red)}
+
+/* ════════════════════════════════════════════════════════════════
    工数管理 (Workforce) — sec-workforce 内のスタイル
    ════════════════════════════════════════════════════════════════ */
 #sec-workforce .wf-toolbar{background:var(--bg2);padding:9px 12px;border-radius:var(--rl);margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-left:3px solid #007aff}
@@ -629,6 +669,49 @@ input.cells-edit-input {
      WEEKLY KPI
 ────────────────────────────────────── -->
 <div class="sec on" id="sec-weekly">
+  <!-- ── 経営者ダッシュボード (Phase 2) — 現状把握ブロック ── -->
+  <div class="exec-dash">
+    <div class="exec-dash-head">
+      <span class="lbl">🎯 経営者ダッシュボード</span>
+      <span class="sub" id="exec-dash-period">— 最新月の経営健全性</span>
+    </div>
+    <div class="exec-dash-grid">
+      <!-- 予算消費率 (販管費) -->
+      <div class="exec-card">
+        <div class="exec-card-icon info" id="exec-budget-icon">📊</div>
+        <div class="exec-card-body">
+          <div class="exec-card-l">予算消費率（累積販管費）</div>
+          <div class="exec-card-v" id="exec-budget-val">—</div>
+          <div class="exec-card-bar"><div class="exec-card-bar-fill good" id="exec-budget-bar" style="width:0"></div></div>
+          <div class="exec-card-s" id="exec-budget-sub">—</div>
+        </div>
+      </div>
+      <!-- 人件費生産性 (工数管理) -->
+      <div class="exec-card">
+        <div class="exec-card-icon info" id="exec-prod-icon">👥</div>
+        <div class="exec-card-body">
+          <div class="exec-card-l">人件費生産性</div>
+          <div class="exec-card-v" id="exec-prod-val">—</div>
+          <div class="exec-card-s" id="exec-prod-sub">目標 3.0倍以上</div>
+        </div>
+      </div>
+      <!-- 残キャッシュ + バーンレート -->
+      <div class="exec-card">
+        <div class="exec-card-icon info" id="exec-runway-icon">💰</div>
+        <div class="exec-card-body">
+          <div class="exec-card-l">残キャッシュ期間</div>
+          <div class="exec-card-v" id="exec-runway-val">—</div>
+          <div class="exec-card-s" id="exec-runway-sub">—</div>
+        </div>
+      </div>
+    </div>
+    <!-- アラートは commit ⑧ で実装 -->
+    <div class="exec-alerts empty" id="exec-alerts" style="display:none">
+      <div class="exec-alerts-head">⚠ アラート</div>
+      <div id="exec-alert-list"></div>
+    </div>
+  </div>
+
   <div class="metrics" style="grid-template-columns:repeat(6,minmax(0,1fr))">
     <div class="mc"><div class="mc-l">現金残高</div><div class="mc-v" id="kpi-cash">—</div><div class="mc-s" id="kpi-cash-s"></div></div>
     <div class="mc"><div class="mc-l">売上（累積）</div><div class="mc-v" id="kpi-rev">—</div><div class="mc-s" id="kpi-rev-s"></div></div>
@@ -2089,6 +2172,80 @@ function updateWeeklyKPIs() {
   // charts
   initWeeklyCharts(d, lastActualIdx);
   renderAnnualSummary();
+
+  // 経営者ダッシュボード (Phase 2)
+  renderExecDashboard({
+    cumOpex, budOpex, hasActual, lastActualIdx,
+    months: d.months, lastCash, runway, burnrate,
+  });
+}
+
+// ── 経営者ダッシュボード (Phase 2.1): 現状把握ブロックの主要3指標 ──
+// 入力は updateWeeklyKPIs で計算済の変数を受け取り、新規計算は最小限。
+function renderExecDashboard(ctx){
+  const $ = (id) => document.getElementById(id);
+  const fmt1 = (v) => Math.round((Number(v)||0) * 10) / 10;
+
+  // 期間ラベル
+  const monthLbl = (ctx.lastActualIdx >= 0 && ctx.months && ctx.months[ctx.lastActualIdx])
+    ? (MONTH_LABELS[ctx.months[ctx.lastActualIdx]] || '')
+    : '';
+  if ($('exec-dash-period')){
+    $('exec-dash-period').textContent = monthLbl
+      ? `— ${monthLbl}末時点の経営健全性`
+      : '— データ未入力';
+  }
+
+  // ① 予算消費率（累積販管費 = cumOpex / budOpex）
+  // 月割で見ると分かりやすいので「実績累計 vs 予算累計（lastActualIdx月分）」で算出
+  const budgetPct = ctx.budOpex > 0 ? Math.round(ctx.cumOpex / ctx.budOpex * 100) : 0;
+  const budgetCls = !ctx.hasActual ? 'info' : budgetPct <= 80 ? 'good' : budgetPct <= 100 ? 'warn' : 'bad';
+  if ($('exec-budget-val')){
+    $('exec-budget-val').textContent = ctx.hasActual ? `${budgetPct}%` : '—';
+    $('exec-budget-val').className = 'exec-card-v ' + (budgetCls === 'info' ? '' : budgetCls);
+  }
+  if ($('exec-budget-bar')){
+    $('exec-budget-bar').style.width = Math.min(100, budgetPct) + '%';
+    $('exec-budget-bar').className = 'exec-card-bar-fill ' + (budgetCls === 'info' ? 'good' : budgetCls);
+  }
+  if ($('exec-budget-icon')) $('exec-budget-icon').className = 'exec-card-icon ' + budgetCls;
+  if ($('exec-budget-sub')){
+    $('exec-budget-sub').textContent = ctx.hasActual
+      ? `実績 ${(ctx.cumOpex/10).toLocaleString()}千円 / 予算 ${Math.round(ctx.budOpex/10).toLocaleString()}千円`
+      : '販管費の予算/実績データ未入力';
+  }
+
+  // ② 人件費生産性（実現売上 ÷ 総人件費）— 工数管理から取得
+  let prodRatio = null, prodSub = '工数管理タブで設定';
+  if (window.WF && typeof window.WF.totalRealizedRev === 'function' && typeof window.WF.totalCost === 'function'){
+    const realRev = window.WF.totalRealizedRev();
+    const costAll = window.WF.totalCost();
+    if (costAll > 0){
+      prodRatio = realRev / costAll;
+      prodSub = `売上${(realRev/10000).toFixed(0)}万 ÷ 人件費${(costAll/10000).toFixed(0)}万`;
+    }
+  }
+  const prodCls = prodRatio == null ? 'info' : prodRatio >= 3 ? 'good' : prodRatio >= 1.5 ? 'warn' : 'bad';
+  if ($('exec-prod-val')){
+    $('exec-prod-val').textContent = prodRatio != null ? `${fmt1(prodRatio)}倍` : '—';
+    $('exec-prod-val').className = 'exec-card-v ' + (prodCls === 'info' ? '' : prodCls);
+  }
+  if ($('exec-prod-icon')) $('exec-prod-icon').className = 'exec-card-icon ' + prodCls;
+  if ($('exec-prod-sub')) $('exec-prod-sub').textContent = prodSub;
+
+  // ③ 残キャッシュ期間 + バーンレート
+  const rwy = ctx.lastCash ? parseFloat(ctx.runway) : null;
+  const rwyCls = rwy == null ? 'info' : rwy >= 12 ? 'good' : rwy >= 6 ? 'warn' : 'bad';
+  if ($('exec-runway-val')){
+    $('exec-runway-val').textContent = rwy != null ? `約${rwy}ヶ月` : '—';
+    $('exec-runway-val').className = 'exec-card-v ' + (rwyCls === 'info' ? '' : rwyCls);
+  }
+  if ($('exec-runway-icon')) $('exec-runway-icon').className = 'exec-card-icon ' + rwyCls;
+  if ($('exec-runway-sub')){
+    $('exec-runway-sub').textContent = ctx.hasActual
+      ? `バーンレート ${(ctx.burnrate||0).toLocaleString()}千円/月 ・ 残高 ${ctx.lastCash ? (ctx.lastCash/10).toLocaleString()+'千円' : '—'}`
+      : 'バーンレート未確定';
+  }
 }
 
 function riskClass(months) {
