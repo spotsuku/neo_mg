@@ -12592,22 +12592,81 @@ document.addEventListener('DOMContentLoaded', function() {
   function totalOperatingProfit(){ return BIZ.reduce((s,b) => s + bizOperatingProfit(b), 0); }
 
   // ─── 自動保存 (localStorage) ───
-  // 編集のたびに即座に localStorage に保存する。リロード後は自動復元される。
-  // 名前付きバージョン (workforce_versions) は別軸で「明示的に保存したスナップショット」として管理。
+  // 編集のたびに localStorage + Supabase + BroadcastChannel に保存。
+  // - localStorage: 即時 (200ms debounce)、リロード時に最優先で復元
+  // - Supabase:    1.5s debounce、workforce_versions の version_id=0 を下書きスロットに使用
+  //                (履歴一覧表示からは除外)
+  // - BroadcastChannel: 同一ブラウザの他タブを即時同期
+  // 名前付きバージョン (version_id != 0) は別軸で「明示的に保存したスナップショット」として管理。
   const DRAFT_KEY = 'neo_workforce_draft_v1';
+  const DRAFT_VERSION_ID = 0;
+  const DRAFT_NAME = '__autosave__';
   let _draftSaveTimer = null;
+  let _draftSupabaseTimer = null;
+  let _suppressNextRemoteApply = false; // 自分の保存通知を再適用しないためのフラグ
+
+  // BroadcastChannel: 同一ブラウザの別タブ間で即時同期
+  const _bc = (typeof BroadcastChannel === 'function') ? new BroadcastChannel('neo_workforce') : null;
+  if (_bc){
+    _bc.onmessage = (ev) => {
+      if (!ev.data || ev.data.type !== 'draft-update') return;
+      if (ev.data.savedAt && state._lastDraftSavedAt && ev.data.savedAt <= state._lastDraftSavedAt) return;
+      if (ev.data.snapshot){
+        _suppressNextRemoteApply = true;
+        restoreSnapshot(ev.data.snapshot);
+        if (ev.data.currentVersionId != null) state.currentVersionId = ev.data.currentVersionId;
+        state._lastDraftSavedAt = ev.data.savedAt || new Date().toISOString();
+        // ループ防止のため saveDraftLocal は呼ばない、UI だけ再描画
+        renderKPI(); renderPL(); renderGrid();
+        renderHeatmap(); renderFulSummary();
+        renderFTEMatrix(); renderWeightMatrix(); renderSGABody();
+        updateDirtyFlag(); renderVersionUI();
+        if (window.PAYROLL && window.PAYROLL.state.initialized) window.PAYROLL.renderAll();
+      }
+    };
+  }
+
   function saveDraftLocal(){
     if (_draftSaveTimer) clearTimeout(_draftSaveTimer);
     _draftSaveTimer = setTimeout(() => {
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        const payload = {
           snapshot: takeSnapshot(),
           currentVersionId: state.currentVersionId,
           savedAt: new Date().toISOString(),
-        }));
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+        state._lastDraftSavedAt = payload.savedAt;
+        // 同一ブラウザの他タブにブロードキャスト
+        if (_bc){
+          try { _bc.postMessage({ type: 'draft-update', ...payload }); } catch(e){}
+        }
+        // Supabase に 1.5s debounce で upsert (他デバイスへの伝播)
+        scheduleSupabaseDraftSave(payload);
       } catch(e){ console.warn('[WF] saveDraftLocal failed:', e.message); }
     }, 200);
   }
+
+  function scheduleSupabaseDraftSave(payload){
+    if (_draftSupabaseTimer) clearTimeout(_draftSupabaseTimer);
+    _draftSupabaseTimer = setTimeout(async () => {
+      try {
+        await apiCall('save_workforce_version', {
+          version_id: DRAFT_VERSION_ID,
+          name: DRAFT_NAME,
+          memo: '',
+          snapshot: payload.snapshot,
+        }, true);
+        const ind = $('payroll-sync-status');
+        if (ind) ind.textContent = '✓ クラウド同期 ' + new Date().toLocaleTimeString('ja-JP');
+      } catch(e){
+        console.warn('[WF] supabase draft save failed:', e.message);
+        const ind = $('payroll-sync-status');
+        if (ind) ind.textContent = '⚠ クラウド同期失敗 (ローカルは保存済)';
+      }
+    }, 1500);
+  }
+
   function loadDraftLocal(){
     try {
       const s = localStorage.getItem(DRAFT_KEY);
@@ -13085,7 +13144,9 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
       const r = await apiCall('load_workforce_versions');
       if (r.ok && Array.isArray(r.data)){
-        state.versions = r.data;
+        // 自動保存スロット (version_id=0) は state.draftRemote に分離して、履歴一覧には含めない
+        state.draftRemote = r.data.find(v => Number(v.version_id) === DRAFT_VERSION_ID) || null;
+        state.versions = r.data.filter(v => Number(v.version_id) !== DRAFT_VERSION_ID);
         // 「現在採用中」フラグから currentVersionId を復元
         const cur = state.versions.find(v => v.is_current);
         if (cur && !state.currentVersionId) state.currentVersionId = cur.version_id;
@@ -13588,16 +13649,28 @@ document.addEventListener('DOMContentLoaded', function() {
       if (main) main.style.display = 'block';
       if (state.initialized) { renderAll(); return; }
       state.initialized = true;
-      // 1. localStorage の下書きが最優先（リロード時の編集状態を維持）
-      const draft = loadDraftLocal();
-      // 2. Supabase からバージョン一覧を取得（履歴UI用）
+      // 復元優先順位:
+      //  1. Supabase 下書き (version_id=0) と localStorage 下書きを比較し、新しい方を採用
+      //     → 別デバイスで編集 → リロードで取込 (リアルタイム同期の最低限)
+      //  2. どちらもなければ採用中バージョン (is_current)
+      //  3. それもなければデフォルト値
+      const localDraft = loadDraftLocal();
       const ok = await loadVersionsFromSupabase();
-      if (draft && draft.snapshot){
-        restoreSnapshot(draft.snapshot);
-        if (draft.currentVersionId) state.currentVersionId = draft.currentVersionId;
-        console.log('[WF] init: restored from localStorage draft');
+      const remoteDraft = state.draftRemote; // 上で分離済
+      const localTs  = localDraft && localDraft.savedAt ? localDraft.savedAt : '';
+      const remoteTs = remoteDraft && remoteDraft.saved_at ? remoteDraft.saved_at : '';
+      let chosen = null;
+      if (localTs && (!remoteTs || localTs >= remoteTs)){
+        chosen = { source: 'local', snapshot: localDraft.snapshot, currentVersionId: localDraft.currentVersionId };
+      } else if (remoteTs){
+        chosen = { source: 'supabase', snapshot: remoteDraft.snapshot, currentVersionId: null };
+      }
+      if (chosen && chosen.snapshot){
+        restoreSnapshot(chosen.snapshot);
+        if (chosen.currentVersionId) state.currentVersionId = chosen.currentVersionId;
+        state._lastDraftSavedAt = (chosen.source === 'local' ? localTs : remoteTs);
+        console.log('[WF] init: restored from', chosen.source, 'draft');
       } else if (ok){
-        // 下書きが無ければ採用中バージョンを復元
         const cur = state.versions.find(v => v.is_current);
         if (cur){
           restoreSnapshot(cur.snapshot);
