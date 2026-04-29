@@ -13381,7 +13381,7 @@ document.addEventListener('DOMContentLoaded', function() {
     thead += '<th class="wf-col-cost" rowspan="2">人件費</th>';
     thead += '<th class="wf-col-ability" rowspan="2">能力</th>';
     BIZ.forEach((b, bi) => {
-      thead += `<th colspan="4" class="${bi < BIZ.length-1 ? 'wf-biz-end' : ''}">${BIZ_SHORT[b]}</th>`;
+      thead += `<th colspan="${ROLES.length}" class="${bi < BIZ.length-1 ? 'wf-biz-end' : ''}">${BIZ_SHORT[b]}</th>`;
     });
     thead += '<th rowspan="2" class="wf-col-total">配分計</th>';
     thead += '<th rowspan="2" class="wf-col-rev">売上貢献</th>';
