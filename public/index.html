@@ -1610,6 +1610,19 @@ input.cells-edit-input {
 
   <!-- ④ 設定 -->
   <div class="wf-panel" id="wf-panel-settings" style="display:none">
+    <!-- 事業マスタ (追加・削除・改名) -->
+    <div class="card">
+      <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>🏢 事業マスタ</span>
+        <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none">プログラム別 PL の列・配分グリッド・必要月工数の事業軸を管理</span>
+        <button class="btn btn-g" onclick="WF.addBusinessPrompt()" style="font-size:11px;padding:4px 12px;margin-left:auto">＋ 事業を追加</button>
+      </div>
+      <div id="wf-biz-list"></div>
+      <div style="margin-top:8px;padding:6px 10px;background:var(--bg2);border-radius:5px;font-size:10px;color:var(--text3)">
+        💡 事業を削除すると、その事業に紐づくプログラム・原価・メンバー配分%・役割ウェイト・必要月工数が全て消えます（取り消し不可）。
+      </div>
+    </div>
+
     <div class="card">
       <div class="ct">役割ウェイトマトリクス（事業内の売上配分）</div>
       <div style="overflow-x:auto">
@@ -13097,6 +13110,8 @@ document.addEventListener('DOMContentLoaded', function() {
       sgaItems:    cloneDeep(state.sgaItems),
       roleWeights: cloneDeep(state.roleWeights),
       requiredFTE: cloneDeep(state.requiredFTE),
+      businesses:  BIZ.slice(),                  // 動的事業リスト
+      bizShort:    Object.assign({}, BIZ_SHORT), // 略称マップ
     };
   }
   function restoreSnapshot(snap){
@@ -13107,6 +13122,30 @@ document.addEventListener('DOMContentLoaded', function() {
     state.sgaItems    = cloneDeep(snap.sgaItems || DEFAULT_SGA_ITEMS);
     state.roleWeights = cloneDeep(snap.roleWeights || DEFAULT_ROLE_WEIGHTS);
     state.requiredFTE = cloneDeep(snap.requiredFTE || DEFAULT_REQUIRED_FTE);
+    // 事業リストを復元 (古いスナップショットには無いのでデフォルトにフォールバック)
+    if (Array.isArray(snap.businesses) && snap.businesses.length){
+      BIZ.length = 0;
+      BIZ.push(...snap.businesses);
+    }
+    if (snap.bizShort && typeof snap.bizShort === 'object'){
+      Object.keys(BIZ_SHORT).forEach(k => delete BIZ_SHORT[k]);
+      Object.assign(BIZ_SHORT, snap.bizShort);
+    }
+    // 全メンバーの allocMatrix が現在の BIZ をすべて含むようにする (整合性保証)
+    state.members.forEach(m => {
+      if (!m.allocMatrix) m.allocMatrix = {};
+      BIZ.forEach(b => {
+        if (!m.allocMatrix[b]) m.allocMatrix[b] = {};
+        ROLES.forEach(r => { if (m.allocMatrix[b][r] == null) m.allocMatrix[b][r] = 0; });
+      });
+    });
+    // 設定マップにも同じ保証
+    BIZ.forEach(b => {
+      if (!state.bizPrograms[b]) state.bizPrograms[b] = [];
+      if (!state.bizCosts[b])    state.bizCosts[b]    = [];
+      if (!state.roleWeights[b]) state.roleWeights[b] = { '営業': 25, '納品': 25, 'CS': 25, '企画': 25 };
+      if (!state.requiredFTE[b]) state.requiredFTE[b] = { '営業': 0, '納品': 0, 'CS': 0, '企画': 0 };
+    });
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -13521,6 +13560,34 @@ document.addEventListener('DOMContentLoaded', function() {
     body.innerHTML = html;
   }
 
+  // ─── 事業マスタ レンダリング ───
+  function renderBizList(){
+    const el = $('wf-biz-list');
+    if (!el) return;
+    let html = '<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">';
+    BIZ.forEach((b, i) => {
+      const memberCount = state.members.filter(m => {
+        return ROLES.some(r => Number(m.allocMatrix?.[b]?.[r]) > 0);
+      }).length;
+      const progCount = (state.bizPrograms[b] || []).length;
+      const costCount = (state.bizCosts[b] || []).length;
+      html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg2);border-radius:6px;border:1px solid var(--border)">
+        <span style="font-size:11px;color:var(--text3);width:24px;text-align:center">${i+1}</span>
+        <input type="text" value="${escapeHtml(b)}" data-orig="${escapeHtml(b)}"
+          onblur="WF.renameBusiness(this.dataset.orig, this.value)"
+          onkeydown="if(event.key==='Enter'){this.blur();}"
+          style="flex:1;min-width:140px;padding:5px 9px;border:1px solid var(--border2);border-radius:5px;background:var(--bg);color:var(--text);font-size:12px;font-weight:600;font-family:inherit">
+        <span style="font-size:9px;color:var(--text3);white-space:nowrap">配分${memberCount}名 / プログラム${progCount} / 原価${costCount}</span>
+        <button class="btn" onclick="WF.deleteBusiness('${escapeHtml(b).replace(/'/g,"\\'")}')" style="font-size:10px;padding:3px 10px;color:var(--tc-red);border-color:var(--tc-red)">× 削除</button>
+      </div>`;
+    });
+    if (!BIZ.length){
+      html += '<div style="text-align:center;padding:12px;color:var(--text3);font-size:11px">事業がまだありません。「＋ 事業を追加」から登録してください。</div>';
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  }
+
   function renderAll(){
     renderKPI();
     renderPL();
@@ -13530,6 +13597,7 @@ document.addEventListener('DOMContentLoaded', function() {
     renderFTEMatrix();
     renderWeightMatrix();
     renderSGABody();
+    renderBizList();
     updateDirtyFlag();
     renderVersionUI();
     // 編集が反映されるたびに localStorage に下書きを保存（リロード耐性）
@@ -14207,6 +14275,74 @@ document.addEventListener('DOMContentLoaded', function() {
     updateSGAAmount: function(i, v){ state.sgaItems[i].amount = parseInt(v) || 0; renderAll(); },
     deleteSGA: function(i){ if (!confirm(`「${state.sgaItems[i].name}」を削除しますか？`)) return; state.sgaItems.splice(i, 1); renderAll(); },
     updateFTE:    function(biz, role, val){ state.requiredFTE[biz][role] = parseFloat(val) || 0; renderAll(); },
+    // ── 事業マスタ操作 ──
+    addBusinessPrompt: function(){
+      const name = (prompt('追加する事業名を入力してください\n例: AI研修, EC事業 など', '') || '').trim();
+      if (!name) return;
+      if (BIZ.includes(name)){ alert(`「${name}」は既に存在します`); return; }
+      WF.addBusiness(name);
+    },
+    addBusiness: function(name){
+      if (!name || BIZ.includes(name)) return;
+      BIZ.push(name);
+      BIZ_SHORT[name] = name;
+      // 全メンバーの allocMatrix に新事業列を追加 (0 初期化)
+      state.members.forEach(m => {
+        if (!m.allocMatrix) m.allocMatrix = {};
+        if (!m.allocMatrix[name]) m.allocMatrix[name] = {};
+        ROLES.forEach(r => { if (m.allocMatrix[name][r] == null) m.allocMatrix[name][r] = 0; });
+      });
+      // 設定値を初期化
+      if (!state.bizPrograms[name]) state.bizPrograms[name] = [];
+      if (!state.bizCosts[name])    state.bizCosts[name]    = [];
+      if (!state.roleWeights[name]) state.roleWeights[name] = { '営業': 25, '納品': 25, 'CS': 25, '企画': 25 };
+      if (!state.requiredFTE[name]) state.requiredFTE[name] = { '営業': 0, '納品': 0, 'CS': 0, '企画': 0 };
+      renderAll();
+    },
+    deleteBusiness: function(name){
+      const idx = BIZ.indexOf(name);
+      if (idx < 0) return;
+      if (!confirm(`「${name}」を削除しますか？\n関連プログラム・原価・メンバー配分・役割ウェイト・必要月工数 が全て消えます（取り消し不可）。`)) return;
+      BIZ.splice(idx, 1);
+      delete BIZ_SHORT[name];
+      state.members.forEach(m => { if (m.allocMatrix) delete m.allocMatrix[name]; });
+      delete state.bizPrograms[name];
+      delete state.bizCosts[name];
+      delete state.roleWeights[name];
+      delete state.requiredFTE[name];
+      renderAll();
+    },
+    renameBusiness: function(oldName, newName){
+      newName = (newName || '').trim();
+      if (!newName || newName === oldName) {
+        // 入力が空 or 同じ → 元に戻す
+        renderBizList();
+        return;
+      }
+      if (BIZ.includes(newName)){
+        alert(`「${newName}」は既に存在します`);
+        renderBizList();
+        return;
+      }
+      const idx = BIZ.indexOf(oldName);
+      if (idx < 0) return;
+      BIZ[idx] = newName;
+      BIZ_SHORT[newName] = BIZ_SHORT[oldName] || newName;
+      delete BIZ_SHORT[oldName];
+      // キーを移行
+      state.members.forEach(m => {
+        if (!m.allocMatrix || !m.allocMatrix[oldName]) return;
+        m.allocMatrix[newName] = m.allocMatrix[oldName];
+        delete m.allocMatrix[oldName];
+      });
+      ['bizPrograms','bizCosts','roleWeights','requiredFTE'].forEach(k => {
+        if (state[k] && state[k][oldName] !== undefined){
+          state[k][newName] = state[k][oldName];
+          delete state[k][oldName];
+        }
+      });
+      renderAll();
+    },
     updateWeight: function(biz, role, val){ state.roleWeights[biz][role] = parseInt(val) || 0; renderAll(); },
     // ── 配置サジェスト (Phase 3.2) ──
     // 貪欲法: 充足度が最も低い役割から、能力×配分余剰が大きいメンバーを優先的に充てがう
