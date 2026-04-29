@@ -478,6 +478,8 @@ input.cells-edit-input {
 #sec-workforce .wf-role-input{border:1px solid transparent;background:transparent;font-size:9px;color:var(--text3);padding:1px 4px;border-radius:3px;width:100%;font-family:inherit}
 #sec-workforce .wf-name-input:focus,#sec-workforce .wf-role-input:focus,#sec-workforce .wf-cost-input:focus,#sec-workforce .wf-ability-input:focus{outline:1px solid #5aabf0;background:var(--bg)}
 #sec-workforce .wf-cost-input{width:72px;padding:3px 4px;border:1px solid var(--border2);border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:var(--bg);color:var(--text);font-family:inherit}
+#sec-workforce .wf-cost-readonly{cursor:pointer;font-size:10px;line-height:1.2;font-weight:600}
+#sec-workforce .wf-cost-readonly:hover{background:rgba(90,171,240,0.10)!important;outline:1px solid #5aabf0}
 #sec-workforce .wf-ability-input{width:48px;padding:3px 4px;border:1px solid var(--border2);border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:var(--bg);color:var(--text);font-family:inherit}
 #sec-workforce .wf-ability-input.high{background:rgba(255,224,230,0.30);color:#e87070;font-weight:700}
 #sec-workforce .wf-ability-input.low{background:rgba(180,180,180,0.15);color:var(--text3)}
@@ -12916,7 +12918,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <input type="text" class="wf-name-input" value="${escapeHtml(m.name)}" onchange="WF.updateName(${idx}, this.value)">
         <input type="text" class="wf-role-input" value="${escapeHtml(m.role||'')}" onchange="WF.updateRole(${idx}, this.value)" placeholder="役職">
       </td>`;
-      tbody += `<td class="wf-col-cost"><input type="number" class="wf-cost-input" value="${m.cost}" oninput="WF.updateCost(${idx}, this.value)" step="100000"></td>`;
+      tbody += `<td class="wf-col-cost wf-cost-readonly" onclick="WF.gotoPayroll(${idx})" title="人件費タブで月次編集">¥${(Number(m.cost)||0).toLocaleString()}<br><span style="font-size:8px;color:var(--text3);font-weight:400">📝 月次編集</span></td>`;
       tbody += `<td class="wf-col-ability"><input type="number" class="wf-ability-input ${abilityCls}" value="${ability}" onchange="WF.updateAbility(${idx}, this.value)" step="0.1" min="0.1" max="5"></td>`;
       BIZ.forEach((b, bi) => ROLES.forEach((r, ri) => {
         const v = m.allocMatrix[b][r] || 0;
@@ -13558,9 +13560,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const cost = parseInt($('wf-new-cost').value) || 0;
     const ability = parseFloat($('wf-new-ability').value) || 1.0;
     if (!name){ alert('名前を入力してください'); return; }
-    state.members.push({ name, role, cost, ability, allocMatrix: makeAllocMatrix() });
+    // 年額 cost (円) を 12等分して costMonthly (千円) に
+    const monthlyKEn = Math.round(cost / 12 / 1000);
+    const costMonthly = Array(12).fill(monthlyKEn);
+    state.members.push({ name, role, cost, ability, costMonthly, allocMatrix: makeAllocMatrix() });
     $('wf-add-modal').classList.remove('show');
     renderAll();
+    if (window.PAYROLL && window.PAYROLL.state.initialized) window.PAYROLL.renderAll();
     showWfStatus(`「${name}」を追加しました`);
   }
 
@@ -13598,6 +13604,10 @@ document.addEventListener('DOMContentLoaded', function() {
           state.currentVersionId = cur.version_id;
           console.log('[WF] init: restored from is_current version');
         }
+      }
+      // 全メンバーに costMonthly[12] を保証 (人件費タブを開かなくても揃う)
+      if (window.PAYROLL && window.PAYROLL.ensureCostMonthly){
+        window.PAYROLL.ensureCostMonthly(state.members);
       }
       renderAll();
     },
@@ -13641,7 +13651,35 @@ document.addEventListener('DOMContentLoaded', function() {
     // テーブル内のインライン編集ハンドラ (簡易実装、本実装は B4)
     updateName: function(idx, val){ state.members[idx].name = val; },
     updateRole: function(idx, val){ state.members[idx].role = val; },
-    updateCost: function(idx, val){ state.members[idx].cost = parseInt(val) || 0; renderAll(); },
+    // cost (年額・円) は人件費タブの costMonthly[12] (千円) から自動算出される
+    // この関数はモーダル/外部から年額を直接書き換えたいケース用 (12等分して反映)
+    updateCost: function(idx, val){
+      const m = state.members[idx];
+      if (!m) return;
+      const annualEn = parseInt(val) || 0;
+      m.cost = annualEn;
+      const monthlyKEn = Math.round(annualEn / 12 / 1000);
+      m.costMonthly = Array(12).fill(monthlyKEn);
+      renderAll();
+      if (window.PAYROLL && window.PAYROLL.state.initialized) window.PAYROLL.renderAll();
+    },
+    // 工数管理から人件費タブへジャンプ: 該当メンバーの行へスクロール
+    gotoPayroll: function(memberIdx){
+      const tab = document.querySelector('.tabs .tab[onclick*="payroll"]');
+      if (tab) tab.click();
+      setTimeout(() => {
+        const tbl = document.getElementById('payroll-table');
+        if (!tbl) return;
+        const rows = tbl.querySelectorAll('tbody tr');
+        const row = rows[memberIdx];
+        if (row){
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          row.style.transition = 'background .8s';
+          row.style.background = 'rgba(90,171,240,0.20)';
+          setTimeout(() => { row.style.background = ''; }, 1200);
+        }
+      }, 100);
+    },
     updateAbility: function(idx, val){ let v = parseFloat(val) || 1; v = Math.max(0.1, Math.min(5, v)); state.members[idx].ability = v; renderAll(); },
     updateAllocPct: function(idx, biz, role, val){ let v = parseInt(val) || 0; v = Math.max(0, Math.min(100, v)); state.members[idx].allocMatrix[biz][role] = v; renderAll(); },
     deleteMember: function(idx){ if (!confirm(`「${state.members[idx].name}」を削除しますか？`)) return; state.members.splice(idx, 1); renderAll(); },
