@@ -12637,6 +12637,7 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
         state._lastDraftSavedAt = payload.savedAt;
+        state._lastLocalSaveAt = Date.now(); // Realtime echo 防止用
         // 同一ブラウザの他タブにブロードキャスト
         if (_bc){
           try { _bc.postMessage({ type: 'draft-update', ...payload }); } catch(e){}
@@ -12679,6 +12680,56 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function clearDraftLocal(){
     try { localStorage.removeItem(DRAFT_KEY); } catch(e){}
+  }
+
+  // ─── Supabase Realtime: 別デバイスの編集を即時反映 ───
+  function getSbClient(){
+    try { return (typeof sbClient !== 'undefined') ? sbClient : (window.sbClient || null); }
+    catch(e){ return window.sbClient || null; }
+  }
+
+  function handleRealtimeDraftEvent(payload){
+    // 自分が直近 3秒以内に保存していたら echo とみなしてスキップ
+    if (state._lastLocalSaveAt && (Date.now() - state._lastLocalSaveAt) < 3000) return;
+    const row = payload && payload.new;
+    if (!row || !row.snapshot) return;
+    // 既知の savedAt より古ければスキップ
+    if (state._lastDraftSavedAt && row.saved_at && row.saved_at <= state._lastDraftSavedAt) return;
+    console.log('[WF] Realtime: applying remote draft', row.saved_at);
+    restoreSnapshot(row.snapshot);
+    state._lastDraftSavedAt = row.saved_at;
+    // 全UI再描画 (saveDraftLocal は呼ばない、ループ防止)
+    renderKPI(); renderPL(); renderGrid();
+    renderHeatmap(); renderFulSummary();
+    renderFTEMatrix(); renderWeightMatrix(); renderSGABody();
+    updateDirtyFlag(); renderVersionUI();
+    if (window.PAYROLL && window.PAYROLL.state.initialized) window.PAYROLL.renderAll();
+    const ind = document.getElementById('payroll-sync-status');
+    if (ind) ind.textContent = '↺ 別デバイスから同期 ' + new Date().toLocaleTimeString('ja-JP');
+  }
+
+  let _realtimeChannel = null;
+  function setupRealtimeSync(){
+    if (_realtimeChannel) return; // 二重購読防止
+    const sb = getSbClient();
+    if (!sb || typeof sb.channel !== 'function'){
+      // sbClient 未初期化なら 2秒後に再試行 (config 取得後に来るかもしれない)
+      setTimeout(() => { if (!_realtimeChannel) setupRealtimeSync(); }, 2000);
+      return;
+    }
+    try {
+      _realtimeChannel = sb
+        .channel('workforce_draft_sync')
+        .on('postgres_changes', {
+          event: '*', schema: 'public', table: 'workforce_versions',
+          filter: 'version_id=eq.' + DRAFT_VERSION_ID,
+        }, handleRealtimeDraftEvent)
+        .subscribe((status) => {
+          console.log('[WF] Realtime status:', status);
+        });
+    } catch (e) {
+      console.warn('[WF] Realtime subscription failed:', e.message);
+    }
   }
 
   // ─── スナップショット ───
@@ -13683,6 +13734,8 @@ document.addEventListener('DOMContentLoaded', function() {
         window.PAYROLL.ensureCostMonthly(state.members);
       }
       renderAll();
+      // Supabase Realtime 購読を開始 (sbClient 未初期化なら自動リトライ)
+      setupRealtimeSync();
     },
     toggleSection: function(key){ state.collapsed[key] = !state.collapsed[key]; renderPL(); },
     switchSubtab: function(name, btn){
