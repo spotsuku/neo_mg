@@ -500,10 +500,16 @@ input.cells-edit-input {
 #sec-workforce .wf-person-card:hover{transform:translateX(2px);box-shadow:0 1px 4px rgba(0,0,0,0.15)}
 #sec-workforce .wf-pc-avatar{display:grid;place-items:center;border-radius:50%;flex-shrink:0;font-weight:700;color:#fff;font-family:'Hiragino Sans','Yu Gothic',sans-serif;border:2px solid rgba(255,255,255,0.15)}
 #sec-workforce .wf-pc-body{flex:1;min-width:0}
-#sec-workforce .wf-pc-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
-#sec-workforce .wf-pc-meta{display:flex;align-items:center;gap:5px;margin-top:2px}
+#sec-workforce .wf-pc-name{font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+#sec-workforce .wf-pc-meta{display:flex;align-items:center;gap:5px;margin-top:2px;flex-wrap:wrap}
 #sec-workforce .wf-pc-meta .wf-rb{font-size:9px;padding:1px 5px}
 #sec-workforce .wf-pc-pct{font-size:11px;font-weight:700;font-family:monospace;color:var(--text)}
+/* 複数役割: 合計バッジ + 役割別ピル */
+#sec-workforce .wf-pc-total-badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:6px;background:var(--bg2);color:var(--text);font-family:monospace;border:1px solid var(--border);margin-left:6px;flex-shrink:0}
+#sec-workforce .wf-pc-roles{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}
+#sec-workforce .wf-pc-role-pill{display:inline-flex;align-items:center;gap:3px;font-size:10px}
+#sec-workforce .wf-pc-role-pill .wf-rb{font-size:9px;padding:1px 5px}
+#sec-workforce .wf-pc-role-pill .pct{font-size:11px;font-weight:700;font-family:monospace;color:var(--text)}
 /* 配分%別サイズ */
 #sec-workforce .wf-person-card.mini  .wf-pc-avatar{width:24px;height:24px;font-size:11px}
 #sec-workforce .wf-person-card.small .wf-pc-avatar{width:30px;height:30px;font-size:13px}
@@ -13470,25 +13476,33 @@ document.addEventListener('DOMContentLoaded', function() {
       else if (fulfillPct > 120) fCls = 'over';
       else fCls = 'full';
 
-      // この BIZ への配分エントリを集める
-      const entries = [];
+      // この BIZ への配分エントリをメンバー単位で集約 (複数役割は 1 カードにまとめる)
+      const memberMap = new Map();
       state.members.forEach((m, idx) => {
         ROLES.forEach(r => {
           const pct = Number(m.allocMatrix?.[biz]?.[r]) || 0;
-          if (pct > 0) entries.push({ idx, m, role: r, pct });
+          if (pct <= 0) return;
+          if (!memberMap.has(idx)) memberMap.set(idx, { idx, m, totalPct: 0, roles: [] });
+          const entry = memberMap.get(idx);
+          entry.totalPct += pct;
+          entry.roles.push({ role: r, pct });
         });
       });
+      // 各エントリ内で役割を % 大きい順にソート
+      const entries = Array.from(memberMap.values());
+      entries.forEach(e => e.roles.sort((a,b) => b.pct - a.pct));
 
-      // フィルタ
+      // フィルタ (検索文字列を name/役職/事業/役割名 で照合)
       let filtered = entries;
       if (filter){
         filtered = entries.filter(e => {
-          const hay = (String(e.m.name||'') + ' ' + (e.m.role||'') + ' ' + biz + ' ' + e.role).toLowerCase();
+          const roleStr = e.roles.map(rr => rr.role).join(' ');
+          const hay = (String(e.m.name||'') + ' ' + (e.m.role||'') + ' ' + biz + ' ' + roleStr).toLowerCase();
           return hay.includes(filter);
         });
       }
-      // 配分% 大きい順
-      filtered.sort((a,b) => b.pct - a.pct);
+      // 合計% 大きい順
+      filtered.sort((a,b) => b.totalPct - a.totalPct);
 
       const fulLabel = fulfillPct == null
         ? (investedTotal > 0 ? `投入 ${investedTotal.toFixed(1)}（必要 0）` : '未設定')
@@ -13505,21 +13519,40 @@ document.addEventListener('DOMContentLoaded', function() {
         html += '<div class="wf-lane-empty">' + (filter ? '該当なし' : '配分なし') + '</div>';
       } else {
         filtered.forEach(e => {
-          const size = e.pct >= 80 ? 'huge'
-                      : e.pct >= 50 ? 'large'
-                      : e.pct >= 30 ? 'medium'
-                      : e.pct >= 10 ? 'small'
+          // アイコンサイズは合計%で決まる
+          const tot = e.totalPct;
+          const size = tot >= 80 ? 'huge'
+                      : tot >= 50 ? 'large'
+                      : tot >= 30 ? 'medium'
+                      : tot >= 10 ? 'small'
                       : 'mini';
           const initial = String(e.m.name || '?').slice(0,1);
-          const color = ROLE_BAR_COLOR[e.role] || '#888';
-          html += `<div class="wf-person-card ${size}" title="${escapeHtml(String(e.m.name||''))} - ${escapeHtml(biz)} × ${e.role} ${e.pct}%">
+          // アイコン色 = 最大%の役割色 (= roles[0])
+          const dominant = e.roles[0];
+          const color = ROLE_BAR_COLOR[dominant.role] || '#888';
+          // tooltip: 全役割を列挙
+          const tooltipRoles = e.roles.map(rr => `${rr.role} ${rr.pct}%`).join(' / ');
+          // 役割表示: 1つだけならコンパクト、複数なら合計バッジ+ピル列
+          const isSingle = e.roles.length === 1;
+          let roleHtml;
+          if (isSingle){
+            roleHtml = `<div class="wf-pc-meta">
+              <span class="wf-rb wf-r-${dominant.role}">${dominant.role}</span>
+              <span class="wf-pc-pct">${dominant.pct}%</span>
+            </div>`;
+          } else {
+            const pills = e.roles.map(rr =>
+              `<span class="wf-pc-role-pill"><span class="wf-rb wf-r-${rr.role}">${rr.role}</span><span class="pct">${rr.pct}%</span></span>`
+            ).join('');
+            roleHtml = `<div class="wf-pc-roles">${pills}</div>`;
+          }
+          // 名前の右に合計バッジ (複数役割時のみ)
+          const totalBadge = isSingle ? '' : `<span class="wf-pc-total-badge">合計 ${tot}%</span>`;
+          html += `<div class="wf-person-card ${size}" title="${escapeHtml(String(e.m.name||''))} - ${escapeHtml(biz)}: ${tooltipRoles}">
             <span class="wf-pc-avatar" style="background:${color}">${escapeHtml(initial)}</span>
             <div class="wf-pc-body">
-              <div class="wf-pc-name">${escapeHtml(String(e.m.name||''))}</div>
-              <div class="wf-pc-meta">
-                <span class="wf-rb wf-r-${e.role}">${e.role}</span>
-                <span class="wf-pc-pct">${e.pct}%</span>
-              </div>
+              <div class="wf-pc-name">${escapeHtml(String(e.m.name||''))}${totalBadge}</div>
+              ${roleHtml}
             </div>
           </div>`;
         });
