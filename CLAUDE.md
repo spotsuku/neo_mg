@@ -65,6 +65,8 @@
 - [2026-04-28] 工数管理セクションで `<input type="number">` を多用し、ネイティブの上下スピナーが目障りという指摘を受けた → 表組セルに数値入力を埋め込む際は `::-webkit-{outer,inner}-spin-button{appearance:none}` と `-moz-appearance:textfield` をスコープして必ず外す。
 - [2026-04-29] 工数管理の人件費を年額1値で持っていたが、月次変動を捉えられない指摘 → 月次変動するデータは最初から月別配列で持つ。`cost`(年額) は `costMonthly[12]` から自動算出する派生値とし、UI も読み取り専用にして編集経路を一本化する。
 - [2026-04-29] localStorage だけだと「複数デバイスで使ったら同期されない」要件を満たせない → 永続化は3層 (localStorage / BroadcastChannel / Supabase Realtime) を組み合わせる。同一ブラウザ別タブは BroadcastChannel、別デバイスは Supabase Realtime + 自動保存で対応。echo 防止のため自分の最近の保存(3秒以内)はスキップ。
+- [2026-04-29] サマリーKPIカードを更新したくなったが、ユーザーは現状の財務数値表示を強く維持したかった → 既存KPIカードは絶対に置き換えず、新しい指標は「上または下に追加ブロック」として乗せる。先頭に乗せる場合は背景色を変えてセクションを分離する。
+- [2026-04-29] 既存ダッシュボードの AI ブリーフィングが古いハードコード値で生成されていた → window.WF / window.EXPENSE などのオプショナルなモジュールから動的に指標を読み出し、prompt に注入する。各モジュールは window 直下に公開し、未読込時は graceful に空文字列でフォールバックする。
 
 # プロジェクト固有ルール（neo_mg）
 
@@ -80,3 +82,6 @@
 - 表セル内の数値入力は必ずスプレッドシート風（スピナー除去）で統一する
 - マルチデバイスを想定する機能は localStorage + BroadcastChannel + Supabase Realtime の3層で同期する
 - 大型機能は main に直 push せず `feature/*` ブランチを切り、Vercel プレビューで確認後 main にマージする
+- サマリーKPIカード (kpi-cash/kpi-rev/kpi-gp/kpi-opex/kpi-op/kpi-equity) は絶対に置き換えない。指標の追加は新ブロックを上または下に追加する形で行う
+- 各機能モジュールは IIFE で `window.WF` `window.PAYROLL` `window.EXPENSE` `window.ExpenseSync` のように window 直下に公開し、相互参照は optional check (window.X && window.X.method) で行う
+- 新規 SQL は別ファイルに分割 (`supabase_*.sql`) し、ユーザーが Dashboard で個別実行できるようにする

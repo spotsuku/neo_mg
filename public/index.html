@@ -10213,10 +10213,30 @@ async function genAI(type) {
   const d = DB[currentYear];
   const cumRev = (d.pl.actual.rev || []).reduce((s, v) => s + (Number(v) || 0), 0);
   const cumOpex = [...(d.pl.actual.labor||[]),...(d.pl.actual.outsource||[]),...(d.pl.actual.adv||[]),...(d.pl.actual.other||[])].reduce((s, v) => s + (Number(v) || 0), 0) / 4;
+  // 工数管理・経費申請のリアルタイム指標を取り込む (Phase 5.3)
+  let prodLine = '', staffLine = '', expenseLine = '';
+  if (window.WF && typeof window.WF.totalRealizedRev === 'function'){
+    const realRev = window.WF.totalRealizedRev();
+    const costAll = window.WF.totalCost();
+    const ratio = costAll > 0 ? (realRev/costAll).toFixed(2) : '—';
+    prodLine = ` / 人件費生産性:${ratio}倍 (実現売上${(realRev/10000).toFixed(0)}万 ÷ 人件費${(costAll/10000).toFixed(0)}万)`;
+    if (Array.isArray(window.WF.BIZ) && Array.isArray(window.WF.ROLES)){
+      const lows = [];
+      window.WF.BIZ.forEach(b => window.WF.ROLES.forEach(r => {
+        const f = window.WF.bizRoleFulfillment(b, r);
+        if (f != null && f < 0.8) lows.push(`${b}×${r}(${Math.round(f*100)}%)`);
+      }));
+      if (lows.length) staffLine = ` / 充足度低役割:${lows.slice(0,3).join('・')}${lows.length>3?'…':''}`;
+    }
+  }
+  if (window.EXPENSE && Array.isArray(window.EXPENSE.state.requests)){
+    const pending = window.EXPENSE.state.requests.filter(r => r.status === 'pending');
+    if (pending.length) expenseLine = ` / 経費申請承認待ち:${pending.length}件 (合計${pending.reduce((s,x)=>s+(Number(x.amount)||0),0).toLocaleString()}円)`;
+  }
 
   const prompts = {
-    weekly: `NEO福岡の経営コンサルタントとして、以下データをもとに週次ブリーフィングを箇条書き3点で作成してください（①CFリスク、②最重要アクション、③中期的注目点）。\n累積売上:${cumRev.toLocaleString()}千円 / 累積販管費概算:${Math.round(cumOpex).toLocaleString()}千円 / 現金:5,371万円（7.5ヶ月分） / OKR:8/10完了 / AI研修45名・粗利500万円達成 / 採用リード獲得が課題`,
-    report: `NEO福岡の代表取締役CEOとして、役員会議用の月次経営方針コメントを400〜500字で作成してください（①成果評価、②財務・資金対策、③来月の重点方針）。\n累積売上:${cumRev.toLocaleString()}千円（予算比103%）/ 累積販管費概算:${Math.round(cumOpex).toLocaleString()}千円 / 現金:5,371万円 / AI研修45名・粗利500万円 / 既存契約更新14社完了 / 課題:採用リード・研修商品最終化`,
+    weekly: `NEO福岡のCFOアドバイザーとして、以下の経営指標をもとに週次ブリーフィングを箇条書き4点で作成してください（①CFリスク、②人員配置の課題、③予算逸脱、④最重要アクション）。\n累積売上:${cumRev.toLocaleString()}千円 / 累積販管費概算:${Math.round(cumOpex).toLocaleString()}千円${prodLine}${staffLine}${expenseLine}`,
+    report: `NEO福岡の代表取締役CEOとして、役員会議用の月次経営方針コメントを400〜500字で作成してください（①成果評価、②財務・資金対策、③人員配置と生産性、④来月の重点方針）。\n累積売上:${cumRev.toLocaleString()}千円（予算比103%）/ 累積販管費概算:${Math.round(cumOpex).toLocaleString()}千円${prodLine}${staffLine}${expenseLine}`,
     'sim-pl': (() => {
       const months = getSimMonths();
       const labels = getSimLabels();
