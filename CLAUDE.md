@@ -69,6 +69,7 @@
 - [2026-04-29] 既存ダッシュボードの AI ブリーフィングが古いハードコード値で生成されていた → window.WF / window.EXPENSE などのオプショナルなモジュールから動的に指標を読み出し、prompt に注入する。各モジュールは window 直下に公開し、未読込時は graceful に空文字列でフォールバックする。
 - [2026-04-29] モーダル要素を sec-workforce 内に配置 → 別タブから開けない（親が display:none だと子要素も全て非表示になる） → 全タブから開くべきモーダルやオーバーレイは必ずセクション外（body 直下相当）に配置し、CSS スコープも `#sec-xxx` ではなく素のクラスに統一する。
 - [2026-04-29] BIZ × ROLES のグリッドで `colspan="4"` をハードコードしていたため、ROLES 数を 4→6 に増やしたら列ズレが発生 → 多次元の配列・行列を生成する箇所では `array.length` を必ず使い、固定値を埋め込まない。同種の cells/rows/cols/colspan/rowspan は全て array length 由来にする。
+- [2026-04-29] チャット入出力時に `obj.prop.deep` のようなドット連鎖が markdown 自動リンク化で `[obj.prop.deep](http://obj.prop.deep)` に変換され構文エラーになる事案 → JS コードを Edit で書き込む際は `String(obj.prop)` などラップする / または変数に分割代入する形で出力し、自動リンク化を回避する。書込み後は必ず `node --check` で検出。
 
 # プロジェクト固有ルール（neo_mg）
 
