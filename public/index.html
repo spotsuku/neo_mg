@@ -2304,11 +2304,13 @@ function updateWeeklyKPIs() {
     }
 
     // ターゲット月（lastActualIdx）にCF実績があるか判定
+    // ※ ストアcfClose 単独は「古い期末残高だけが残っている」可能性があるため
+    //   「実績反映済み」とは見做さない。BS現預金 or 入金/出金 が入っていることを必須とする。
     const i = lastActualIdx;
     const bsCi = Number(d.bs?.actual?.[i]?.cash) || 0;
-    const ccA  = Number(d.cf?.actual?.cfClose?.[i]) || 0;
     const aN   = netCFOf('actual', i);
-    const monthHasActual = bsCi !== 0 || ccA !== 0 || aN.inflow > 0
+    const monthHasActual = bsCi !== 0
+                        || aN.inflow > 0
                         || (aN.cogs + aN.opex + aN.invest + aN.finOut) > 0;
 
     if (monthHasActual) {
