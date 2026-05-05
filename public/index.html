@@ -2223,10 +2223,12 @@ function updateWeeklyKPIs() {
   const opexRate = budOpex > 0 ? Math.round(cumOpex / budOpex * 100) : null;
 
   // 現金残高 = 最終実績月の月末残高
-  // 「資金繰り予測（直近12ヶ月）」と同じく全年度をロールアップして算出する。
-  // 優先順位（月次）: BS現預金 > ストア cfClose > 月初+純CF
-  // 純CF = aIn - aCogsTot - aOpexTot - investPay + (loanIn+capitalIn) - (loanOut+warrantPay+finOtherPay)
+  // 「資金繰り予測（直近12ヶ月）」と同じ全年度ロールアップ。
+  // 月ごとに優先順位: BS現預金 > ストア cfClose > 月初+純CF
+  // 純CFは「その月にCF実績があれば実績、無ければ予算」で計算する。
+  // → 4月にPL実績はあってもCF実績未入力なら、4月末は予算ベースで表示される。
   let lastCash = null;
+  let lastCashIsActual = false; // 表示時に「実績/予算」をラベル分けするため
   if (lastActualIdx >= 0) {
     const cogsCfKeys   = ['cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'];
     const opexCfKeys   = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
@@ -2236,7 +2238,6 @@ function updateWeeklyKPIs() {
     const finOutCfKeys = ['loanOut','warrantPay','finOtherPay'];
     const cfInDetailKeys = ['cfInFee','cfInTraining','cfInEvent','cfInOther','cfInMembership'];
 
-    // 全年度を時系列に並べてロールアップ。currentYear の lastActualIdx で停止する。
     const yearsOrder = ['2024','2025','2026'];
     const stopYr = currentYear;
     let running = null;
@@ -2248,7 +2249,7 @@ function updateWeeklyKPIs() {
       const cfB = dy.cf?.budget || {};
       const bsA = dy.bs?.actual || {};
       const N = dy.months.length;
-      // 期首残高（最初の年の最初の月で1度だけ確定する）
+      // 期首は最初の年の最初の月で1度だけ確定（actual.open[0] > budget.open[0]）
       if (!runningInitialized) {
         const so = Number(cfA.open?.[0]);
         const bo = Number(cfB.open?.[0]);
@@ -2259,23 +2260,44 @@ function updateWeeklyKPIs() {
       }
       const stopIdx = (yr === stopYr) ? lastActualIdx : N - 1;
       for (let i = 0; i <= stopIdx; i++) {
-        const getA = (k) => Number(cfA[k]?.[i]) || 0;
+        const gA = (k) => Number(cfA[k]?.[i]) || 0;
+        const gB = (k) => Number(cfB[k]?.[i]) || 0;
         const bsCi = Number(bsA[i]?.cash);
         const ccA  = Number(cfA.cfClose?.[i]);
+        // CF実績の有無判定: BS / cfClose / 入金 / 主要出金のいずれかに値があれば「実績あり」
+        const detIn_A   = cfInDetailKeys.reduce((t,k) => t + gA(k), 0);
+        const par_A     = gA('cfIn');
+        const inflow_A  = detIn_A + Math.max(0, par_A - detIn_A);
+        const cogs_A    = cogsCfKeys.reduce((t,k) => t + gA(k), 0);
+        const opex_A    = opexCfKeys.reduce((t,k) => t + gA(k), 0);
+        const invest_A  = gA('investPay');
+        const finIn_A   = finInCfKeys.reduce((t,k) => t + gA(k), 0);
+        const finOut_A  = finOutCfKeys.reduce((t,k) => t + gA(k), 0);
+        const monthHasActual = (Number.isFinite(bsCi) && bsCi !== 0)
+                            || (Number.isFinite(ccA) && ccA !== 0)
+                            || inflow_A > 0
+                            || (cogs_A + opex_A + invest_A + finOut_A) > 0;
         if (Number.isFinite(bsCi) && bsCi !== 0) {
           running = Math.round(bsCi);
         } else if (Number.isFinite(ccA) && ccA !== 0) {
           running = Math.round(ccA);
+        } else if (monthHasActual) {
+          running = running + inflow_A + finIn_A - cogs_A - opex_A - invest_A - finOut_A;
         } else {
-          const detIn   = cfInDetailKeys.reduce((t,k) => t + getA(k), 0);
-          const par     = getA('cfIn');
-          const inflow  = detIn + Math.max(0, par - detIn);
-          const finIn   = finInCfKeys.reduce((t,k) => t + getA(k), 0);
-          const cogs_   = cogsCfKeys.reduce((t,k) => t + getA(k), 0);
-          const opex_   = opexCfKeys.reduce((t,k) => t + getA(k), 0);
-          const invest_ = getA('investPay');
-          const finOut_ = finOutCfKeys.reduce((t,k) => t + getA(k), 0);
-          running = running + inflow + finIn - cogs_ - opex_ - invest_ - finOut_;
+          // 予算フォールバック
+          const detIn_B  = cfInDetailKeys.reduce((t,k) => t + gB(k), 0);
+          const par_B    = gB('cfIn');
+          const inflow_B = detIn_B + Math.max(0, par_B - detIn_B);
+          const cogs_B   = cogsCfKeys.reduce((t,k) => t + gB(k), 0);
+          const opex_B   = opexCfKeys.reduce((t,k) => t + gB(k), 0);
+          const invest_B = gB('investPay');
+          const finIn_B  = finInCfKeys.reduce((t,k) => t + gB(k), 0);
+          const finOut_B = finOutCfKeys.reduce((t,k) => t + gB(k), 0);
+          running = running + inflow_B + finIn_B - cogs_B - opex_B - invest_B - finOut_B;
+        }
+        // 最終月（停止月）の表示ラベル用に実績/予算判定を保持
+        if (yr === stopYr && i === stopIdx) {
+          lastCashIsActual = monthHasActual;
         }
       }
       if (yr === stopYr) break;
@@ -2305,8 +2327,9 @@ function updateWeeklyKPIs() {
     ? (runwayNum >= 999 ? '残り 999ヶ月超' : `残り約${runway}ヶ月`)
     : 'バーンレート未確定';
   const _runwayCls = runwayNum != null ? riskClass(runway) : '';
+  const _basisLabel = lastCashIsActual ? '実績' : '予算';
   document.getElementById('kpi-cash-s').innerHTML = lastCash
-    ? `<span style="color:var(--text3)">${cashMonthLabel}末時点</span> ・ <span class="${_runwayCls}">${_runwayLabel}</span>`
+    ? `<span style="color:var(--text3)">${cashMonthLabel}末${_basisLabel}</span> ・ <span class="${_runwayCls}">${_runwayLabel}</span>`
     : '';
 
   document.getElementById('kpi-rev').textContent =
