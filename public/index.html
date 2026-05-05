@@ -2228,7 +2228,8 @@ function updateWeeklyKPIs() {
   // 純CFは「その月にCF実績があれば実績、無ければ予算」で計算する。
   // → 4月にPL実績はあってもCF実績未入力なら、4月末は予算ベースで表示される。
   let lastCash = null;
-  let lastCashIsActual = false; // 表示時に「実績/予算」をラベル分けするため
+  let lastCashIsActual = false;
+  let lastCashTrace = []; // 計算過程をtooltipに出すためのトレース
   if (lastActualIdx >= 0) {
     const cogsCfKeys   = ['cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'];
     const opexCfKeys   = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
@@ -2249,13 +2250,14 @@ function updateWeeklyKPIs() {
       const cfB = dy.cf?.budget || {};
       const bsA = dy.bs?.actual || {};
       const N = dy.months.length;
-      // 期首は最初の年の最初の月で1度だけ確定（actual.open[0] > budget.open[0]）
       if (!runningInitialized) {
         const so = Number(cfA.open?.[0]);
         const bo = Number(cfB.open?.[0]);
-        if (Number.isFinite(so) && so > 0) running = so;
-        else if (Number.isFinite(bo) && bo > 0) running = bo;
-        else running = 0;
+        let src;
+        if (Number.isFinite(so) && so > 0) { running = so; src = `actual.open[0]=${so}`; }
+        else if (Number.isFinite(bo) && bo > 0) { running = bo; src = `budget.open[0]=${bo}`; }
+        else { running = 0; src = 'なし→0'; }
+        lastCashTrace.push(`期首[${yr}]: ${running.toLocaleString()} (${src})`);
         runningInitialized = true;
       }
       const stopIdx = (yr === stopYr) ? lastActualIdx : N - 1;
@@ -2264,7 +2266,6 @@ function updateWeeklyKPIs() {
         const gB = (k) => Number(cfB[k]?.[i]) || 0;
         const bsCi = Number(bsA[i]?.cash);
         const ccA  = Number(cfA.cfClose?.[i]);
-        // CF実績の有無判定: BS / cfClose / 入金 / 主要出金のいずれかに値があれば「実績あり」
         const detIn_A   = cfInDetailKeys.reduce((t,k) => t + gA(k), 0);
         const par_A     = gA('cfIn');
         const inflow_A  = detIn_A + Math.max(0, par_A - detIn_A);
@@ -2277,14 +2278,19 @@ function updateWeeklyKPIs() {
                             || (Number.isFinite(ccA) && ccA !== 0)
                             || inflow_A > 0
                             || (cogs_A + opex_A + invest_A + finOut_A) > 0;
+        const mLbl = MONTH_LABELS[dy.months[i]] || dy.months[i];
+        let traceLine = '';
         if (Number.isFinite(bsCi) && bsCi !== 0) {
           running = Math.round(bsCi);
+          traceLine = `${yr}年度${mLbl}: BS現預金 = ${running.toLocaleString()}`;
         } else if (Number.isFinite(ccA) && ccA !== 0) {
           running = Math.round(ccA);
+          traceLine = `${yr}年度${mLbl}: ストアcfClose = ${running.toLocaleString()}`;
         } else if (monthHasActual) {
-          running = running + inflow_A + finIn_A - cogs_A - opex_A - invest_A - finOut_A;
+          const net = inflow_A + finIn_A - cogs_A - opex_A - invest_A - finOut_A;
+          running = running + net;
+          traceLine = `${yr}年度${mLbl}: 実績純CF ${net>=0?'+':''}${net.toLocaleString()} → ${running.toLocaleString()} (入${inflow_A}/原${cogs_A}/販${opex_A}/投${invest_A}/借±${finIn_A-finOut_A})`;
         } else {
-          // 予算フォールバック
           const detIn_B  = cfInDetailKeys.reduce((t,k) => t + gB(k), 0);
           const par_B    = gB('cfIn');
           const inflow_B = detIn_B + Math.max(0, par_B - detIn_B);
@@ -2293,9 +2299,11 @@ function updateWeeklyKPIs() {
           const invest_B = gB('investPay');
           const finIn_B  = finInCfKeys.reduce((t,k) => t + gB(k), 0);
           const finOut_B = finOutCfKeys.reduce((t,k) => t + gB(k), 0);
-          running = running + inflow_B + finIn_B - cogs_B - opex_B - invest_B - finOut_B;
+          const net = inflow_B + finIn_B - cogs_B - opex_B - invest_B - finOut_B;
+          running = running + net;
+          traceLine = `${yr}年度${mLbl}: 予算純CF ${net>=0?'+':''}${net.toLocaleString()} → ${running.toLocaleString()} (入${inflow_B}/原${cogs_B}/販${opex_B}/投${invest_B}/借±${finIn_B-finOut_B})`;
         }
-        // 最終月（停止月）の表示ラベル用に実績/予算判定を保持
+        lastCashTrace.push(traceLine);
         if (yr === stopYr && i === stopIdx) {
           lastCashIsActual = monthHasActual;
         }
@@ -2303,6 +2311,8 @@ function updateWeeklyKPIs() {
       if (yr === stopYr) break;
     }
     lastCash = Math.round(running);
+    // デバッグ用: コンソールにも出力
+    try { console.log('[KPI現金残高] 計算過程:\n' + lastCashTrace.join('\n')); } catch(e){}
   }
   const months12Labor = pl.actual.labor.slice(Math.max(0, lastActualIdx - 2), lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
   const countMonths = Math.min(lastActualIdx + 1, 3);
@@ -2331,6 +2341,12 @@ function updateWeeklyKPIs() {
   document.getElementById('kpi-cash-s').innerHTML = lastCash
     ? `<span style="color:var(--text3)">${cashMonthLabel}末${_basisLabel}</span> ・ <span class="${_runwayCls}">${_runwayLabel}</span>`
     : '';
+  // 計算過程ツールチップ（KPIカードホバーで表示。コンソールにも出力済み）
+  const _kpiCashCard = document.getElementById('kpi-cash')?.closest('.mc');
+  if (_kpiCashCard && lastCashTrace && lastCashTrace.length) {
+    _kpiCashCard.title = '【現金残高 計算過程】\n' + lastCashTrace.slice(-15).join('\n');
+    _kpiCashCard.style.cursor = 'help';
+  }
 
   document.getElementById('kpi-rev').textContent =
     hasActual ? fmt万(cumRev) + '千円' : '—';
