@@ -2223,10 +2223,9 @@ function updateWeeklyKPIs() {
   const opexRate = budOpex > 0 ? Math.round(cumOpex / budOpex * 100) : null;
 
   // 現金残高 = 最終実績月の月末残高
-  // 月次財務 CF表 (renderCfDetail の aCloseDisplay) と同じロジックで算出する。
-  // 優先順位（月次）: BS現預金 > ストア cfClose > 月初+純CF（推定）
+  // 「資金繰り予測（直近12ヶ月）」と同じく全年度をロールアップして算出する。
+  // 優先順位（月次）: BS現預金 > ストア cfClose > 月初+純CF
   // 純CF = aIn - aCogsTot - aOpexTot - investPay + (loanIn+capitalIn) - (loanOut+warrantPay+finOtherPay)
-  // aIn = cfInFee+cfInTraining+cfInEvent+cfInOther+cfInMembership + max(0, cfIn親 - 内訳合計)
   let lastCash = null;
   if (lastActualIdx >= 0) {
     const cogsCfKeys   = ['cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'];
@@ -2236,60 +2235,50 @@ function updateWeeklyKPIs() {
     const finInCfKeys  = ['loanIn','capitalIn'];
     const finOutCfKeys = ['loanOut','warrantPay','finOtherPay'];
     const cfInDetailKeys = ['cfInFee','cfInTraining','cfInEvent','cfInOther','cfInMembership'];
-    const getA = (k, i) => Number((cf.actual?.[k] || [])[i]) || 0;
-    const sumA = (keys, i) => keys.reduce((t, k) => t + getA(k, i), 0);
-    const bsActualMap = d.bs?.actual || {};
-    const cfCloseArrA = cf.actual?.cfClose || [];
 
-    // 期首残高: 前年度末BS現預金 > actual.open[0] > budget.open[0] > 前年度cfClose末
-    const prevYr = currentYear === '2026' ? '2025'
-                : currentYear === '2025' ? '2024'
-                : null;
+    // 全年度を時系列に並べてロールアップ。currentYear の lastActualIdx で停止する。
+    const yearsOrder = ['2024','2025','2026'];
+    const stopYr = currentYear;
     let running = null;
-    if (prevYr && DB[prevYr]?.bs?.actual) {
-      const idxs = Object.keys(DB[prevYr].bs.actual).map(Number).filter(n => !isNaN(n));
-      if (idxs.length) {
-        const c = Number(DB[prevYr].bs.actual[Math.max(...idxs)]?.cash);
-        if (Number.isFinite(c) && c !== 0) running = c;
+    let runningInitialized = false;
+    for (const yr of yearsOrder) {
+      const dy = DB[yr];
+      if (!dy || !dy.months) continue;
+      const cfA = dy.cf?.actual || {};
+      const cfB = dy.cf?.budget || {};
+      const bsA = dy.bs?.actual || {};
+      const N = dy.months.length;
+      // 期首残高（最初の年の最初の月で1度だけ確定する）
+      if (!runningInitialized) {
+        const so = Number(cfA.open?.[0]);
+        const bo = Number(cfB.open?.[0]);
+        if (Number.isFinite(so) && so > 0) running = so;
+        else if (Number.isFinite(bo) && bo > 0) running = bo;
+        else running = 0;
+        runningInitialized = true;
       }
-    }
-    if (running == null) {
-      const so = Number(cf.actual?.open?.[0]);
-      if (Number.isFinite(so) && so > 0) running = so;
-    }
-    if (running == null) {
-      const bo = Number(cf.budget?.open?.[0]);
-      if (Number.isFinite(bo) && bo > 0) running = bo;
-    }
-    if (running == null) {
-      const prevCloseArr = prevYr && DB[prevYr]?.cf?.actual?.cfClose;
-      if (prevCloseArr) {
-        for (let j = prevCloseArr.length - 1; j >= 0; j--) {
-          if (Number(prevCloseArr[j]) > 0) { running = Number(prevCloseArr[j]); break; }
+      const stopIdx = (yr === stopYr) ? lastActualIdx : N - 1;
+      for (let i = 0; i <= stopIdx; i++) {
+        const getA = (k) => Number(cfA[k]?.[i]) || 0;
+        const bsCi = Number(bsA[i]?.cash);
+        const ccA  = Number(cfA.cfClose?.[i]);
+        if (Number.isFinite(bsCi) && bsCi !== 0) {
+          running = Math.round(bsCi);
+        } else if (Number.isFinite(ccA) && ccA !== 0) {
+          running = Math.round(ccA);
+        } else {
+          const detIn   = cfInDetailKeys.reduce((t,k) => t + getA(k), 0);
+          const par     = getA('cfIn');
+          const inflow  = detIn + Math.max(0, par - detIn);
+          const finIn   = finInCfKeys.reduce((t,k) => t + getA(k), 0);
+          const cogs_   = cogsCfKeys.reduce((t,k) => t + getA(k), 0);
+          const opex_   = opexCfKeys.reduce((t,k) => t + getA(k), 0);
+          const invest_ = getA('investPay');
+          const finOut_ = finOutCfKeys.reduce((t,k) => t + getA(k), 0);
+          running = running + inflow + finIn - cogs_ - opex_ - invest_ - finOut_;
         }
       }
-    }
-    if (running == null) running = 0;
-
-    // 月次に running を更新（CF表 aCloseDisplay と同じ優先順位）
-    for (let i = 0; i <= lastActualIdx; i++) {
-      const bsCi = Number(bsActualMap[i]?.cash);
-      const ccA  = Number(cfCloseArrA[i]);
-      if (Number.isFinite(bsCi) && bsCi !== 0) {
-        running = Math.round(bsCi);
-      } else if (Number.isFinite(ccA) && ccA !== 0) {
-        running = Math.round(ccA);
-      } else {
-        const detIn   = sumA(cfInDetailKeys, i);
-        const par     = getA('cfIn', i);
-        const inflow  = detIn + Math.max(0, par - detIn);
-        const finIn   = sumA(finInCfKeys, i);
-        const cogs_   = sumA(cogsCfKeys, i);
-        const opex_   = sumA(opexCfKeys, i);
-        const invest_ = getA('investPay', i);
-        const finOut_ = sumA(finOutCfKeys, i);
-        running = running + inflow + finIn - cogs_ - opex_ - invest_ - finOut_;
-      }
+      if (yr === stopYr) break;
     }
     lastCash = Math.round(running);
   }
