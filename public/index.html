@@ -3015,10 +3015,14 @@ function renderCashFlowForecast() {
   const sparkEl = document.getElementById('cf-forecast-sparkline');
   if (!el) return;
 
-  const opexKeys = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
+  // 月次財務 CF表 (renderCfDetail) と同じキーセットを使う
+  const cogsKeys      = ['cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'];
+  const opexKeys      = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
     'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
     'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay'];
-  const finOutKeys = ['investPay','loanOut'];
+  const finOutKeysCF  = ['loanOut','warrantPay','finOtherPay'];
+  const finInKeysCF   = ['loanIn','capitalIn'];
+  const cfInDetailKeys = ['cfInFee','cfInTraining','cfInEvent','cfInOther','cfInMembership'];
 
   // 全年度の月データを時系列に結合
   const allMonths = [];
@@ -3027,36 +3031,44 @@ function renderCashFlowForecast() {
     if (!d || !d.months) return;
     const cfA = d.cf?.actual || {};
     const cfB = d.cf?.budget || {};
+    const bsA = d.bs?.actual || {};
     d.months.forEach((m, i) => {
       const getA = (k) => Number(cfA[k]?.[i]) || 0;
       const getB = (k) => Number(cfB[k]?.[i]) || 0;
-      // 売上入金：内訳（cfInFee+cfInTraining+cfInEvent+cfInOther+旧cfInMembership）が
-      // あればその合計、無ければ直接入力の cfIn
-      const sumInDetail = (sec, obj) => {
-        const s = (obj[`cfInFee`]?.[i]||0) + (obj[`cfInTraining`]?.[i]||0)
-                + (obj[`cfInEvent`]?.[i]||0) + (obj[`cfInOther`]?.[i]||0)
-                + (obj[`cfInMembership`]?.[i]||0);
-        return s > 0 ? Number(s) : Number(obj.cfIn?.[i] || 0);
+      // 売上入金 = 明細合計 + 未分類差 (cfIn親 − 明細超過分)。CF表 aIn と同一
+      const inflowOf = (obj) => {
+        const det = cfInDetailKeys.reduce((t,k) => t + (Number(obj[k]?.[i])||0), 0);
+        const par = Number(obj.cfIn?.[i]) || 0;
+        return det + Math.max(0, par - det);
       };
-      const cashIn_A = sumInDetail('actual', cfA);
-      const cashIn_B = sumInDetail('budget', cfB);
-      const hasActual = (Number(cfA.cfClose?.[i]) > 0) || cashIn_A > 0;
-      const opex_A = opexKeys.reduce((t,k) => t + getA(k), 0);
-      const opex_B = opexKeys.reduce((t,k) => t + getB(k), 0);
-      const finOut_A = finOutKeys.reduce((t,k) => t + getA(k), 0);
-      const finOut_B = finOutKeys.reduce((t,k) => t + getB(k), 0);
-      const loanIn_A = getA('loanIn');
-      const loanIn_B = getB('loanIn');
+      const cashIn_A = inflowOf(cfA);
+      const cashIn_B = inflowOf(cfB);
+      // 出金: 原価+販管費 / 投資・財務出金 を分離して保持
+      const cogs_A   = cogsKeys.reduce((t,k) => t + getA(k), 0);
+      const cogs_B   = cogsKeys.reduce((t,k) => t + getB(k), 0);
+      const opex_A   = opexKeys.reduce((t,k) => t + getA(k), 0);
+      const opex_B   = opexKeys.reduce((t,k) => t + getB(k), 0);
+      const invest_A = getA('investPay');
+      const invest_B = getB('investPay');
+      const finOut_A = finOutKeysCF.reduce((t,k) => t + getA(k), 0);
+      const finOut_B = finOutKeysCF.reduce((t,k) => t + getB(k), 0);
+      const finIn_A  = finInKeysCF.reduce((t,k) => t + getA(k), 0);
+      const finIn_B  = finInKeysCF.reduce((t,k) => t + getB(k), 0);
+      // BS現預金（真値: 銀行残高）
+      const bsCash   = Number(bsA[i]?.cash) || 0;
+      const storedClose = getA('cfClose');
+      // 実績判定: BS現預金あり OR 入金あり OR ストアcfClose>0
+      const hasActual = bsCash !== 0 || cashIn_A > 0 || storedClose > 0;
 
       allMonths.push({
         code: m, yr, label: MONTH_LABELS[m] || m,
-        hasActual,
-        open:   hasActual ? getA('open')    : getB('open'),
-        cashIn: hasActual ? cashIn_A  : cashIn_B,
-        opex:   hasActual ? opex_A    : opex_B,
-        finOut: hasActual ? finOut_A  : finOut_B,
-        loanIn: hasActual ? loanIn_A  : loanIn_B,
-        close:  hasActual ? getA('cfClose') : 0,
+        hasActual, bsCash, storedClose,
+        open:    hasActual ? getA('open')    : getB('open'),
+        cashIn:  hasActual ? cashIn_A : cashIn_B,
+        loanIn:  hasActual ? finIn_A  : finIn_B,   // 借入・調達 = loanIn + capitalIn
+        opex:    hasActual ? (cogs_A + opex_A) : (cogs_B + opex_B), // 事業出金 = 原価 + 販管費
+        finOut:  hasActual ? (invest_A + finOut_A) : (invest_B + finOut_B), // 投資・財務出金
+        close:   0, // 後で計算
       });
     });
   });
@@ -3095,17 +3107,28 @@ function renderCashFlowForecast() {
     }
   }
 
-  // 残高計算: 月末残高 = 月初 + 入金 + 借入 − 出金 − 投資・返済（実績/予算とも常にフローから算出）
-  // ストアの cfClose に外部同期由来の不整合値（=月初値など）が入っていても
-  // 表示と純CFが一致するよう、保存値ではなく計算結果を表示する。
-  // また 2月目以降は前月末残高を当月初に強制ロールしてチェーンを維持する。
+  // 残高計算（月次財務 CF表 の aCloseDisplay と同じロジック）
+  // 月初: i==0 はそのまま / i>0 は前月末を強制ロール
+  // 月末 (実績月): BS現預金 > ストアcfClose > 月初+純CF
+  // 月末 (予算月): 月初+純CF (将来予測)
   for (let i = 0; i < forecast.length; i++) {
     const f = forecast[i];
     if (i > 0) {
       const prevClose = forecast[i-1].close;
       if (prevClose != null) f.open = prevClose;
     }
-    f.close = Math.round((f.open || 0) + f.cashIn + f.loanIn - f.opex - f.finOut);
+    const calcClose = Math.round((f.open || 0) + f.cashIn + f.loanIn - f.opex - f.finOut);
+    if (f.hasActual) {
+      if (f.bsCash !== 0) {
+        f.close = Math.round(f.bsCash);
+      } else if (f.storedClose !== 0) {
+        f.close = Math.round(f.storedClose);
+      } else {
+        f.close = calcClose;
+      }
+    } else {
+      f.close = calcClose;
+    }
   }
 
   const fmt = (v) => v !== 0 ? Math.round(v).toLocaleString() : '\u2014';
@@ -3123,12 +3146,12 @@ function renderCashFlowForecast() {
 
   // 行定義
   const rowDefs = [
-    { label: '月初残高',   key: 'open',   style: 'font-weight:600' },
-    { label: '入金',       key: 'cashIn', isRev: true },
-    { label: '借入・調達', key: 'loanIn', isRev: true },
-    { label: '販管費出金', key: 'opex',   isOut: true },
-    { label: '投資・返済', key: 'finOut', isOut: true },
-    { label: '月末残高',   key: 'close',  style: 'font-weight:700;border-top:2px solid var(--border2)', isClose: true },
+    { label: '月初残高',         key: 'open',   style: 'font-weight:600' },
+    { label: '入金',             key: 'cashIn', isRev: true },
+    { label: '借入・調達',       key: 'loanIn', isRev: true },
+    { label: '事業出金（原価＋販管費）', key: 'opex',   isOut: true },
+    { label: '投資・財務出金',   key: 'finOut', isOut: true },
+    { label: '月末残高',         key: 'close',  style: 'font-weight:700;border-top:2px solid var(--border2)', isClose: true },
   ];
 
   rowDefs.forEach(row => {
