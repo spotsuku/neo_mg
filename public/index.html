@@ -2223,50 +2223,75 @@ function updateWeeklyKPIs() {
   const opexRate = budOpex > 0 ? Math.round(cumOpex / budOpex * 100) : null;
 
   // 現金残高 = 最終実績月の月末残高
-  // 算出順: BS現預金（最終実績月以前で最大BS月） > 月初+累計純CFの計算
-  // ストアの cfClose は外部同期で不整合値（=月初値など）が入りうるため使わない
+  // 月次財務 CF表 (renderCfDetail の aCloseDisplay) と同じロジックで算出する。
+  // 優先順位（月次）: BS現預金 > ストア cfClose > 月初+純CF（推定）
+  // 純CF = aIn - aCogsTot - aOpexTot - investPay + (loanIn+capitalIn) - (loanOut+warrantPay+finOtherPay)
+  // aIn = cfInFee+cfInTraining+cfInEvent+cfInOther+cfInMembership + max(0, cfIn親 - 内訳合計)
   let lastCash = null;
   if (lastActualIdx >= 0) {
-    // 1. BS現預金 (最終実績月 ≧ BS最新月)
+    const cogsCfKeys   = ['cogsHomeroomPay','cogsHyogikaiPay','cogsOenKaigiPay','cogsBigEventPay','cogsOtherPay'];
+    const opexCfKeys   = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
+      'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
+      'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay'];
+    const finInCfKeys  = ['loanIn','capitalIn'];
+    const finOutCfKeys = ['loanOut','warrantPay','finOtherPay'];
+    const cfInDetailKeys = ['cfInFee','cfInTraining','cfInEvent','cfInOther','cfInMembership'];
+    const getA = (k, i) => Number((cf.actual?.[k] || [])[i]) || 0;
+    const sumA = (keys, i) => keys.reduce((t, k) => t + getA(k, i), 0);
     const bsActualMap = d.bs?.actual || {};
-    const bsIdxs = Object.keys(bsActualMap).map(Number).filter(n => !isNaN(n) && n <= lastActualIdx);
-    if (bsIdxs.length) {
-      const lastBsIdx = Math.max(...bsIdxs);
-      const bsC = Number(bsActualMap[lastBsIdx]?.cash);
-      if (Number.isFinite(bsC) && bsC !== 0) lastCash = Math.round(bsC);
+    const cfCloseArrA = cf.actual?.cfClose || [];
+
+    // 期首残高: 前年度末BS現預金 > actual.open[0] > budget.open[0] > 前年度cfClose末
+    const prevYr = currentYear === '2026' ? '2025'
+                : currentYear === '2025' ? '2024'
+                : null;
+    let running = null;
+    if (prevYr && DB[prevYr]?.bs?.actual) {
+      const idxs = Object.keys(DB[prevYr].bs.actual).map(Number).filter(n => !isNaN(n));
+      if (idxs.length) {
+        const c = Number(DB[prevYr].bs.actual[Math.max(...idxs)]?.cash);
+        if (Number.isFinite(c) && c !== 0) running = c;
+      }
     }
-    // 2. 月初 + 累計純CF（フローから算出、月次財務CF詳細と同じロジック）
-    if (lastCash == null) {
-      const cfOpexKeys = ['salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
-        'expensePay','telPay','entertainPay','taxPay','toolsPay','suppliesPay',
-        'adSportsPay','eventCostPay','recruitPay','annualFeePay','salesOtherPay'];
-      const getA = (k, i) => Number((cf.actual?.[k] || [])[i]) || 0;
-      // 期首残高の確定: actual.open[0] > budget.open[0] > 前年度cfClose末
-      let running = Number(cf.actual?.open?.[0]) || Number(cf.budget?.open?.[0]) || 0;
-      if (!running) {
-        const prevYr = currentYear === '2026' ? '2025' : currentYear === '2025' ? '2024' : null;
-        const prevCloseArr = prevYr && DB[prevYr]?.cf?.actual?.cfClose;
-        if (prevCloseArr) {
-          for (let j = prevCloseArr.length - 1; j >= 0; j--) {
-            if (Number(prevCloseArr[j]) > 0) { running = Number(prevCloseArr[j]); break; }
-          }
+    if (running == null) {
+      const so = Number(cf.actual?.open?.[0]);
+      if (Number.isFinite(so) && so > 0) running = so;
+    }
+    if (running == null) {
+      const bo = Number(cf.budget?.open?.[0]);
+      if (Number.isFinite(bo) && bo > 0) running = bo;
+    }
+    if (running == null) {
+      const prevCloseArr = prevYr && DB[prevYr]?.cf?.actual?.cfClose;
+      if (prevCloseArr) {
+        for (let j = prevCloseArr.length - 1; j >= 0; j--) {
+          if (Number(prevCloseArr[j]) > 0) { running = Number(prevCloseArr[j]); break; }
         }
       }
-      // 各月の純CFを累積。途中月にBS現預金があれば真値で上書き。
-      for (let i = 0; i <= lastActualIdx; i++) {
-        const bsCi = Number(bsActualMap[i]?.cash);
-        if (Number.isFinite(bsCi) && bsCi !== 0) {
-          running = Math.round(bsCi);
-        } else {
-          const inflow  = getA('cfIn', i) + getA('loanIn', i) + getA('capitalIn', i);
-          const opex_   = cfOpexKeys.reduce((t, k) => t + getA(k, i), 0);
-          const finOut_ = getA('investPay', i) + getA('loanOut', i)
-                        + getA('warrantPay', i) + getA('finOtherPay', i);
-          running = running + inflow - opex_ - finOut_;
-        }
-      }
-      lastCash = Math.round(running);
     }
+    if (running == null) running = 0;
+
+    // 月次に running を更新（CF表 aCloseDisplay と同じ優先順位）
+    for (let i = 0; i <= lastActualIdx; i++) {
+      const bsCi = Number(bsActualMap[i]?.cash);
+      const ccA  = Number(cfCloseArrA[i]);
+      if (Number.isFinite(bsCi) && bsCi !== 0) {
+        running = Math.round(bsCi);
+      } else if (Number.isFinite(ccA) && ccA !== 0) {
+        running = Math.round(ccA);
+      } else {
+        const detIn   = sumA(cfInDetailKeys, i);
+        const par     = getA('cfIn', i);
+        const inflow  = detIn + Math.max(0, par - detIn);
+        const finIn   = sumA(finInCfKeys, i);
+        const cogs_   = sumA(cogsCfKeys, i);
+        const opex_   = sumA(opexCfKeys, i);
+        const invest_ = getA('investPay', i);
+        const finOut_ = sumA(finOutCfKeys, i);
+        running = running + inflow + finIn - cogs_ - opex_ - invest_ - finOut_;
+      }
+    }
+    lastCash = Math.round(running);
   }
   const months12Labor = pl.actual.labor.slice(Math.max(0, lastActualIdx - 2), lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
   const countMonths = Math.min(lastActualIdx + 1, 3);
