@@ -762,48 +762,6 @@ input.cells-edit-input {
       <div class="exec-alerts-head">⚠ アラート</div>
       <div id="exec-alert-list"></div>
     </div>
-
-    <!-- 経費管理ダッシュボード（neobudget-liard）リアルタイム連携 (Phase 6) -->
-    <details style="margin-top:8px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg2)" open>
-      <summary style="cursor:pointer;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text2);list-style:none;display:flex;align-items:center;gap:6px">
-        <span>🔗 経費管理ダッシュボード — プログラム別予算消化（リアルタイム）</span>
-        <span id="bd-sync-status" style="font-size:10px;font-weight:400;color:var(--text3);margin-left:auto">読込中...</span>
-      </summary>
-      <div style="padding:8px 12px 12px">
-        <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
-          現場メンバーが管理する <a href="https://neobudget-liard.vercel.app/" target="_blank" style="color:#5aabf0">経費管理ダッシュボード</a> から、
-          プログラム別の予算/見積/実績を 30秒間隔で自動取得します。
-          <span style="color:var(--tc-amber)">※ 環境変数 NEOBUDGET_SUPABASE_URL / NEOBUDGET_SERVICE_ROLE_KEY を Vercel に設定してください。</span>
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-          <button class="btn btn-p" onclick="BUDGET_DASH.refresh()" style="font-size:10px;padding:4px 10px">🔁 今すぐ更新</button>
-          <label style="font-size:10px;color:var(--text3);display:flex;align-items:center;gap:4px"><input type="checkbox" id="bd-poll-toggle" checked onchange="BUDGET_DASH.togglePoll(this.checked)"> 30秒ごと自動更新</label>
-          <span id="bd-last-updated" style="font-size:10px;color:var(--text3);margin-left:auto"></span>
-        </div>
-        <div id="bd-summary"></div>
-      </div>
-    </details>
-
-    <!-- 経費管理ダッシュボード連携 (Phase 4: 汎用JSON取込) -->
-    <details style="margin-top:8px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg2)">
-      <summary style="cursor:pointer;padding:8px 12px;font-size:11px;font-weight:700;color:var(--text2);list-style:none;display:flex;align-items:center;gap:6px">
-        <span>🔗 汎用 JSON 経費連携（オプション）</span>
-        <span id="expense-sync-status" style="font-size:10px;font-weight:400;color:var(--text3);margin-left:auto">未設定</span>
-      </summary>
-      <div style="padding:8px 12px 12px">
-        <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
-          neobudget 以外の任意の JSON エンドポイントを使う場合に使用。
-          形式: <code>{ items: [{ category, amount }, ...], total: N, budget: N }</code>
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-          <input type="url" id="expense-api-url" placeholder="https://example.com/api/expenses" style="flex:1;min-width:240px;padding:5px 8px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-size:11px;font-family:inherit">
-          <button class="btn" onclick="ExpenseSync.saveUrl()" style="font-size:10px;padding:4px 10px">URL保存</button>
-          <button class="btn btn-p" onclick="ExpenseSync.fetchNow()" style="font-size:10px;padding:4px 10px">今すぐ取込</button>
-          <label style="font-size:10px;color:var(--text3);display:flex;align-items:center;gap:4px"><input type="checkbox" id="expense-poll-toggle" onchange="ExpenseSync.togglePoll(this.checked)"> 60秒ごと自動取込</label>
-        </div>
-        <div id="expense-summary" style="font-size:11px"></div>
-      </div>
-    </details>
   </div>
 
   <div class="metrics" style="grid-template-columns:repeat(6,minmax(0,1fr))">
@@ -929,6 +887,56 @@ input.cells-edit-input {
       <div class="risk-row"><div class="risk-lbl">🟢 安全</div><div class="risk-track"><div class="risk-fill" style="width:100%;background:#639922;opacity:.5"></div></div><div style="font-size:10px;color:var(--text3)">12ヶ月以上</div></div>
     </div>
   </details>
+
+  <!-- ══ 経費管理ダッシュボード連携（サマリー末尾） ══ -->
+  <div class="card" id="expense-dash-section">
+    <div class="ct" style="display:flex;align-items:center;gap:6px">
+      <span style="width:3px;height:14px;background:var(--blue);border-radius:2px;display:inline-block;flex-shrink:0"></span>
+      <span>経費管理ダッシュボード — 外部連携</span>
+    </div>
+
+    <!-- 経費管理ダッシュボード（neobudget-liard）リアルタイム連携 (Phase 6) -->
+    <details style="border:1px solid var(--border);border-radius:var(--r);background:var(--bg2)" open>
+      <summary style="cursor:pointer;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text2);list-style:none;display:flex;align-items:center;gap:6px">
+        <span>🔗 経費管理ダッシュボード — プログラム別予算消化（リアルタイム）</span>
+        <span id="bd-sync-status" style="font-size:10px;font-weight:400;color:var(--text3);margin-left:auto">読込中...</span>
+      </summary>
+      <div style="padding:8px 12px 12px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
+          現場メンバーが管理する <a href="https://neobudget-liard.vercel.app/" target="_blank" style="color:var(--blue)">経費管理ダッシュボード</a> から、
+          プログラム別の予算/見積/実績を 30秒間隔で自動取得します。
+          <span style="color:var(--tc-amber)">※ 環境変数 NEOBUDGET_SUPABASE_URL / NEOBUDGET_SERVICE_ROLE_KEY を Vercel に設定してください。</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+          <button class="btn btn-p" onclick="BUDGET_DASH.refresh()" style="font-size:10px;padding:4px 10px">🔁 今すぐ更新</button>
+          <label style="font-size:10px;color:var(--text3);display:flex;align-items:center;gap:4px"><input type="checkbox" id="bd-poll-toggle" checked onchange="BUDGET_DASH.togglePoll(this.checked)"> 30秒ごと自動更新</label>
+          <span id="bd-last-updated" style="font-size:10px;color:var(--text3);margin-left:auto"></span>
+        </div>
+        <div id="bd-summary"></div>
+      </div>
+    </details>
+
+    <!-- 経費管理ダッシュボード連携 (Phase 4: 汎用JSON取込) -->
+    <details style="margin-top:8px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg2)">
+      <summary style="cursor:pointer;padding:9px 12px;font-size:11px;font-weight:700;color:var(--text2);list-style:none;display:flex;align-items:center;gap:6px">
+        <span>🔗 汎用 JSON 経費連携（オプション）</span>
+        <span id="expense-sync-status" style="font-size:10px;font-weight:400;color:var(--text3);margin-left:auto">未設定</span>
+      </summary>
+      <div style="padding:8px 12px 12px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px">
+          neobudget 以外の任意の JSON エンドポイントを使う場合に使用。
+          形式: <code>{ items: [{ category, amount }, ...], total: N, budget: N }</code>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+          <input type="url" id="expense-api-url" placeholder="https://example.com/api/expenses" style="flex:1;min-width:240px;padding:5px 8px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;font-family:inherit">
+          <button class="btn" onclick="ExpenseSync.saveUrl()" style="font-size:10px;padding:4px 10px">URL保存</button>
+          <button class="btn btn-p" onclick="ExpenseSync.fetchNow()" style="font-size:10px;padding:4px 10px">今すぐ取込</button>
+          <label style="font-size:10px;color:var(--text3);display:flex;align-items:center;gap:4px"><input type="checkbox" id="expense-poll-toggle" onchange="ExpenseSync.togglePoll(this.checked)"> 60秒ごと自動取込</label>
+        </div>
+        <div id="expense-summary" style="font-size:11px"></div>
+      </div>
+    </details>
+  </div>
 </div>
 
 <!-- ──────────────────────────────────────
@@ -2263,7 +2271,12 @@ function updateWeeklyKPIs() {
   const months12Labor = pl.actual.labor.slice(Math.max(0, lastActualIdx - 2), lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
   const countMonths = Math.min(lastActualIdx + 1, 3);
   const burnrate = countMonths > 0 ? Math.round((cumOpex / (lastActualIdx + 1))) : 1022;
-  const runway = lastCash ? (lastCash / burnrate).toFixed(1) : '—'; // lastCash:千円, burnrate:千円/月
+  // 残キャッシュ期間: バーンレートが正のときのみ算出（ゼロ除算/Infinity対策）
+  // 999ヶ月超は事実上「十分」としてキャップ表示
+  const runwayNum = (Number(lastCash) > 0 && burnrate > 0)
+    ? Math.min(lastCash / burnrate, 999)
+    : null;
+  const runway = runwayNum != null ? runwayNum.toFixed(1) : '—'; // lastCash:千円, burnrate:千円/月
 
   // 実績なし（lastActualIdx=-1）の場合は「—」表示（ハードコードのデフォルト値を使わない）
   const hasActual = lastActualIdx >= 0;
@@ -2274,8 +2287,12 @@ function updateWeeklyKPIs() {
     : '';
   document.getElementById('kpi-cash').textContent =
     lastCash ? fmt万(lastCash) + '千円' : '—';
+  const _runwayLabel = runwayNum != null
+    ? (runwayNum >= 999 ? '残り 999ヶ月超' : `残り約${runway}ヶ月`)
+    : 'バーンレート未確定';
+  const _runwayCls = runwayNum != null ? riskClass(runway) : '';
   document.getElementById('kpi-cash-s').innerHTML = lastCash
-    ? `<span style="color:var(--text3)">${cashMonthLabel}末時点</span> ・ <span class="${riskClass(runway)}">残り約${runway}ヶ月</span>`
+    ? `<span style="color:var(--text3)">${cashMonthLabel}末時点</span> ・ <span class="${_runwayCls}">${_runwayLabel}</span>`
     : '';
 
   document.getElementById('kpi-rev').textContent =
@@ -2339,17 +2356,19 @@ function updateWeeklyKPIs() {
   }
 
   // ランウェイ・リスク（折りたたみカードに表示）
-  const rwy = lastCash ? parseFloat(runway) : null;
-  const riskTxt = !rwy ? '⚪ データなし'
+  const rwy = runwayNum;
+  const riskTxt = rwy == null ? '⚪ データなし'
     : rwy >= 12 ? '🟢 安全' : rwy >= 6 ? '🟡 注意' : rwy >= 3 ? '🟠 警戒' : '🔴 危険';
-  const riskCls = !rwy ? 'ba' : rwy >= 12 ? 'bg' : rwy >= 6 ? 'ba' : 'br';
+  const riskCls = rwy == null ? 'ba' : rwy >= 12 ? 'bg' : rwy >= 6 ? 'ba' : 'br';
   const riskBadgeEl = document.getElementById('risk-badge');
   if (riskBadgeEl) {
     riskBadgeEl.textContent = riskTxt;
     riskBadgeEl.className = `badge ${riskCls}`;
   }
   const runwayValEl = document.getElementById('runway-val');
-  if (runwayValEl) runwayValEl.textContent = rwy ? `約${rwy}ヶ月` : '—';
+  if (runwayValEl) runwayValEl.textContent = rwy == null
+    ? '—'
+    : (rwy >= 999 ? '999ヶ月超' : `約${rwy.toFixed(1)}ヶ月`);
   const burnrateValEl = document.getElementById('burnrate-val');
   if (burnrateValEl) burnrateValEl.textContent = hasActual ? burnrate.toLocaleString() : '─';
 
@@ -2418,17 +2437,26 @@ function renderExecDashboard(ctx){
   if ($('exec-prod-sub')) $('exec-prod-sub').textContent = prodSub;
 
   // ③ 残キャッシュ期間 + バーンレート
-  const rwy = ctx.lastCash ? parseFloat(ctx.runway) : null;
+  // バーンレート > 0 のときのみ算出（ゼロ/負の場合は Infinity 化を防止）
+  const rwy = (Number(ctx.lastCash) > 0 && Number(ctx.burnrate) > 0)
+    ? Math.min(ctx.lastCash / ctx.burnrate, 999)
+    : null;
   const rwyCls = rwy == null ? 'info' : rwy >= 12 ? 'good' : rwy >= 6 ? 'warn' : 'bad';
   if ($('exec-runway-val')){
-    $('exec-runway-val').textContent = rwy != null ? `約${rwy}ヶ月` : '—';
+    $('exec-runway-val').textContent = rwy == null
+      ? '—'
+      : (rwy >= 999 ? '999ヶ月超' : `約${fmt1(rwy)}ヶ月`);
     $('exec-runway-val').className = 'exec-card-v ' + (rwyCls === 'info' ? '' : rwyCls);
   }
   if ($('exec-runway-icon')) $('exec-runway-icon').className = 'exec-card-icon ' + rwyCls;
   if ($('exec-runway-sub')){
-    $('exec-runway-sub').textContent = ctx.hasActual
-      ? `バーンレート ${(ctx.burnrate||0).toLocaleString()}千円/月 ・ 残高 ${ctx.lastCash ? (ctx.lastCash/10).toLocaleString()+'千円' : '—'}`
-      : 'バーンレート未確定';
+    if (!ctx.hasActual) {
+      $('exec-runway-sub').textContent = 'バーンレート未確定';
+    } else if (Number(ctx.burnrate) <= 0) {
+      $('exec-runway-sub').textContent = `バーンレートが0以下のため算出不可 ・ 残高 ${ctx.lastCash ? (ctx.lastCash/10).toLocaleString()+'千円' : '—'}`;
+    } else {
+      $('exec-runway-sub').textContent = `バーンレート ${(ctx.burnrate||0).toLocaleString()}千円/月 ・ 残高 ${ctx.lastCash ? (ctx.lastCash/10).toLocaleString()+'千円' : '—'}`;
+    }
   }
 
   // ④ アラートエリア (Phase 2.2)
