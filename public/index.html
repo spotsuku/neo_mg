@@ -2320,6 +2320,29 @@ function updateWeeklyKPIs() {
       lastCash = bCloseDisplay[i];
       lastCashIsActual = false;
     }
+
+    // 診断用: コンソールから window.__cashDebug() で値を確認できる
+    try {
+      window.__cashDebug = () => ({
+        currentYear,
+        lastActualIdx,
+        targetMonth: MONTH_LABELS[d.months?.[i]] || d.months?.[i],
+        bsCashTarget: Number(d.bs?.actual?.[i]?.cash) || 0,
+        cfCloseActualTarget: Number(d.cf?.actual?.cfClose?.[i]) || 0,
+        cfBudgetOpen0: Number(d.cf?.budget?.open?.[0]) || 0,
+        cfActualOpen0: Number(d.cf?.actual?.open?.[0]) || 0,
+        prevYrCfCloseLast: prevYrClose,
+        prevYrLastBsCash,
+        bOpenDisplay0: bOpenDisplay[0],
+        bCloseDisplay_target: bCloseDisplay[i],
+        aOpenDisplay0: aOpenDisplay[0],
+        aCloseDisplay_target: aCloseDisplay[i],
+        actualNetCF_target: aN,
+        monthHasActual,
+        lastCashChosen: lastCash,
+        lastCashIsActual,
+      });
+    } catch(e){}
   }
   const months12Labor = pl.actual.labor.slice(Math.max(0, lastActualIdx - 2), lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0);
   const countMonths = Math.min(lastActualIdx + 1, 3);
