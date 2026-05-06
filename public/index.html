@@ -2099,6 +2099,9 @@ let DB = {
   '2025': JSON.parse(JSON.stringify(DEFAULT_2025)),
   '2026': makeEmptyYearStruct(MONTHS_2026)
 };
+// 診断用にコンソールから DB / __cashDebug() にアクセスできるようにする
+try { window.DB = DB; } catch(e) {}
+window.__cashDebug = () => ({ note: 'updateWeeklyKPIs() がまだ実行されていません。サマリータブを開いてから再実行してください。' });
 
 // ───────────────────────────────────────────
 //  NAV / TABS
