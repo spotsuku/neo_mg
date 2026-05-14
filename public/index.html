@@ -13,52 +13,52 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#ffffff;--bg2:#f5f4f0;--bg3:#eeede9;--bg4:#e8e7e3;
-  --text:#1a1a18;--text2:#5f5e5a;--text3:#9c9a92;
-  --border:rgba(0,0,0,0.09);--border2:rgba(0,0,0,0.18);
-  --green:#1e8449;--red:#922b21;--amber:#d35400;--blue:#1a5276;
-  --bg-green:#d5f5e3;--bg-red:#fde8e8;--bg-amber:#fef9e7;--bg-blue:#dbeafe;
-  --tc-green:#1e8449;--tc-red:#922b21;--tc-amber:#d35400;--tc-blue:#1a5276;
-  --r:8px;--rl:12px;
-  --chart-blue:#378ADD;--chart-green:#3B6D11;--chart-red:#D85A30;--chart-amber:#EF9F27;--chart-gray:#888780;
+  color-scheme: light;
+  /* iOS風ライトモードパレット */
+  --bg:#ffffff;--bg2:#f5f5f7;--bg3:#fbfbfd;--bg4:#ececf0;
+  --text:#1c1c1e;--text2:#3a3a3c;--text3:#8e8e93;
+  --border:rgba(60,60,67,0.10);--border2:rgba(60,60,67,0.18);
+  --green:#34c759;--red:#ff3b30;--amber:#ff9500;--blue:#007aff;
+  --bg-green:#e2f7e8;--bg-red:#ffe5e3;--bg-amber:#fff1dd;--bg-blue:#e1efff;
+  --tc-green:#1f8a3e;--tc-red:#d92e26;--tc-amber:#c46b00;--tc-blue:#0062cc;
+  --accent:#007aff;
+  --r:10px;--rl:16px;--rxl:20px;
+  --shadow-sm:0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.06);
+  --shadow:0 4px 14px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.04);
+  --shadow-lg:0 12px 32px rgba(16,24,40,0.10), 0 4px 12px rgba(16,24,40,0.06);
+  --chart-blue:#0a84ff;--chart-green:#34c759;--chart-red:#ff3b30;--chart-amber:#ff9500;--chart-gray:#8e8e93;
 }
-@media(prefers-color-scheme:dark){:root{
-  --bg:#1c1c1a;--bg2:#2a2a28;--bg3:#353533;--bg4:#404040;
-  --text:#e6e4da;--text2:#b0aea6;--text3:#888780;
-  --border:rgba(255,255,255,0.09);--border2:rgba(255,255,255,0.18);
-  --bg-green:#0a3020;--bg-red:#380f0f;--bg-amber:#382000;--bg-blue:#0b2240;
-  --tc-green:#5dbd7e;--tc-red:#e87070;--tc-amber:#f0a060;--tc-blue:#5aabf0;
-}}
-body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;background:var(--bg3);color:var(--text);font-size:13px;min-height:100vh}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;background:var(--bg3);color:var(--text);font-size:13px;min-height:100vh;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;letter-spacing:-0.01em}
 .wrap{max-width:1280px;margin:0 auto;padding:0 1.25rem 3rem}
 
-/* ── TOP NAV ── */
-.topnav{display:flex;align-items:flex-start;justify-content:space-between;padding:.875rem 0;border-bottom:1px solid var(--border);margin-bottom:1rem;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:100;background:var(--bg3);backdrop-filter:saturate(1.2)}
-.logo{font-size:17px;font-weight:700;letter-spacing:-.4px}
-.logo-sub{font-size:11px;color:var(--text3);margin-top:2px}
+/* ── TOP NAV ── (iOS frosted glass) */
+.topnav{display:flex;align-items:flex-start;justify-content:space-between;padding:.875rem 1rem;border-bottom:1px solid var(--border);margin-bottom:1rem;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:100;background:rgba(251,251,253,0.78);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-radius:0 0 var(--rl) var(--rl)}
+.logo{font-size:17px;font-weight:700;letter-spacing:-.5px}
+.logo-sub{font-size:11px;color:var(--text3);margin-top:2px;font-weight:500}
 .nav-title{display:flex;flex-direction:column;flex-shrink:0}
 .nav-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 
-/* YEAR TOGGLE */
-.year-toggle{display:flex;border:1px solid var(--border2);border-radius:var(--r);overflow:hidden}
-.yt{padding:5px 12px;font-size:11px;cursor:pointer;background:transparent;border:none;color:var(--text2);font-family:inherit;transition:all .15s}
-.yt.active{background:var(--text);color:var(--bg)}
+/* YEAR TOGGLE (iOS segmented control) */
+.year-toggle{display:flex;background:var(--bg4);border-radius:var(--r);overflow:hidden;padding:2px;gap:2px}
+.yt{padding:5px 12px;font-size:11px;cursor:pointer;background:transparent;border:none;color:var(--text2);font-family:inherit;font-weight:600;transition:all .2s ease;border-radius:7px}
+.yt.active{background:var(--bg);color:var(--text);box-shadow:var(--shadow-sm)}
 
-/* TABS */
-.tabs{display:flex;gap:3px;flex-wrap:wrap}
-.tab{padding:5px 11px;border-radius:var(--r);font-size:12px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2);font-family:inherit;transition:all .15s;white-space:nowrap}
-.tab:hover{background:var(--bg2)}
-.tab.active{background:var(--text);color:var(--bg);border-color:var(--text)}
+/* TABS (iOS pill-shape) */
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tab{padding:6px 13px;border-radius:999px;font-size:12px;cursor:pointer;border:1px solid transparent;background:var(--bg4);color:var(--text2);font-family:inherit;font-weight:600;transition:all .2s ease;white-space:nowrap;letter-spacing:-0.01em}
+.tab:hover{background:var(--bg2);color:var(--text)}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 1px 3px rgba(0,122,255,0.30)}
 
 /* ── SECTIONS ── */
 .sec{display:none}.sec.on{display:block}
 
 /* ── METRICS ── */
-.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:1rem}
-.mc{background:var(--bg2);border-radius:var(--r);padding:11px 13px}
-.mc-l{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;font-weight:600}
-.mc-v{font-size:21px;font-weight:700;line-height:1.1}
-.mc-s{font-size:10px;margin-top:3px}
+.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:1rem}
+.mc{background:var(--bg);border-radius:var(--rl);padding:14px 16px;border:1px solid var(--border);box-shadow:var(--shadow-sm);transition:transform .15s ease, box-shadow .15s ease}
+.mc:hover{transform:translateY(-1px);box-shadow:var(--shadow)}
+.mc-l{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;font-weight:600}
+.mc-v{font-size:22px;font-weight:700;line-height:1.1;letter-spacing:-0.02em;font-variant-numeric:tabular-nums}
+.mc-s{font-size:10px;margin-top:4px;font-weight:500}
 .g{color:var(--tc-green)}.r{color:var(--tc-red)}.a{color:var(--tc-amber)}.b{color:var(--tc-blue)}
 
 /* ── BADGES ── */
@@ -74,16 +74,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:1rem}
 .full{grid-column:1/-1}
 
-/* ── CARDS ── */
-.card{background:var(--bg);border-radius:var(--rl);border:1px solid var(--border);padding:.875rem 1rem;margin-bottom:1rem}
+/* ── CARDS ── (iOS soft elevation) */
+.card{background:var(--bg);border-radius:var(--rl);border:1px solid var(--border);padding:1rem 1.125rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
 .card:last-child{margin-bottom:0}
-.ct{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:.625rem;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.ct{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:.75rem;padding-bottom:6px;border-bottom:1px solid var(--border)}
 
-/* ── TABLES ── */
-.dt{width:100%;border-collapse:collapse;font-size:11px}
-.dt th{color:var(--text3);font-weight:700;text-align:right;padding:4px 5px;border-bottom:1px solid var(--border);font-size:10px;white-space:nowrap}
+/* ── TABLES ── (iOS hairlines + tabular nums) */
+.dt{width:100%;border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums}
+.dt th{color:var(--text3);font-weight:700;text-align:right;padding:6px 6px;border-bottom:1px solid var(--border);font-size:10px;white-space:nowrap;text-transform:uppercase;letter-spacing:.3px}
 .dt th:first-child,.dt th.l{text-align:left}
-.dt td{padding:4px 5px;text-align:right;border-bottom:1px solid var(--border)}
+.dt td{padding:6px 6px;text-align:right;border-bottom:1px solid var(--border)}
 .dt td:first-child,.dt td.l{text-align:left;color:var(--text2)}
 .dt tr:last-child td{border-bottom:none}
 .dt .tot td{font-weight:700;background:var(--bg2)}
@@ -99,24 +99,25 @@ td.actual { color: var(--text) !important; }
 .fg2{grid-template-columns:repeat(2,1fr)}
 .fg4{grid-template-columns:repeat(4,1fr)}
 .fl label{display:block;font-size:10px;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px;font-weight:600}
-.fl input,.fl select,.fl textarea{width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-family:inherit}
-.fl input:focus,.fl select:focus,.fl textarea:focus{outline:none;border-color:#378ADD}
+.fl input,.fl select,.fl textarea{width:100%;padding:8px 11px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-family:inherit;transition:border-color .15s, box-shadow .15s}
+.fl input:focus,.fl select:focus,.fl textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,122,255,0.15)}
 .fl textarea{resize:vertical;min-height:56px}
 .section-lbl{font-size:10px;font-weight:700;color:var(--text2);margin:.75rem 0 .5rem;padding-bottom:4px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px}
 
-/* ── BUTTONS ── */
-.btn{padding:7px 14px;border-radius:var(--r);font-size:12px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text);font-family:inherit;font-weight:600;transition:all .15s;white-space:nowrap}
-.btn:hover{background:var(--bg2)}
-.btn-p{background:var(--text);color:var(--bg);border-color:var(--text)}
-.btn-p:hover{opacity:.85}
-.btn-g{background:var(--bg-green);color:var(--tc-green);border-color:var(--tc-green)}
-.btn-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:.875rem}
+/* ── BUTTONS ── (iOS style) */
+.btn{padding:7px 14px;border-radius:999px;font-size:12px;cursor:pointer;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;font-weight:600;transition:all .15s ease;white-space:nowrap;letter-spacing:-0.01em}
+.btn:hover{background:var(--bg2);transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+.btn:active{transform:translateY(0);opacity:.85}
+.btn-p{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 1px 3px rgba(0,122,255,0.30)}
+.btn-p:hover{background:#0062cc;border-color:#0062cc;color:#fff}
+.btn-g{background:var(--bg-green);color:var(--tc-green);border-color:rgba(52,199,89,0.30)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:.875rem}
 
 /* ── AI BOX ── */
-.ai-box{background:var(--bg2);border-radius:var(--rl);border:1px solid var(--border);padding:1rem;min-height:72px;margin-bottom:.875rem}
-.ai-content{font-size:12px;line-height:1.8;white-space:pre-wrap}
+.ai-box{background:linear-gradient(135deg, rgba(0,122,255,0.04), rgba(88,86,214,0.03));border-radius:var(--rl);border:1px solid var(--border);padding:1.125rem;min-height:72px;margin-bottom:.875rem}
+.ai-content{font-size:12px;line-height:1.85;white-space:pre-wrap}
 .ai-loading{color:var(--text3);font-style:italic;font-size:12px;display:flex;align-items:center;gap:6px}
-.spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--text);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+.spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ── CHARTS ── */
@@ -127,8 +128,8 @@ td.actual { color: var(--text) !important; }
 .pf{height:100%;border-radius:3px;transition:width .4s}
 
 /* ── UPLOAD ZONE ── */
-.upload-zone{border:2px dashed var(--border2);border-radius:var(--rl);padding:2rem;text-align:center;cursor:pointer;transition:all .2s;position:relative}
-.upload-zone:hover,.upload-zone.drag{border-color:#378ADD;background:var(--bg-blue)}
+.upload-zone{border:2px dashed var(--border2);border-radius:var(--rl);padding:2rem;text-align:center;cursor:pointer;transition:all .2s ease;position:relative;background:var(--bg2)}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:var(--bg-blue)}
 .upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
 .uz-icon{font-size:32px;margin-bottom:.5rem}
 .uz-title{font-size:14px;font-weight:600;margin-bottom:4px}
@@ -138,12 +139,13 @@ td.actual { color: var(--text) !important; }
 .csv-preview{border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-top:.75rem;font-size:11px;max-height:220px;overflow-y:auto}
 
 /* ── MONTH TABS ── */
-.month-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:.875rem;padding-bottom:.875rem;border-bottom:1px solid var(--border)}
-.mt{padding:4px 10px;border-radius:var(--r);font-size:11px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text3);font-family:inherit;transition:all .15s}
-.mt:hover{background:var(--bg2)}
-.mt.active{background:var(--bg2);color:var(--text);border-color:var(--border2);font-weight:600}
+.month-tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:.875rem;padding-bottom:.875rem;border-bottom:1px solid var(--border)}
+.mt{padding:5px 11px;border-radius:999px;font-size:11px;cursor:pointer;border:1px solid transparent;background:var(--bg4);color:var(--text3);font-family:inherit;transition:all .15s ease;font-weight:500}
+.mt:hover{background:var(--bg2);color:var(--text2)}
+.mt.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700;box-shadow:0 1px 3px rgba(0,122,255,0.30)}
 .mt.has-data{color:var(--text2)}
-.mt.has-actual::after{content:'─';font-size:6px;vertical-align:super;color:var(--tc-green);margin-left:2px}
+.mt.has-actual::after{content:'●';font-size:6px;vertical-align:super;color:var(--tc-green);margin-left:2px}
+.mt.active.has-actual::after{color:#fff}
 
 /* ── SIM SLIDERS ── */
 .sim-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1rem}
@@ -204,10 +206,10 @@ td.actual { color: var(--text) !important; }
 .import-log{background:var(--bg2);border-radius:var(--r);padding:.75rem;font-size:11px;line-height:1.7;max-height:200px;overflow-y:auto;font-family:monospace;margin-top:.75rem}
 .log-ok{color:var(--tc-green)}.log-warn{color:var(--tc-amber)}.log-err{color:var(--tc-red)}.log-info{color:var(--tc-blue)}
 
-/* ── PRED/ACT TOGGLE ── */
-.pa-toggle{display:flex;border:1px solid var(--border2);border-radius:var(--r);overflow:hidden;margin-bottom:.875rem}
-.pa-btn{padding:5px 14px;font-size:11px;cursor:pointer;background:transparent;border:none;color:var(--text2);font-family:inherit;font-weight:600;transition:all .15s}
-.pa-btn.active{background:var(--text);color:var(--bg)}
+/* ── PRED/ACT TOGGLE ── (iOS segmented) */
+.pa-toggle{display:flex;background:var(--bg4);border-radius:var(--r);overflow:hidden;margin-bottom:.875rem;padding:2px;gap:2px}
+.pa-btn{padding:6px 14px;font-size:11px;cursor:pointer;background:transparent;border:none;color:var(--text2);font-family:inherit;font-weight:600;transition:all .2s ease;border-radius:7px}
+.pa-btn.active{background:var(--bg);color:var(--text);box-shadow:var(--shadow-sm)}
 
 /* monthly PL/CF table */
 .yoyo-table{display:grid;grid-template-columns:160px repeat(12,1fr);gap:0;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;font-size:10px;overflow-x:auto}
@@ -525,7 +527,7 @@ input.cells-edit-input {
 #sec-workforce table.wf-grid{border-collapse:separate;border-spacing:0;font-size:10px;width:max-content;min-width:100%}
 #sec-workforce table.wf-grid th,#sec-workforce table.wf-grid td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:3px 5px;text-align:center;background:var(--bg);white-space:nowrap;color:var(--text)}
 #sec-workforce table.wf-grid thead tr.lv1 th{background:var(--text);color:var(--bg);font-size:11px;font-weight:700;position:sticky;top:0;z-index:5;padding:5px 4px;border-right:2px solid var(--text2)}
-#sec-workforce table.wf-grid thead tr.lv2 th{background:#2c2c2e;color:#fff;font-size:9px;font-weight:600;position:sticky;top:26px;z-index:5;padding:4px}
+#sec-workforce table.wf-grid thead tr.lv2 th{background:#f5f5f7;color:var(--text2);font-size:9px;font-weight:600;position:sticky;top:26px;z-index:5;padding:4px}
 #sec-workforce table.wf-grid thead tr.summary-row th,#sec-workforce table.wf-grid thead tr.summary-row td{position:sticky;z-index:5;padding:5px 6px;font-size:10px}
 #sec-workforce table.wf-grid thead tr.sr-required th,#sec-workforce table.wf-grid thead tr.sr-required td{top:53px;background:var(--bg2)!important;border-bottom:1px solid var(--border)}
 #sec-workforce table.wf-grid thead tr.sr-invested th,#sec-workforce table.wf-grid thead tr.sr-invested td{top:80px;background:var(--bg2)!important;border-bottom:1px solid var(--border)}
@@ -541,7 +543,7 @@ input.cells-edit-input {
 #sec-workforce table.wf-grid thead tr.lv1 .wf-col-ability{background:var(--text)!important}
 #sec-workforce table.wf-grid thead tr.lv2 .wf-col-name,
 #sec-workforce table.wf-grid thead tr.lv2 .wf-col-cost,
-#sec-workforce table.wf-grid thead tr.lv2 .wf-col-ability{background:#2c2c2e!important;color:#fff}
+#sec-workforce table.wf-grid thead tr.lv2 .wf-col-ability{background:#f5f5f7!important;color:var(--text2)}
 #sec-workforce .wf-grid-cell-input{width:42px;padding:3px 4px;border:1px solid transparent;border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:transparent;color:var(--text);font-family:inherit}
 #sec-workforce .wf-grid-cell-input:focus{outline:2px solid #5aabf0;background:var(--bg)}
 #sec-workforce .wf-grid-cell-input.zero{color:var(--text3);opacity:.4}
@@ -1560,8 +1562,8 @@ input.cells-edit-input {
   <div class="metrics" style="grid-template-columns:repeat(5,minmax(0,1fr));margin-bottom:1rem">
     <div class="mc"><div class="mc-l">総人件費</div><div class="mc-v" id="wf-kpi-cost">—</div><div class="mc-s" id="wf-kpi-member-count"></div></div>
     <div class="mc"><div class="mc-l">総売上（設定）</div><div class="mc-v" id="wf-kpi-target-rev">—</div></div>
-    <div class="mc"><div class="mc-l">実現売上</div><div class="mc-v" id="wf-kpi-rev">—</div><div class="mc-s" id="wf-kpi-rev-sub"></div></div>
-    <div class="mc" title="実現売上 ÷ 総人件費"><div class="mc-l">生産性倍率</div><div class="mc-v" id="wf-kpi-ratio">—</div><div class="mc-s">目標 3.0倍以上</div></div>
+    <div class="mc" title="充足度反映後の参考値。PL計算には使用しない"><div class="mc-l">実現売上（参考）</div><div class="mc-v" id="wf-kpi-rev">—</div><div class="mc-s" id="wf-kpi-rev-sub"></div></div>
+    <div class="mc" title="総売上(設定) ÷ 総人件費"><div class="mc-l">生産性倍率（売上÷人件費）</div><div class="mc-v" id="wf-kpi-ratio">—</div><div class="mc-s">目標 3.0倍以上</div></div>
     <div class="mc"><div class="mc-l">想定営業利益</div><div class="mc-v" id="wf-kpi-profit">—</div><div class="mc-s">PL基準</div></div>
   </div>
 
@@ -2397,14 +2399,14 @@ function renderExecDashboard(ctx){
       : '販管費の予算/実績データ未入力';
   }
 
-  // ② 人件費生産性（実現売上 ÷ 総人件費）— 工数管理から取得
+  // ② 人件費生産性（総売上(設定) ÷ 総人件費）— 工数管理から取得
   let prodRatio = null, prodSub = '工数管理タブで設定';
-  if (window.WF && typeof window.WF.totalRealizedRev === 'function' && typeof window.WF.totalCost === 'function'){
-    const realRev = window.WF.totalRealizedRev();
+  if (window.WF && typeof window.WF.totalTargetRevenue === 'function' && typeof window.WF.totalCost === 'function'){
+    const targetRev = window.WF.totalTargetRevenue();
     const costAll = window.WF.totalCost();
     if (costAll > 0){
-      prodRatio = realRev / costAll;
-      prodSub = `売上${(realRev/10000).toFixed(0)}万 ÷ 人件費${(costAll/10000).toFixed(0)}万`;
+      prodRatio = targetRev / costAll;
+      prodSub = `売上${(targetRev/10000).toFixed(0)}万 ÷ 人件費${(costAll/10000).toFixed(0)}万`;
     }
   }
   const prodCls = prodRatio == null ? 'info' : prodRatio >= 3 ? 'good' : prodRatio >= 1.5 ? 'warn' : 'bad';
@@ -10347,11 +10349,11 @@ async function genAI(type) {
   const cumOpex = [...(d.pl.actual.labor||[]),...(d.pl.actual.outsource||[]),...(d.pl.actual.adv||[]),...(d.pl.actual.other||[])].reduce((s, v) => s + (Number(v) || 0), 0) / 4;
   // 工数管理・経費申請のリアルタイム指標を取り込む (Phase 5.3)
   let prodLine = '', staffLine = '', expenseLine = '';
-  if (window.WF && typeof window.WF.totalRealizedRev === 'function'){
-    const realRev = window.WF.totalRealizedRev();
+  if (window.WF && typeof window.WF.totalTargetRevenue === 'function'){
+    const targetRev = window.WF.totalTargetRevenue();
     const costAll = window.WF.totalCost();
-    const ratio = costAll > 0 ? (realRev/costAll).toFixed(2) : '—';
-    prodLine = ` / 人件費生産性:${ratio}倍 (実現売上${(realRev/10000).toFixed(0)}万 ÷ 人件費${(costAll/10000).toFixed(0)}万)`;
+    const ratio = costAll > 0 ? (targetRev/costAll).toFixed(2) : '—';
+    prodLine = ` / 人件費生産性:${ratio}倍 (売上${(targetRev/10000).toFixed(0)}万 ÷ 人件費${(costAll/10000).toFixed(0)}万)`;
     if (Array.isArray(window.WF.BIZ) && Array.isArray(window.WF.ROLES)){
       const lows = [];
       window.WF.BIZ.forEach(b => window.WF.ROLES.forEach(r => {
@@ -13008,7 +13010,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function bizRealizedRev(biz){
     return ROLES.reduce((s,r) => s + roleRealizedRev(biz, r), 0);
   }
-  function bizGrossProfit(biz){ return bizRealizedRev(biz) - bizCostTotal(biz); }
+  function bizGrossProfit(biz){ return bizRevenue(biz) - bizCostTotal(biz); }
   function bizOperatingProfit(biz){ return bizGrossProfit(biz) - bizPersonnelCost(biz) - sgaPerBiz(); }
 
   function memberRevenue(idx){
@@ -13255,7 +13257,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const cost      = totalCost();
     const targetRev = totalTargetRevenue();
     const realRev   = totalRealizedRev();
-    const ratio     = cost > 0 ? realRev / cost : 0;
+    const ratio     = cost > 0 ? targetRev / cost : 0;
     const profit    = totalOperatingProfit();
     if ($('wf-kpi-cost'))         $('wf-kpi-cost').textContent = fmtJPY(cost);
     if ($('wf-kpi-member-count')) $('wf-kpi-member-count').textContent = state.members.length + '名';
@@ -13312,8 +13314,8 @@ document.addEventListener('DOMContentLoaded', function() {
       h += `<td></td></tr>`;
     }
 
-    // 実現売上
-    h += `<tr class="row-section"><td>実現売上（充足度反映後）</td>`;
+    // 実現売上（参考値 - PL計算には使用しない）
+    h += `<tr class="row-section" style="opacity:.78" title="参考値。粗利・営業利益の計算には反映されません"><td>実現売上（参考・充足度反映後）</td>`;
     BIZ.forEach(b => {
       const real = bizRealizedRev(b);
       const target = bizRevenue(b);
@@ -13363,16 +13365,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const totalPersonnel = BIZ.reduce((s,b) => s + bizPersonnelCost(b), 0);
     h += `<td class="num">${fmtCol(totalPersonnel)}</td></tr>`;
 
-    // 人件費比率
-    h += `<tr class="row-detail"><td>　└ 人件費比率（実現売上比）</td>`;
+    // 人件費比率（売上比）
+    h += `<tr class="row-detail"><td>　└ 人件費比率（売上比）</td>`;
     BIZ.forEach(b => {
-      const real = bizRealizedRev(b);
-      const ratio = real > 0 ? (bizPersonnelCost(b) / real * 100) : 0;
+      const rev = bizRevenue(b);
+      const ratio = rev > 0 ? (bizPersonnelCost(b) / rev * 100) : 0;
       let cls = 'good'; if (ratio > 80) cls = 'bad'; else if (ratio > 50) cls = 'warn';
       h += `<td class="num wf-ratio-cell ${cls}">${ratio.toFixed(1)}%</td>`;
     });
-    const totalReal = totalRealizedRev();
-    const totalRatio = totalReal > 0 ? (totalPersonnel / totalReal * 100) : 0;
+    const totalRev = totalTargetRevenue();
+    const totalRatio = totalRev > 0 ? (totalPersonnel / totalRev * 100) : 0;
     let totalRatioCls = 'good'; if (totalRatio > 80) totalRatioCls = 'bad'; else if (totalRatio > 50) totalRatioCls = 'warn';
     h += `<td class="num wf-ratio-cell ${totalRatioCls}">${totalRatio.toFixed(1)}%</td></tr>`;
 
@@ -13405,27 +13407,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const totalOP = totalOperatingProfit();
     h += `<td class="num" style="color:${totalOP>=0?'#5dbd7e':'#ff8a8a'}">${fmtCol(totalOP)}</td></tr>`;
 
-    // 営業利益率
-    h += `<tr class="row-detail"><td>　└ 営業利益率（実現売上比）</td>`;
+    // 営業利益率（売上比）
+    h += `<tr class="row-detail"><td>　└ 営業利益率（売上比）</td>`;
     BIZ.forEach(b => {
       const op = bizOperatingProfit(b);
-      const real = bizRealizedRev(b);
-      const m = real > 0 ? (op / real * 100) : 0;
+      const rev = bizRevenue(b);
+      const m = rev > 0 ? (op / rev * 100) : 0;
       h += `<td class="num" style="color:${op>=0?'var(--tc-green)':'var(--tc-red)'}">${m.toFixed(1)}%</td>`;
     });
-    const totalMargin = totalReal > 0 ? (totalOP / totalReal * 100) : 0;
+    const totalMargin = totalRev > 0 ? (totalOP / totalRev * 100) : 0;
     h += `<td class="num" style="color:${totalOP>=0?'var(--tc-green)':'var(--tc-red)'}">${totalMargin.toFixed(1)}%</td></tr>`;
 
-    // 生産性倍率
-    h += `<tr class="row-detail"><td>　└ 生産性倍率（実現売上÷人件費）</td>`;
+    // 生産性倍率（売上÷人件費）
+    h += `<tr class="row-detail"><td>　└ 生産性倍率（売上÷人件費）</td>`;
     BIZ.forEach(b => {
-      const real = bizRealizedRev(b);
+      const rev = bizRevenue(b);
       const personnel = bizPersonnelCost(b);
-      const r = personnel > 0 ? real / personnel : 0;
+      const r = personnel > 0 ? rev / personnel : 0;
       let cls = 'bad'; if (r >= 3) cls = 'good'; else if (r >= 1) cls = 'warn';
       h += `<td class="num wf-ratio-cell ${cls}">${r.toFixed(2)}倍</td>`;
     });
-    const totalR = totalPersonnel > 0 ? totalReal / totalPersonnel : 0;
+    const totalR = totalPersonnel > 0 ? totalRev / totalPersonnel : 0;
     let totalRCls = 'bad'; if (totalR >= 3) totalRCls = 'good'; else if (totalR >= 1) totalRCls = 'warn';
     h += `<td class="num wf-ratio-cell ${totalRCls}">${totalR.toFixed(2)}倍</td></tr>`;
 
