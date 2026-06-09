@@ -624,6 +624,32 @@ input.cells-edit-input {
 #sec-workforce .wf-ful-card-item{padding:3px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between}
 #sec-workforce .wf-ful-card-item:last-child{border-bottom:none}
 
+/* ─── HD管理 (ホールディングス連結) ─── */
+#sec-hd input[type="number"]::-webkit-outer-spin-button,
+#sec-hd input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
+#sec-hd input[type="number"]{ -moz-appearance:textfield; appearance:textfield }
+#sec-hd .hd-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:.75rem}
+#sec-hd .hd-toolbar label{font-size:10px;color:var(--text3);margin-right:3px}
+#sec-hd .hd-sel{padding:5px 8px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;font-family:inherit}
+#sec-hd .hd-panel{display:none}
+#sec-hd .hd-panel.on{display:block}
+#sec-hd .hd-tbl{width:100%;border-collapse:collapse;font-size:11px;min-width:560px}
+#sec-hd .hd-tbl th,#sec-hd .hd-tbl td{padding:7px 9px;text-align:center;border-bottom:1px solid var(--border)}
+#sec-hd .hd-tbl th{background:var(--text);color:var(--bg);font-size:10px;font-weight:600;white-space:nowrap}
+#sec-hd .hd-tbl td:first-child,#sec-hd .hd-tbl th:first-child{text-align:left;font-weight:600}
+#sec-hd .hd-tbl tr.hd-sub td:first-child{padding-left:20px;font-weight:400;color:var(--text2)}
+#sec-hd .hd-tbl tr.hd-total td{font-weight:700;background:var(--bg2)}
+#sec-hd .hd-tbl td.num,#sec-hd .hd-tbl th.num{text-align:right;font-variant-numeric:tabular-nums}
+#sec-hd .hd-in{width:80px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;text-align:right;font-size:11px;font-variant-numeric:tabular-nums;background:var(--bg);color:var(--text);font-family:inherit}
+#sec-hd .hd-in:focus{outline:2px solid #5aabf0}
+#sec-hd .hd-in-text{text-align:left;width:140px}
+#sec-hd .hd-elim{color:var(--tc-red)}
+#sec-hd .hd-note{font-size:10px;color:var(--text3);margin-top:6px}
+#sec-hd .hd-type-badge{display:inline-block;padding:1px 8px;border-radius:980px;font-size:9px;font-weight:700}
+#sec-hd .hd-type-parent{background:rgba(90,171,240,0.18);color:#5aabf0}
+#sec-hd .hd-type-subsidiary{background:rgba(93,189,126,0.18);color:#5dbd7e}
+#sec-hd .hd-type-affiliate{background:rgba(240,160,96,0.18);color:#f0a060}
+
 /* バージョン一覧 */
 #sec-workforce .wf-version-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
 #sec-workforce .wf-version-card{background:var(--bg2);border-radius:var(--r);padding:11px 13px;border-left:3px solid var(--border2)}
@@ -712,6 +738,7 @@ input.cells-edit-input {
         <button class="tab" onclick="sw('expense',this)">💳 経費申請</button>
         <button class="tab" onclick="sw('report',this)">📋 月次レポート</button>
         <button class="tab" onclick="sw('pdf',this)">📄 役員PDF</button>
+        <button class="tab" onclick="sw('hd',this)">🏢 HD管理</button>
       </div>
     </div>
   </div>
@@ -1840,6 +1867,74 @@ input.cells-edit-input {
 </div>
 
 <!-- ──────────────────────────────────────
+     HD管理（ホールディングス連結）
+────────────────────────────────────── -->
+<div class="sec" id="sec-hd">
+  <div class="hd-toolbar">
+    <div><label>年度</label><select class="hd-sel" id="hd-year" onchange="HD.onYearMonthChange()"></select></div>
+    <div><label>月</label><select class="hd-sel" id="hd-month" onchange="HD.onYearMonthChange()"></select></div>
+    <span id="hd-sync-status" style="font-size:10px;color:var(--text3);margin-left:auto"></span>
+  </div>
+
+  <div class="pa-toggle" id="hd-subtabs">
+    <button class="pa-btn active" data-panel="companies" onclick="HD.switchPanel('companies',this)">🏢 会社一覧</button>
+    <button class="pa-btn" data-panel="financials" onclick="HD.switchPanel('financials',this)">📥 各社財務入力</button>
+    <button class="pa-btn" data-panel="intercompany" onclick="HD.switchPanel('intercompany',this)">🔄 内部取引</button>
+    <button class="pa-btn" data-panel="consolidated" onclick="HD.switchPanel('consolidated',this)">📊 連結財務諸表</button>
+  </div>
+
+  <!-- 会社一覧 -->
+  <div class="hd-panel on" id="hd-panel-companies">
+    <div class="card">
+      <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>🏢 グループ会社一覧</span>
+        <button class="btn btn-p" onclick="HD.addCompany()" style="font-size:11px;padding:5px 14px;margin-left:auto">＋ 会社を追加</button>
+      </div>
+      <div style="overflow-x:auto"><table class="hd-tbl" id="hd-companies-tbl" style="min-width:720px"></table></div>
+      <div class="hd-note">種別: 親会社 / 子会社 / 関連会社。出資比率と決算月を設定してください。連結対象は「連結に含める」をオンにした会社です。</div>
+    </div>
+  </div>
+
+  <!-- 各社財務入力 -->
+  <div class="hd-panel" id="hd-panel-financials">
+    <div class="card">
+      <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>📥 各社財務入力</span>
+        <select class="hd-sel" id="hd-fin-company" onchange="HD.renderFinancials()" style="margin-left:auto"></select>
+      </div>
+      <div id="hd-fin-body"><div class="hd-note">会社を選択してください（会社一覧で会社を追加すると選べます）。</div></div>
+    </div>
+  </div>
+
+  <!-- 内部取引 -->
+  <div class="hd-panel" id="hd-panel-intercompany">
+    <div class="card">
+      <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>🔄 内部取引（連結相殺対象）</span>
+        <button class="btn btn-p" onclick="HD.addIntercompany()" style="font-size:11px;padding:5px 14px;margin-left:auto">＋ 取引を追加</button>
+      </div>
+      <div style="overflow-x:auto"><table class="hd-tbl" id="hd-ic-tbl" style="min-width:760px"></table></div>
+      <div class="hd-note">種別: 内部売上(sales) / 内部仕入(purchase) / 貸付(loan) / 配当(dividend) / その他(other)。連結時に相殺消去されます。</div>
+    </div>
+  </div>
+
+  <!-- 連結財務諸表 -->
+  <div class="hd-panel" id="hd-panel-consolidated">
+    <div class="card">
+      <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>📊 連結財務諸表</span>
+        <div class="pa-toggle" id="hd-stmt-toggle" style="margin:0 0 0 auto">
+          <button class="pa-btn active" data-stmt="pl" onclick="HD.switchStmt('pl',this)" style="font-size:10px;padding:3px 10px">連結PL</button>
+          <button class="pa-btn" data-stmt="bs" onclick="HD.switchStmt('bs',this)" style="font-size:10px;padding:3px 10px">連結BS</button>
+          <button class="pa-btn" data-stmt="cf" onclick="HD.switchStmt('cf',this)" style="font-size:10px;padding:3px 10px">連結CF</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto"><div id="hd-stmt-body"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────
      月次レポート
 ────────────────────────────────────── -->
 <div class="sec" id="sec-report">
@@ -2127,6 +2222,7 @@ function sw(id, el) {
   if (id === 'workforce' && window.WF) setTimeout(() => window.WF.init(), 30);
   if (id === 'payroll' && window.PAYROLL) setTimeout(() => window.PAYROLL.init(), 30);
   if (id === 'expense' && window.EXPENSE) setTimeout(() => window.EXPENSE.init(), 30);
+  if (id === 'hd' && window.HD) setTimeout(() => window.HD.init(), 30);
 }
 
 function setYear(y, el) {
@@ -11101,7 +11197,7 @@ window.addEventListener('load', async () => {
       const yBtns = document.querySelectorAll('.year-toggle .yt');
       if (yBtns[yIdx]) setYear(savedYear, yBtns[yIdx]);
     }
-    const tabOrder = ['weekly','pl-cf','import','sim','workforce','payroll','expense','report','pdf'];
+    const tabOrder = ['weekly','pl-cf','import','sim','workforce','payroll','expense','report','pdf','hd'];
     const savedTab = localStorage.getItem('neo_active_tab');
     const tIdx = tabOrder.indexOf(savedTab);
     if (tIdx > 0) { // 0='weekly' はデフォルトなのでスキップ
