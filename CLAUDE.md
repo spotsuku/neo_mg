@@ -73,6 +73,8 @@
 - [2026-06-09] HD管理を追加する際、仕様書には「Next.js/TypeScript/Tailwind/Recharts・src/utils・app/page.tsx」とあったが実態は単一HTML+バニラJS構成だった → 仕様のスタック記述を鵜呑みにせず、着手前に必ず package.json と find で実在を確認する。汎用テンプレ前提の指示はこのリポジトリの実態（public/index.html 単一ファイル）に翻訳して実装する。
 - [2026-06-09] HDモジュールから `sbClient` / `_sbReady` / `currentYear` を参照する必要があった → 別 `<script>` ブロックでも classic script の top-level let/const はグローバル字句環境を共有するため参照可能。ただし定義順・未定義に備えて必ず `typeof X !== 'undefined' && X` でガードしてから使う（モジュール非依存・graceful フォールバック）。
 - [2026-06-09] サブタブの表示制御で `.hd-panel{display:none}` + `.hd-panel.on{display:block}` の class 制御に統一し、JS は classList.toggle('on',...) のみで切替えた（過去の inline style と class 混在による永久非表示バグを回避）→ タブ/パネル表示は CSS class 一本化を徹底する。
+- [2026-06-09] HD連結を最初「科目×金額」の単列表＋円単位＋インライン会社追加で作ったが、ユーザー要望は「科目｜会社A｜会社B｜…｜消去額｜連結合計」の会社別カラム＋千円単位＋モーダル追加だった → 財務テーブルは着手前に①単位(円/千円)②表の向き(単列集計 or 会社別カラム)③入出力UI(インライン or モーダル)を確認・確定する。連結表は会社別カラム＋消去額列＋合計列が既定と考える。
+- [2026-06-09] 全タブから/特定タブからに関わらず、開閉するモーダルは `.sec` の外（body直下相当）に素クラスで配置し、`.on` で display を切替える。`.hd-modal{position:fixed;inset:0}` + `.hd-modal.on{display:flex}`。親が display:none になると子も消える問題を構造的に回避。
 
 # プロジェクト固有ルール（neo_mg）
 
