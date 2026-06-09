@@ -624,6 +624,32 @@ input.cells-edit-input {
 #sec-workforce .wf-ful-card-item{padding:3px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between}
 #sec-workforce .wf-ful-card-item:last-child{border-bottom:none}
 
+/* ─── HD管理 (ホールディングス連結) ─── */
+#sec-hd input[type="number"]::-webkit-outer-spin-button,
+#sec-hd input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
+#sec-hd input[type="number"]{ -moz-appearance:textfield; appearance:textfield }
+#sec-hd .hd-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:.75rem}
+#sec-hd .hd-toolbar label{font-size:10px;color:var(--text3);margin-right:3px}
+#sec-hd .hd-sel{padding:5px 8px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text);font-size:11px;font-family:inherit}
+#sec-hd .hd-panel{display:none}
+#sec-hd .hd-panel.on{display:block}
+#sec-hd .hd-tbl{width:100%;border-collapse:collapse;font-size:11px;min-width:560px}
+#sec-hd .hd-tbl th,#sec-hd .hd-tbl td{padding:7px 9px;text-align:center;border-bottom:1px solid var(--border)}
+#sec-hd .hd-tbl th{background:var(--text);color:var(--bg);font-size:10px;font-weight:600;white-space:nowrap}
+#sec-hd .hd-tbl td:first-child,#sec-hd .hd-tbl th:first-child{text-align:left;font-weight:600}
+#sec-hd .hd-tbl tr.hd-sub td:first-child{padding-left:20px;font-weight:400;color:var(--text2)}
+#sec-hd .hd-tbl tr.hd-total td{font-weight:700;background:var(--bg2)}
+#sec-hd .hd-tbl td.num,#sec-hd .hd-tbl th.num{text-align:right;font-variant-numeric:tabular-nums}
+#sec-hd .hd-in{width:80px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;text-align:right;font-size:11px;font-variant-numeric:tabular-nums;background:var(--bg);color:var(--text);font-family:inherit}
+#sec-hd .hd-in:focus{outline:2px solid #5aabf0}
+#sec-hd .hd-in-text{text-align:left;width:140px}
+#sec-hd .hd-elim{color:var(--tc-red)}
+#sec-hd .hd-note{font-size:10px;color:var(--text3);margin-top:6px}
+#sec-hd .hd-type-badge{display:inline-block;padding:1px 8px;border-radius:980px;font-size:9px;font-weight:700}
+#sec-hd .hd-type-parent{background:rgba(90,171,240,0.18);color:#5aabf0}
+#sec-hd .hd-type-subsidiary{background:rgba(93,189,126,0.18);color:#5dbd7e}
+#sec-hd .hd-type-affiliate{background:rgba(240,160,96,0.18);color:#f0a060}
+
 /* バージョン一覧 */
 #sec-workforce .wf-version-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
 #sec-workforce .wf-version-card{background:var(--bg2);border-radius:var(--r);padding:11px 13px;border-left:3px solid var(--border2)}
@@ -712,6 +738,7 @@ input.cells-edit-input {
         <button class="tab" onclick="sw('expense',this)">💳 経費申請</button>
         <button class="tab" onclick="sw('report',this)">📋 月次レポート</button>
         <button class="tab" onclick="sw('pdf',this)">📄 役員PDF</button>
+        <button class="tab" onclick="sw('hd',this)">🏢 HD管理</button>
       </div>
     </div>
   </div>
@@ -1840,6 +1867,74 @@ input.cells-edit-input {
 </div>
 
 <!-- ──────────────────────────────────────
+     HD管理（ホールディングス連結）
+────────────────────────────────────── -->
+<div class="sec" id="sec-hd">
+  <div class="hd-toolbar">
+    <div><label>年度</label><select class="hd-sel" id="hd-year" onchange="HD.onYearMonthChange()"></select></div>
+    <div><label>月</label><select class="hd-sel" id="hd-month" onchange="HD.onYearMonthChange()"></select></div>
+    <span id="hd-sync-status" style="font-size:10px;color:var(--text3);margin-left:auto"></span>
+  </div>
+
+  <div class="pa-toggle" id="hd-subtabs">
+    <button class="pa-btn active" data-panel="companies" onclick="HD.switchPanel('companies',this)">🏢 会社一覧</button>
+    <button class="pa-btn" data-panel="financials" onclick="HD.switchPanel('financials',this)">📥 各社財務入力</button>
+    <button class="pa-btn" data-panel="intercompany" onclick="HD.switchPanel('intercompany',this)">🔄 内部取引</button>
+    <button class="pa-btn" data-panel="consolidated" onclick="HD.switchPanel('consolidated',this)">📊 連結財務諸表</button>
+  </div>
+
+  <!-- 会社一覧 -->
+  <div class="hd-panel on" id="hd-panel-companies">
+    <div class="card">
+      <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>🏢 グループ会社一覧</span>
+        <button class="btn btn-p" onclick="HD.addCompany()" style="font-size:11px;padding:5px 14px;margin-left:auto">＋ 会社を追加</button>
+      </div>
+      <div style="overflow-x:auto"><table class="hd-tbl" id="hd-companies-tbl" style="min-width:720px"></table></div>
+      <div class="hd-note">種別: 親会社 / 子会社 / 関連会社。出資比率と決算月を設定してください。連結対象は「連結に含める」をオンにした会社です。</div>
+    </div>
+  </div>
+
+  <!-- 各社財務入力 -->
+  <div class="hd-panel" id="hd-panel-financials">
+    <div class="card">
+      <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>📥 各社財務入力</span>
+        <select class="hd-sel" id="hd-fin-company" onchange="HD.renderFinancials()" style="margin-left:auto"></select>
+      </div>
+      <div id="hd-fin-body"><div class="hd-note">会社を選択してください（会社一覧で会社を追加すると選べます）。</div></div>
+    </div>
+  </div>
+
+  <!-- 内部取引 -->
+  <div class="hd-panel" id="hd-panel-intercompany">
+    <div class="card">
+      <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>🔄 内部取引（連結相殺対象）</span>
+        <button class="btn btn-p" onclick="HD.addIntercompany()" style="font-size:11px;padding:5px 14px;margin-left:auto">＋ 取引を追加</button>
+      </div>
+      <div style="overflow-x:auto"><table class="hd-tbl" id="hd-ic-tbl" style="min-width:760px"></table></div>
+      <div class="hd-note">種別: 内部売上(sales) / 内部仕入(purchase) / 貸付(loan) / 配当(dividend) / その他(other)。連結時に相殺消去されます。</div>
+    </div>
+  </div>
+
+  <!-- 連結財務諸表 -->
+  <div class="hd-panel" id="hd-panel-consolidated">
+    <div class="card">
+      <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>📊 連結財務諸表</span>
+        <div class="pa-toggle" id="hd-stmt-toggle" style="margin:0 0 0 auto">
+          <button class="pa-btn active" data-stmt="pl" onclick="HD.switchStmt('pl',this)" style="font-size:10px;padding:3px 10px">連結PL</button>
+          <button class="pa-btn" data-stmt="bs" onclick="HD.switchStmt('bs',this)" style="font-size:10px;padding:3px 10px">連結BS</button>
+          <button class="pa-btn" data-stmt="cf" onclick="HD.switchStmt('cf',this)" style="font-size:10px;padding:3px 10px">連結CF</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto"><div id="hd-stmt-body"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────
      月次レポート
 ────────────────────────────────────── -->
 <div class="sec" id="sec-report">
@@ -2127,6 +2222,7 @@ function sw(id, el) {
   if (id === 'workforce' && window.WF) setTimeout(() => window.WF.init(), 30);
   if (id === 'payroll' && window.PAYROLL) setTimeout(() => window.PAYROLL.init(), 30);
   if (id === 'expense' && window.EXPENSE) setTimeout(() => window.EXPENSE.init(), 30);
+  if (id === 'hd' && window.HD) setTimeout(() => window.HD.init(), 30);
 }
 
 function setYear(y, el) {
@@ -11101,7 +11197,7 @@ window.addEventListener('load', async () => {
       const yBtns = document.querySelectorAll('.year-toggle .yt');
       if (yBtns[yIdx]) setYear(savedYear, yBtns[yIdx]);
     }
-    const tabOrder = ['weekly','pl-cf','import','sim','workforce','payroll','expense','report','pdf'];
+    const tabOrder = ['weekly','pl-cf','import','sim','workforce','payroll','expense','report','pdf','hd'];
     const savedTab = localStorage.getItem('neo_active_tab');
     const tIdx = tabOrder.indexOf(savedTab);
     if (tIdx > 0) { // 0='weekly' はデフォルトなのでスキップ
@@ -15429,6 +15525,564 @@ document.addEventListener('DOMContentLoaded', function() {
     },
   };
   window.EXPENSE = EXPENSE;
+})();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         HD (ホールディングス連結管理)
+         会社マスタ / 各社財務入力 / 内部取引 / 連結PL・BS・CF
+         localStorage 即時保存 + Supabase(sbClient) 直 upsert（未設定時は localStorage のみ）
+         既存 KPI カード・他モジュールには非干渉（window.HD で独立公開）
+         ════════════════════════════════════════════════════════════════ -->
+    <script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const LS_C = 'neo_hd_companies', LS_F = 'neo_hd_financials', LS_I = 'neo_hd_intercompany';
+
+  // ── 勘定科目マスタ ──
+  const BS_GROUPS = [
+    { group: '資産',   side: 'asset', items: [
+      { code: 'cash',          name: '現預金' },
+      { code: 'receivable',    name: '売掛金' },
+      { code: 'other_current', name: 'その他流動資産' },
+      { code: 'fixed_asset',   name: '固定資産' },
+    ]},
+    { group: '負債',   side: 'liability', items: [
+      { code: 'payable',    name: '買掛金' },
+      { code: 'short_loan', name: '短期借入金' },
+      { code: 'long_loan',  name: '長期借入金' },
+    ]},
+    { group: '純資産', side: 'equity', items: [
+      { code: 'capital',  name: '資本金' },
+      { code: 'retained', name: '利益剰余金' },
+    ]},
+  ];
+  const PL_ITEMS = [
+    { code: 'sales',           name: '売上高' },
+    { code: 'cogs',            name: '売上原価' },
+    { code: 'sga',             name: '販管費' },
+    { code: 'non_op_income',   name: '営業外収益' },
+    { code: 'non_op_expense',  name: '営業外費用' },
+  ];
+  const ALL_CODES = [].concat(
+    BS_GROUPS.reduce((a, g) => a.concat(g.items.map(i => i.code)), []),
+    PL_ITEMS.map(i => i.code)
+  );
+  const TYPE_LABEL = { parent: '親会社', subsidiary: '子会社', affiliate: '関連会社' };
+  const IC_LABEL = { sales: '内部売上', purchase: '内部仕入', loan: '貸付', dividend: '配当', other: 'その他' };
+
+  const state = {
+    initialized: false,
+    year: Number((typeof currentYear !== 'undefined' && currentYear) || new Date().getFullYear()),
+    month: new Date().getMonth() + 1,
+    companies: [],
+    financials: {},          // `${cid}|${y}|${m}|${code}` -> number
+    intercompany: [],
+    panel: 'companies',
+    stmt: 'pl',
+    finCompanyId: null,
+  };
+
+  // ── ユーティリティ ──
+  function esc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function fmt(n){ return Number(n||0).toLocaleString('ja-JP'); }
+  function finKey(cid, y, m, code){ return cid + '|' + y + '|' + m + '|' + code; }
+  function getFin(cid, y, m, code){ return Number(state.financials[finKey(cid, y, m, code)]) || 0; }
+  function uid(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+  function normalizeCompany(r){
+    return {
+      id: r.id, name: r.name || '',
+      type: r.type || 'subsidiary',
+      ownership_ratio: r.ownership_ratio == null ? 100 : Number(r.ownership_ratio),
+      fiscal_month: r.fiscal_month == null ? 3 : Number(r.fiscal_month),
+      consolidate: r.consolidate !== false,
+      is_active: r.is_active !== false,
+      sort_order: Number(r.sort_order) || 0,
+    };
+  }
+  function normalizeIC(r){
+    return {
+      id: r.id, fiscal_year: Number(r.fiscal_year), fiscal_month: Number(r.fiscal_month),
+      transaction_type: r.transaction_type || 'sales',
+      from_company_id: r.from_company_id || '', to_company_id: r.to_company_id || '',
+      amount: Number(r.amount) || 0, note: r.note || '',
+    };
+  }
+
+  // ── 永続化 ──
+  function saveLocal(){
+    try {
+      localStorage.setItem(LS_C, JSON.stringify(state.companies));
+      localStorage.setItem(LS_F, JSON.stringify(state.financials));
+      localStorage.setItem(LS_I, JSON.stringify(state.intercompany));
+    } catch(e){ console.warn('[HD] localStorage save:', e.message); }
+  }
+  function loadLocal(){
+    try {
+      const c = JSON.parse(localStorage.getItem(LS_C) || '[]');
+      const f = JSON.parse(localStorage.getItem(LS_F) || '{}');
+      const i = JSON.parse(localStorage.getItem(LS_I) || '[]');
+      if (Array.isArray(c)) state.companies = c.map(normalizeCompany);
+      if (f && typeof f === 'object') state.financials = f;
+      if (Array.isArray(i)) state.intercompany = i.map(normalizeIC);
+    } catch(e){ console.warn('[HD] localStorage load:', e.message); }
+  }
+
+  async function sb(){
+    if (typeof _sbReady !== 'undefined') { try { await _sbReady; } catch(e){} }
+    return (typeof sbClient !== 'undefined' && sbClient) ? sbClient : null;
+  }
+  function setStatus(txt, color){
+    const el = $('hd-sync-status');
+    if (el){ el.textContent = txt || ''; el.style.color = color || 'var(--text3)'; }
+  }
+
+  async function loadRemote(){
+    const c = await sb();
+    if (!c) { setStatus('ローカル保存（Supabase未接続）'); return false; }
+    try {
+      const [cRes, fRes, iRes] = await Promise.all([
+        c.from('holdings_companies').select('*'),
+        c.from('holdings_financials').select('*'),
+        c.from('intercompany_transactions').select('*'),
+      ]);
+      if (cRes.error || fRes.error || iRes.error) throw new Error((cRes.error||fRes.error||iRes.error).message);
+      if (Array.isArray(cRes.data) && cRes.data.length) state.companies = cRes.data.map(normalizeCompany);
+      if (Array.isArray(fRes.data)){
+        const map = {};
+        fRes.data.forEach(r => { map[finKey(r.company_id, Number(r.fiscal_year), Number(r.fiscal_month), r.account_code)] = Number(r.amount) || 0; });
+        if (fRes.data.length) state.financials = map;
+      }
+      if (Array.isArray(iRes.data) && iRes.data.length) state.intercompany = iRes.data.map(normalizeIC);
+      saveLocal();
+      setStatus('✓ Supabase同期 ' + new Date().toLocaleTimeString('ja-JP'), 'var(--tc-green)');
+      return true;
+    } catch(e){
+      console.warn('[HD] remote load failed:', e.message);
+      setStatus('⚠ Supabase読込失敗（ローカル使用）', 'var(--tc-amber)');
+      return false;
+    }
+  }
+
+  async function upsertCompany(co){
+    const c = await sb(); if (!c) return;
+    const row = {
+      id: co.id, name: co.name, type: co.type, ownership_ratio: co.ownership_ratio,
+      fiscal_month: co.fiscal_month, consolidate: co.consolidate, is_active: co.is_active,
+      sort_order: co.sort_order, updated_at: new Date().toISOString(),
+    };
+    try { const r = await c.from('holdings_companies').upsert(row, { onConflict: 'id' }); if (r.error) throw r.error; }
+    catch(e){ console.warn('[HD] upsertCompany:', e.message); }
+  }
+  async function deleteRemote(table, id){
+    const c = await sb(); if (!c) return;
+    try { const r = await c.from(table).delete().eq('id', id); if (r.error) throw r.error; }
+    catch(e){ console.warn('[HD] delete ' + table + ':', e.message); }
+  }
+  async function upsertFinancial(cid, y, m, code, amount){
+    const c = await sb(); if (!c) return;
+    const row = {
+      id: finKey(cid, y, m, code), company_id: cid, fiscal_year: y, fiscal_month: m,
+      account_code: code, amount: amount, updated_at: new Date().toISOString(),
+    };
+    try { const r = await c.from('holdings_financials').upsert(row, { onConflict: 'id' }); if (r.error) throw r.error; }
+    catch(e){ console.warn('[HD] upsertFinancial:', e.message); }
+  }
+  async function upsertIC(t){
+    const c = await sb(); if (!c) return;
+    const row = {
+      id: t.id, fiscal_year: t.fiscal_year, fiscal_month: t.fiscal_month,
+      transaction_type: t.transaction_type, from_company_id: t.from_company_id || null,
+      to_company_id: t.to_company_id || null, amount: t.amount, note: t.note || null,
+    };
+    try { const r = await c.from('intercompany_transactions').upsert(row, { onConflict: 'id' }); if (r.error) throw r.error; }
+    catch(e){ console.warn('[HD] upsertIC:', e.message); }
+  }
+
+  // ── セレクト初期化 ──
+  function fillPeriodSelects(){
+    const ys = $('hd-year'), ms = $('hd-month');
+    if (ys && !ys.options.length){
+      [2024, 2025, 2026, 2027].forEach(y => {
+        const o = document.createElement('option'); o.value = y; o.textContent = y + '年度'; ys.appendChild(o);
+      });
+    }
+    if (ms && !ms.options.length){
+      for (let m = 1; m <= 12; m++){
+        const o = document.createElement('option'); o.value = m; o.textContent = m + '月'; ms.appendChild(o);
+      }
+    }
+    if (ys) ys.value = state.year;
+    if (ms) ms.value = state.month;
+  }
+  function companyOptions(selectedId, includeBlank){
+    let h = includeBlank ? '<option value="">—</option>' : '';
+    state.companies.forEach(co => {
+      h += '<option value="' + esc(co.id) + '"' + (co.id === selectedId ? ' selected' : '') + '>' + esc(co.name || '(無名)') + '</option>';
+    });
+    return h;
+  }
+
+  // ── 会社一覧 ──
+  function renderCompanies(){
+    const tbl = $('hd-companies-tbl'); if (!tbl) return;
+    let h = '<thead><tr>'
+      + '<th>会社名</th><th>種別</th><th class="num">出資比率%</th><th>決算月</th>'
+      + '<th>連結対象</th><th>有効</th><th>操作</th></tr></thead><tbody>';
+    if (!state.companies.length){
+      h += '<tr><td colspan="7" style="padding:18px;text-align:center;color:var(--text3)">「＋ 会社を追加」でグループ会社を登録してください</td></tr>';
+    }
+    state.companies.forEach(co => {
+      let typeOpts = '';
+      Object.keys(TYPE_LABEL).forEach(t => { typeOpts += '<option value="' + t + '"' + (co.type === t ? ' selected' : '') + '>' + TYPE_LABEL[t] + '</option>'; });
+      let fmOpts = '';
+      for (let m = 1; m <= 12; m++){ fmOpts += '<option value="' + m + '"' + (co.fiscal_month === m ? ' selected' : '') + '>' + m + '月</option>'; }
+      h += '<tr>'
+        + '<td><input class="hd-in hd-in-text" value="' + esc(co.name) + '" onchange="HD.updateCompany(\'' + co.id + '\',\'name\',this.value)"></td>'
+        + '<td><select class="hd-sel" onchange="HD.updateCompany(\'' + co.id + '\',\'type\',this.value)">' + typeOpts + '</select></td>'
+        + '<td class="num"><input type="number" class="hd-in" style="width:64px" value="' + co.ownership_ratio + '" min="0" max="100" step="0.01" onchange="HD.updateCompany(\'' + co.id + '\',\'ownership_ratio\',this.value)"></td>'
+        + '<td><select class="hd-sel" onchange="HD.updateCompany(\'' + co.id + '\',\'fiscal_month\',this.value)">' + fmOpts + '</select></td>'
+        + '<td><input type="checkbox"' + (co.consolidate ? ' checked' : '') + ' onchange="HD.updateCompany(\'' + co.id + '\',\'consolidate\',this.checked)"></td>'
+        + '<td><input type="checkbox"' + (co.is_active ? ' checked' : '') + ' onchange="HD.updateCompany(\'' + co.id + '\',\'is_active\',this.checked)"></td>'
+        + '<td><button class="btn" style="font-size:9px;padding:2px 8px;color:var(--tc-red);border-color:var(--tc-red)" onclick="HD.deleteCompany(\'' + co.id + '\')">🗑</button></td>'
+        + '</tr>';
+    });
+    h += '</tbody>';
+    tbl.innerHTML = h;
+  }
+
+  // ── 各社財務入力 ──
+  function fillFinCompanySelect(){
+    const sel = $('hd-fin-company'); if (!sel) return;
+    if (!state.finCompanyId && state.companies.length) state.finCompanyId = state.companies[0].id;
+    sel.innerHTML = companyOptions(state.finCompanyId, false);
+    if (state.finCompanyId) sel.value = state.finCompanyId;
+  }
+  function renderFinancials(){
+    const sel = $('hd-fin-company');
+    if (sel && sel.value) state.finCompanyId = sel.value;
+    const body = $('hd-fin-body'); if (!body) return;
+    const cid = state.finCompanyId;
+    if (!cid){ body.innerHTML = '<div class="hd-note">会社を選択してください（会社一覧で会社を追加すると選べます）。</div>'; return; }
+    const y = state.year, m = state.month;
+    const inCell = (code) => '<td class="num"><input type="number" class="hd-in" value="' + (state.financials[finKey(cid,y,m,code)] != null ? state.financials[finKey(cid,y,m,code)] : '') + '" placeholder="0" onchange="HD.setFin(\'' + code + '\',this.value)"></td>';
+
+    let bs = '<table class="hd-tbl" style="min-width:320px"><thead><tr><th>貸借対照表 (BS)</th><th class="num">金額(円)</th></tr></thead><tbody>';
+    BS_GROUPS.forEach(g => {
+      bs += '<tr class="hd-total"><td>' + g.group + '</td><td></td></tr>';
+      g.items.forEach(it => { bs += '<tr class="hd-sub"><td>' + it.name + '</td>' + inCell(it.code) + '</tr>'; });
+    });
+    bs += '</tbody></table>';
+
+    let pl = '<table class="hd-tbl" style="min-width:320px"><thead><tr><th>損益計算書 (PL)</th><th class="num">金額(円)</th></tr></thead><tbody>';
+    PL_ITEMS.forEach(it => { pl += '<tr class="hd-sub"><td>' + it.name + '</td>' + inCell(it.code) + '</tr>'; });
+    // 派生指標
+    const gp = getFin(cid,y,m,'sales') - getFin(cid,y,m,'cogs');
+    const op = gp - getFin(cid,y,m,'sga');
+    const ord = op + getFin(cid,y,m,'non_op_income') - getFin(cid,y,m,'non_op_expense');
+    pl += '<tr class="hd-total"><td>売上総利益</td><td class="num">' + fmt(gp) + '</td></tr>';
+    pl += '<tr class="hd-total"><td>営業利益</td><td class="num">' + fmt(op) + '</td></tr>';
+    pl += '<tr class="hd-total"><td>経常利益</td><td class="num">' + fmt(ord) + '</td></tr>';
+    pl += '</tbody></table>';
+
+    body.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">'
+      + '<div>' + bs + '</div><div>' + pl + '</div></div>'
+      + '<div class="hd-note">' + esc(currentCompanyName()) + ' の ' + y + '年度 ' + m + '月 単月データ。入力は即時保存されます。</div>';
+  }
+  function currentCompanyName(){
+    const co = state.companies.find(c => c.id === state.finCompanyId);
+    return co ? co.name : '';
+  }
+
+  // ── 内部取引 ──
+  function renderIntercompany(){
+    const tbl = $('hd-ic-tbl'); if (!tbl) return;
+    const rows = state.intercompany.filter(t => t.fiscal_year === state.year && t.fiscal_month === state.month);
+    let h = '<thead><tr><th>取引元</th><th>取引先</th><th>種別</th><th class="num">金額(円)</th><th>備考</th><th>操作</th></tr></thead><tbody>';
+    if (!rows.length){
+      h += '<tr><td colspan="6" style="padding:18px;text-align:center;color:var(--text3)">' + state.year + '年度 ' + state.month + '月の内部取引はありません</td></tr>';
+    }
+    rows.forEach(t => {
+      let typeOpts = '';
+      Object.keys(IC_LABEL).forEach(k => { typeOpts += '<option value="' + k + '"' + (t.transaction_type === k ? ' selected' : '') + '>' + IC_LABEL[k] + '</option>'; });
+      h += '<tr>'
+        + '<td><select class="hd-sel" onchange="HD.updateIC(\'' + t.id + '\',\'from_company_id\',this.value)">' + companyOptions(t.from_company_id, true) + '</select></td>'
+        + '<td><select class="hd-sel" onchange="HD.updateIC(\'' + t.id + '\',\'to_company_id\',this.value)">' + companyOptions(t.to_company_id, true) + '</select></td>'
+        + '<td><select class="hd-sel" onchange="HD.updateIC(\'' + t.id + '\',\'transaction_type\',this.value)">' + typeOpts + '</select></td>'
+        + '<td class="num"><input type="number" class="hd-in" value="' + t.amount + '" onchange="HD.updateIC(\'' + t.id + '\',\'amount\',this.value)"></td>'
+        + '<td><input class="hd-in hd-in-text" value="' + esc(t.note) + '" onchange="HD.updateIC(\'' + t.id + '\',\'note\',this.value)"></td>'
+        + '<td><button class="btn" style="font-size:9px;padding:2px 8px;color:var(--tc-red);border-color:var(--tc-red)" onclick="HD.deleteIC(\'' + t.id + '\')">🗑</button></td>'
+        + '</tr>';
+    });
+    h += '</tbody>';
+    tbl.innerHTML = h;
+  }
+
+  // ── 連結計算 ──
+  function consolidatedCompanyIds(){
+    return state.companies.filter(c => c.is_active && c.consolidate).map(c => c.id);
+  }
+  function aggregate(ids, y, m){
+    const sum = {}; ALL_CODES.forEach(code => sum[code] = 0);
+    ids.forEach(cid => ALL_CODES.forEach(code => { sum[code] += getFin(cid, y, m, code); }));
+    return sum;
+  }
+  function eliminations(y, m){
+    // 連結対象会社間の取引のみ相殺
+    const ids = consolidatedCompanyIds();
+    const inSet = (id) => ids.indexOf(id) >= 0;
+    const e = { sales: 0, cogs: 0, short_loan: 0, other_current: 0, non_op_income: 0, retained: 0 };
+    state.intercompany.filter(t => t.fiscal_year === y && t.fiscal_month === m).forEach(t => {
+      if (!inSet(t.from_company_id) || !inSet(t.to_company_id)) return;
+      const a = Number(t.amount) || 0;
+      if (t.transaction_type === 'sales' || t.transaction_type === 'purchase'){ e.sales += a; e.cogs += a; }
+      else if (t.transaction_type === 'loan'){ e.short_loan += a; e.other_current += a; }
+      else if (t.transaction_type === 'dividend'){ e.non_op_income += a; e.retained += a; }
+    });
+    return e;
+  }
+  function minorityInterest(y, m){
+    // 子会社の非支配株主持分（純資産 × (1-出資比率)）
+    let mi = 0;
+    state.companies.filter(c => c.is_active && c.consolidate && c.type === 'subsidiary').forEach(c => {
+      const ratio = Math.max(0, Math.min(100, Number(c.ownership_ratio) || 0)) / 100;
+      const netAssets = getFin(c.id, y, m, 'capital') + getFin(c.id, y, m, 'retained');
+      mi += netAssets * (1 - ratio);
+    });
+    return mi;
+  }
+  function consolidate(y, m){
+    const ids = consolidatedCompanyIds();
+    const raw = aggregate(ids, y, m);
+    const e = eliminations(y, m);
+    const c = {};
+    ALL_CODES.forEach(code => c[code] = raw[code] - (e[code] || 0));
+    return { ids: ids, raw: raw, elim: e, c: c, minority: minorityInterest(y, m) };
+  }
+
+  // ── 連結財務諸表 描画 ──
+  function lineRow(name, value, cls){
+    return '<tr class="' + (cls || '') + '"><td>' + name + '</td><td class="num">' + fmt(value) + '</td></tr>';
+  }
+  function renderConsolidated(){
+    const body = $('hd-stmt-body'); if (!body) return;
+    const ids = consolidatedCompanyIds();
+    if (!ids.length){ body.innerHTML = '<div class="hd-note">連結対象の会社がありません。会社一覧で「連結対象」をオンにしてください。</div>'; return; }
+    const res = consolidate(state.year, state.month);
+    const c = res.c;
+    if (state.stmt === 'pl') body.innerHTML = renderPL(c, res);
+    else if (state.stmt === 'bs') body.innerHTML = renderBS(c, res);
+    else body.innerHTML = renderCF(state.year, state.month, c, res);
+  }
+  function renderPL(c, res){
+    const gp = c.sales - c.cogs;
+    const op = gp - c.sga;
+    const ord = op + c.non_op_income - c.non_op_expense;
+    let h = '<table class="hd-tbl" style="min-width:420px"><thead><tr><th>連結損益計算書 (PL)</th><th class="num">金額(円)</th></tr></thead><tbody>';
+    h += lineRow('売上高', c.sales);
+    h += lineRow('売上原価', c.cogs);
+    h += lineRow('売上総利益', gp, 'hd-total');
+    h += lineRow('販管費', c.sga);
+    h += lineRow('営業利益', op, 'hd-total');
+    h += lineRow('営業外収益', c.non_op_income);
+    h += lineRow('営業外費用', c.non_op_expense);
+    h += lineRow('経常利益', ord, 'hd-total');
+    h += lineRow('当期純利益', ord, 'hd-total');
+    h += '</tbody></table>';
+    h += '<div class="hd-note">内部取引相殺: 内部売上/仕入 <span class="hd-elim">▲' + fmt(res.elim.sales) + '</span>、配当 <span class="hd-elim">▲' + fmt(res.elim.non_op_income) + '</span>。連結対象 ' + res.ids.length + '社（' + state.year + '年度 ' + state.month + '月）。</div>';
+    return h;
+  }
+  function renderBS(c, res){
+    const currentAsset = c.cash + c.receivable + c.other_current;
+    const totalAsset = currentAsset + c.fixed_asset;
+    const currentLiab = c.payable + c.short_loan;
+    const totalLiab = currentLiab + c.long_loan;
+    const ownEquity = c.capital + c.retained - res.minority;
+    const totalEquity = ownEquity + res.minority;
+    const totalLE = totalLiab + totalEquity;
+    let h = '<table class="hd-tbl" style="min-width:420px"><thead><tr><th>連結貸借対照表 (BS)</th><th class="num">金額(円)</th></tr></thead><tbody>';
+    h += lineRow('【資産の部】', '', 'hd-total').replace('0</td>', '</td>');
+    h += lineRow('現預金', c.cash);
+    h += lineRow('売掛金', c.receivable);
+    h += lineRow('その他流動資産', c.other_current);
+    h += lineRow('流動資産合計', currentAsset, 'hd-total');
+    h += lineRow('固定資産', c.fixed_asset);
+    h += lineRow('資産合計', totalAsset, 'hd-total');
+    h += lineRow('【負債の部】', '', 'hd-total').replace('0</td>', '</td>');
+    h += lineRow('買掛金', c.payable);
+    h += lineRow('短期借入金', c.short_loan);
+    h += lineRow('長期借入金', c.long_loan);
+    h += lineRow('負債合計', totalLiab, 'hd-total');
+    h += lineRow('【純資産の部】', '', 'hd-total').replace('0</td>', '</td>');
+    h += lineRow('資本金', c.capital);
+    h += lineRow('利益剰余金', c.retained);
+    h += lineRow('株主資本合計', ownEquity, 'hd-total');
+    h += lineRow('非支配株主持分', res.minority);
+    h += lineRow('純資産合計', totalEquity, 'hd-total');
+    h += lineRow('負債純資産合計', totalLE, 'hd-total');
+    h += '</tbody></table>';
+    const diff = totalAsset - totalLE;
+    h += '<div class="hd-note">内部債権債務相殺: 貸付/借入 <span class="hd-elim">▲' + fmt(res.elim.short_loan) + '</span>。'
+      + 'バランス差額: ' + (diff === 0 ? '0（一致）' : '<span class="hd-elim">' + fmt(diff) + '</span>（各社BSの入力差です）') + '</div>';
+    return h;
+  }
+  function priorPeriod(y, m){ return m > 1 ? { y: y, m: m - 1 } : { y: y - 1, m: 12 }; }
+  function renderCF(y, m, c, res){
+    const ids = consolidatedCompanyIds();
+    const pp = priorPeriod(y, m);
+    const prevRaw = aggregate(ids, pp.y, pp.m);
+    const prevElim = (function(){
+      const e = { sales:0,cogs:0,short_loan:0,other_current:0,non_op_income:0,retained:0 };
+      const inSet = (id) => ids.indexOf(id) >= 0;
+      state.intercompany.filter(t => t.fiscal_year === pp.y && t.fiscal_month === pp.m).forEach(t => {
+        if (!inSet(t.from_company_id) || !inSet(t.to_company_id)) return;
+        const a = Number(t.amount) || 0;
+        if (t.transaction_type === 'sales' || t.transaction_type === 'purchase'){ e.sales += a; e.cogs += a; }
+        else if (t.transaction_type === 'loan'){ e.short_loan += a; e.other_current += a; }
+        else if (t.transaction_type === 'dividend'){ e.non_op_income += a; e.retained += a; }
+      });
+      return e;
+    })();
+    const prev = {}; ALL_CODES.forEach(code => prev[code] = prevRaw[code] - (prevElim[code] || 0));
+    const hasPrev = ALL_CODES.some(code => prev[code] !== 0);
+    const ni = (c.sales - c.cogs - c.sga) + c.non_op_income - c.non_op_expense;
+
+    let h = '<table class="hd-tbl" style="min-width:420px"><thead><tr><th>連結キャッシュフロー計算書 (簡易間接法)</th><th class="num">金額(円)</th></tr></thead><tbody>';
+    if (!hasPrev){
+      h += lineRow('当期純利益', ni, 'hd-total');
+      h += lineRow('営業CF（簡易）', ni, 'hd-total');
+      h += '</tbody></table>';
+      h += '<div class="hd-note">前期（' + pp.y + '年度 ' + pp.m + '月）データが無いため、運転資本・投資・財務CFは算出できません。前期の各社財務を入力すると差分から自動計算します。</div>';
+      return h;
+    }
+    const dRecv = c.receivable - prev.receivable;
+    const dPay = c.payable - prev.payable;
+    const dOther = c.other_current - prev.other_current;
+    const dFixed = c.fixed_asset - prev.fixed_asset;
+    const dShort = c.short_loan - prev.short_loan;
+    const dLong = c.long_loan - prev.long_loan;
+    const dCap = c.capital - prev.capital;
+    const opCF = ni - dRecv - dOther + dPay;
+    const invCF = -dFixed;
+    const finCF = dShort + dLong + dCap;
+    const netCF = opCF + invCF + finCF;
+    const endCash = prev.cash + netCF;
+    h += lineRow('当期純利益', ni);
+    h += lineRow('売上債権の増減', -dRecv);
+    h += lineRow('その他流動資産の増減', -dOther);
+    h += lineRow('仕入債務の増減', dPay);
+    h += lineRow('営業CF', opCF, 'hd-total');
+    h += lineRow('固定資産の増減', invCF);
+    h += lineRow('投資CF', invCF, 'hd-total');
+    h += lineRow('借入金の増減', dShort + dLong);
+    h += lineRow('資本金の増減', dCap);
+    h += lineRow('財務CF', finCF, 'hd-total');
+    h += lineRow('現金の増減', netCF, 'hd-total');
+    h += lineRow('期首現金', prev.cash);
+    h += lineRow('期末現金（理論値）', endCash, 'hd-total');
+    h += '</tbody></table>';
+    const cashDiff = c.cash - endCash;
+    h += '<div class="hd-note">前期 ' + pp.y + '年度 ' + pp.m + '月 との差分から算出。実残高との差: ' + (cashDiff === 0 ? '0' : '<span class="hd-elim">' + fmt(cashDiff) + '</span>') + '</div>';
+    return h;
+  }
+
+  // ── パネル切替 ──
+  function renderCurrentPanel(){
+    if (state.panel === 'companies') renderCompanies();
+    else if (state.panel === 'financials'){ fillFinCompanySelect(); renderFinancials(); }
+    else if (state.panel === 'intercompany') renderIntercompany();
+    else if (state.panel === 'consolidated') renderConsolidated();
+  }
+
+  const HD = {
+    state,
+    init: async function(){
+      if (!state.initialized){
+        loadLocal();
+        fillPeriodSelects();
+        state.initialized = true;
+      }
+      fillPeriodSelects();
+      renderCurrentPanel();
+      const ok = await loadRemote();
+      if (ok){ fillFinCompanySelect(); renderCurrentPanel(); }
+    },
+    onYearMonthChange: function(){
+      const ys = $('hd-year'), ms = $('hd-month');
+      if (ys) state.year = Number(ys.value);
+      if (ms) state.month = Number(ms.value);
+      renderCurrentPanel();
+    },
+    switchPanel: function(name, btn){
+      state.panel = name;
+      document.querySelectorAll('#hd-subtabs .pa-btn').forEach(b => b.classList.toggle('active', b === btn));
+      ['companies','financials','intercompany','consolidated'].forEach(p => {
+        const el = $('hd-panel-' + p);
+        if (el) el.classList.toggle('on', p === name);
+      });
+      renderCurrentPanel();
+    },
+    switchStmt: function(stmt, btn){
+      state.stmt = stmt;
+      document.querySelectorAll('#hd-stmt-toggle .pa-btn').forEach(b => b.classList.toggle('active', b === btn));
+      renderConsolidated();
+    },
+    addCompany: function(){
+      const co = { id: uid('c_'), name: '新規会社', type: 'subsidiary', ownership_ratio: 100, fiscal_month: 3, consolidate: true, is_active: true, sort_order: state.companies.length };
+      state.companies.push(co);
+      saveLocal(); upsertCompany(co); renderCompanies();
+    },
+    updateCompany: function(id, field, value){
+      const co = state.companies.find(c => c.id === id); if (!co) return;
+      if (field === 'ownership_ratio') co[field] = Number(value) || 0;
+      else if (field === 'fiscal_month') co[field] = Number(value) || 3;
+      else if (field === 'consolidate' || field === 'is_active') co[field] = !!value;
+      else co[field] = value;
+      saveLocal(); upsertCompany(co);
+      // 連結対象・有効・名称はセレクト類に波及するため再描画
+      if (field === 'name' || field === 'is_active') { fillFinCompanySelect(); }
+    },
+    deleteCompany: function(id){
+      const co = state.companies.find(c => c.id === id);
+      if (!confirm('「' + (co ? co.name : '') + '」を削除しますか？関連する財務データも削除されます。')) return;
+      state.companies = state.companies.filter(c => c.id !== id);
+      Object.keys(state.financials).forEach(k => { if (k.indexOf(id + '|') === 0) delete state.financials[k]; });
+      if (state.finCompanyId === id) state.finCompanyId = state.companies.length ? state.companies[0].id : null;
+      saveLocal(); deleteRemote('holdings_companies', id);
+      renderCompanies(); fillFinCompanySelect();
+    },
+    setFin: function(code, value){
+      const cid = state.finCompanyId; if (!cid) return;
+      const y = state.year, m = state.month;
+      const amount = value === '' ? 0 : Math.round(Number(value) || 0);
+      state.financials[finKey(cid, y, m, code)] = amount;
+      saveLocal(); upsertFinancial(cid, y, m, code, amount);
+      renderFinancials();
+    },
+    addIntercompany: function(){
+      const t = { id: uid('ic_'), fiscal_year: state.year, fiscal_month: state.month, transaction_type: 'sales', from_company_id: '', to_company_id: '', amount: 0, note: '' };
+      state.intercompany.push(t);
+      saveLocal(); upsertIC(t); renderIntercompany();
+    },
+    updateIC: function(id, field, value){
+      const t = state.intercompany.find(x => x.id === id); if (!t) return;
+      if (field === 'amount') t[field] = Math.round(Number(value) || 0);
+      else t[field] = value;
+      saveLocal(); upsertIC(t);
+    },
+    deleteIC: function(id){
+      state.intercompany = state.intercompany.filter(x => x.id !== id);
+      saveLocal(); deleteRemote('intercompany_transactions', id);
+      renderIntercompany();
+    },
+    renderFinancials: renderFinancials,
+  };
+  window.HD = HD;
 })();
     </script>
 

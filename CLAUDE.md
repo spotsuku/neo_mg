@@ -70,6 +70,9 @@
 - [2026-04-29] モーダル要素を sec-workforce 内に配置 → 別タブから開けない（親が display:none だと子要素も全て非表示になる） → 全タブから開くべきモーダルやオーバーレイは必ずセクション外（body 直下相当）に配置し、CSS スコープも `#sec-xxx` ではなく素のクラスに統一する。
 - [2026-04-29] BIZ × ROLES のグリッドで `colspan="4"` をハードコードしていたため、ROLES 数を 4→6 に増やしたら列ズレが発生 → 多次元の配列・行列を生成する箇所では `array.length` を必ず使い、固定値を埋め込まない。同種の cells/rows/cols/colspan/rowspan は全て array length 由来にする。
 - [2026-04-29] チャット入出力時に `obj.prop.deep` のようなドット連鎖が markdown 自動リンク化で `[obj.prop.deep](http://obj.prop.deep)` に変換され構文エラーになる事案 → JS コードを Edit で書き込む際は `String(obj.prop)` などラップする / または変数に分割代入する形で出力し、自動リンク化を回避する。書込み後は必ず `node --check` で検出。
+- [2026-06-09] HD管理を追加する際、仕様書には「Next.js/TypeScript/Tailwind/Recharts・src/utils・app/page.tsx」とあったが実態は単一HTML+バニラJS構成だった → 仕様のスタック記述を鵜呑みにせず、着手前に必ず package.json と find で実在を確認する。汎用テンプレ前提の指示はこのリポジトリの実態（public/index.html 単一ファイル）に翻訳して実装する。
+- [2026-06-09] HDモジュールから `sbClient` / `_sbReady` / `currentYear` を参照する必要があった → 別 `<script>` ブロックでも classic script の top-level let/const はグローバル字句環境を共有するため参照可能。ただし定義順・未定義に備えて必ず `typeof X !== 'undefined' && X` でガードしてから使う（モジュール非依存・graceful フォールバック）。
+- [2026-06-09] サブタブの表示制御で `.hd-panel{display:none}` + `.hd-panel.on{display:block}` の class 制御に統一し、JS は classList.toggle('on',...) のみで切替えた（過去の inline style と class 混在による永久非表示バグを回避）→ タブ/パネル表示は CSS class 一本化を徹底する。
 
 # プロジェクト固有ルール（neo_mg）
 
