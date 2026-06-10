@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="alternate icon" type="image/png" href="/favicon.svg">
 <link rel="apple-touch-icon" href="/favicon.svg">
-<meta name="theme-color" content="#f2f2f7">
+<meta name="theme-color" content="#f2f2f7"
 <meta name="application-name" content="経営MG">
 <meta name="apple-mobile-web-app-title" content="経営MG">
 <style>
@@ -35,6 +35,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 /* ── TOP NAV (iOS frosted glass) ── */
 .topnav{display:flex;align-items:flex-start;justify-content:space-between;padding:.875rem 1rem;border-bottom:1px solid var(--border);margin:0 -1.25rem 1rem;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:100;background:rgba(242,242,247,0.78);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px)}
 .logo{font-size:17px;font-weight:700;letter-spacing:-.4px}
+.company-sel{background:transparent;border:none;color:var(--text);font-size:1.1rem;font-weight:700;cursor:pointer;max-width:280px;appearance:none;-webkit-appearance:none;outline:none}
 .logo-sub{font-size:11px;color:var(--text3);margin-top:2px;letter-spacing:.01em}
 .nav-title{display:flex;flex-direction:column;flex-shrink:0}
 .nav-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
@@ -758,7 +759,7 @@ input.cells-edit-input {
 <div class="topnav">
   <!-- 左: タイトル + サブタイトル + 月次財務サブタブ（PL/CF/BS） -->
   <div class="nav-title">
-    <div class="logo">NEO福岡 ｜ 経営ダッシュボード</div>
+    <div class="logo"><select id="company-sel" class="company-sel" onchange="switchCompany(this.value)"><option value="">NEO福岡 ｜ 経営ダッシュボード</option></select></div>
     <div class="logo-sub" id="nav-sub">2025年度 ｜ 最終更新：2026年2月末</div>
     <!-- 月次財務サブタブ：常時スロット確保で高さ固定、月次財務時のみ可視 -->
     <div class="pa-toggle" id="pa-header-toggle" style="margin-top:8px;margin-bottom:0;visibility:hidden">
@@ -2168,6 +2169,7 @@ const gc = 'rgba(60,60,67,0.10)';
 const tc = '#8e8e93';
 
 let currentYear = '2025';
+let currentCompanyId = null; // null = NEO (後方互換)
 let currentPaView = 'pl';
 let currentSimView = 'pl';
 let csvRawText = '';
@@ -10771,11 +10773,40 @@ async function genAI(type) {
 // Vercel環境: /api/db (Supabase) を使用
 const IS_LOCAL = window.location.protocol === 'file:' || window.location.hostname === '';
 
+function switchCompany(id) {
+  currentCompanyId = id || null;
+  localStorage.setItem('neo_active_company', id || '');
+  if (typeof loadDB === 'function') {
+    Promise.resolve(loadDB()).then(function(){
+      if (typeof setYear === 'function') setYear(currentYear);
+    });
+  }
+}
+
+function initCompanySelector() {
+  var sel = document.getElementById('company-sel');
+  if (!sel) return;
+  var baseLabel = sel.options.length ? sel.options[0].textContent : 'NEO';
+  while (sel.options.length > 1) sel.remove(1);
+  var comps = (window.HD && window.HD.state && window.HD.state.companies) || [];
+  comps.forEach(function(c){
+    if (c && c.is_active === false) return;
+    var opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = (c.name || c.id);
+    sel.appendChild(opt);
+  });
+  var saved = localStorage.getItem('neo_active_company');
+  if (saved) {
+    var match = Array.prototype.some.call(sel.options, function(o){ return o.value === saved; });
+    if (match) { sel.value = saved; currentCompanyId = saved; }
+  }
+}
+
 async function saveDB() {
   // localStorage に必ず保存（オフラインバックアップ）
   try {
-    localStorage.setItem('neo_db_2025', JSON.stringify(DB['2025']));
-    localStorage.setItem('neo_db_2026', JSON.stringify(DB['2026']));
+    for (const _yr of ['2024','2025','2026']) { const _lsKey = currentCompanyId ? 'neo_db_' + currentCompanyId + '_' + _yr : 'neo_db_' + _yr; if (DB[_yr]) localStorage.setItem(_lsKey, JSON.stringify(DB[_yr])); }
   } catch(e) { console.warn('localStorage save failed:', e); }
 
   if (IS_LOCAL) return; // ローカルはlocalStorageのみ
@@ -10788,6 +10819,7 @@ async function saveDB() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        company_id: currentCompanyId,
         fiscal_year: yr,
         months: d.months,
         pl: d.pl,
@@ -10835,7 +10867,7 @@ async function loadDB() {
 
   try {
     if (!IS_LOCAL) {
-      const res = await fetch('/api/db?action=load_fiscal');
+      const res = await fetch(`/api/db?action=load_fiscal${currentCompanyId ? "&company_id=" + currentCompanyId : ""}`{currentCompanyId ? "&company_id=" + currentCompanyId : ""}`);
       const r = await res.json();
       console.log('[loadDB] Supabase response:', r.ok, Object.keys(r.data || {}));
       if (r.ok && r.data) {
@@ -10852,7 +10884,7 @@ async function loadDB() {
             // これで「Supabase 同期後に bs が消える」既存バグを救済
             if (!DB[yr].bs || !DB[yr].bs.actual) {
               try {
-                const raw = localStorage.getItem(`neo_db_${yr}`);
+                const raw = localStorage.getItem(currentCompanyId ? `neo_db_${currentCompanyId}_${yr}` : `neo_db_${yr}`);
                 if (raw) {
                   const cached = JSON.parse(raw);
                   if (cached?.bs?.actual && Object.keys(cached.bs.actual).length > 0) {
@@ -13093,6 +13125,17 @@ window.mfCommitConfirmed = async function() {
 // ── 初期化 ──
 document.addEventListener('DOMContentLoaded', function() {
   mfInit();
+  // 会社セレクタ初期化 (HD管理の会社一覧と連動)
+  try {
+    if (window.HD && typeof window.HD.init === 'function' && !(window.HD.state && window.HD.state.initialized)) {
+      window.HD.init();
+    }
+  } catch(e) { console.warn('[companySel] HD.init failed', e); }
+  if (typeof initCompanySelector === 'function') {
+    initCompanySelector();
+    var _savedCo = localStorage.getItem('neo_active_company');
+    if (_savedCo) { currentCompanyId = _savedCo; }
+  }
   // タブ切り替え時にMFセクション再挿入
   const origSw = window.sw;
   if (origSw) {
