@@ -677,6 +677,20 @@ input.cells-edit-input {
 #sec-hd .hd-mini-sel{font-size:9px;padding:1px 2px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-family:inherit}
 #sec-hd .hd-solo-tbl tr.hd-hidden td,#sec-hd .hd-solo-bs tr.hd-hidden td{opacity:0.5}
 #sec-hd .hd-add-row td{text-align:left!important;background:rgba(90,171,240,0.06)}
+#sec-hd .hd-mini:disabled{opacity:0.3;cursor:default}
+/* HD単体: 科目管理リスト（編集モード） */
+#sec-hd .hd-mgr{display:flex;flex-direction:column;gap:14px;max-width:640px}
+#sec-hd .hd-mgr-grp{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--bg)}
+#sec-hd .hd-mgr-grp-h{font-size:11px;font-weight:700;color:var(--text);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+#sec-hd .hd-mgr-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)}
+#sec-hd .hd-mgr-row:last-of-type{border-bottom:none}
+#sec-hd .hd-mgr-ord{display:flex;gap:2px;flex:0 0 auto}
+#sec-hd .hd-mgr-name{flex:1;min-width:110px;padding:6px 9px;border:1px solid var(--border2);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px;font-family:inherit}
+#sec-hd .hd-mgr-name:focus{outline:2px solid #5aabf0}
+#sec-hd .hd-mgr-row.hd-hidden{opacity:0.5}
+#sec-hd .hd-mgr-empty{font-size:10px;color:var(--text3);padding:5px 0}
+#sec-hd .hd-mgr-add{margin-top:8px;font-size:11px;padding:6px 12px;border:1px dashed var(--border2);border-radius:7px;background:transparent;color:var(--text2);cursor:pointer;font-family:inherit;width:100%}
+#sec-hd .hd-mgr-add:hover{background:var(--bg2);border-color:#5aabf0;color:var(--text)}
 /* HD会社追加モーダル（セクション外配置・素クラス） */
 .hd-modal{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center}
 .hd-modal.on{display:flex}
@@ -16507,8 +16521,36 @@ document.addEventListener('DOMContentLoaded', function() {
     h += '<button class="btn ' + (SOLO.editing ? 'btn-p' : '') + '" style="font-size:10px;padding:4px 12px" onclick="HDSOLO.toggleEdit()">' + (SOLO.editing ? '✓ 編集を終了' : '⚙ 科目を編集') + '</button>';
     if (SOLO.editing){
       h += '<button class="btn" style="font-size:10px;padding:4px 12px;color:var(--tc-red);border-color:var(--tc-red)" onclick="HDSOLO.resetSchema()">デフォルトに戻す</button>';
-      h += '<span class="hd-note" style="margin:0">名称変更・追加(＋)・削除(🗑)・並べ替え(↑↓)・表示/非表示(👁)。非表示の科目は集計から除外。科目定義は全年度共通です。</span>';
+      h += '<span class="hd-note" style="margin:0">上の PL / BS / CF で対象を切替えて編集できます。非表示の科目は集計から除外。科目定義は全年度共通です。</span>';
     }
+    h += '</div>';
+    return h;
+  }
+  function schemaManager(view){
+    const stmt = view; // 'pl' | 'cf' | 'bs'
+    const groups = stmt === 'pl' ? PL_GROUPS : (stmt === 'cf' ? CF_GROUPS : BS_GROUPS);
+    let h = '<div class="hd-mgr">';
+    groups.forEach(grp => {
+      h += '<div class="hd-mgr-grp"><div class="hd-mgr-grp-h">' + esc(grp.label)
+        + (grp.id === 'fin' ? ' <span style="font-weight:400;color:var(--text3)">（収入+ / 支出−）</span>' : '') + '</div>';
+      const its = items(stmt, grp.id);
+      if (!its.length) h += '<div class="hd-mgr-empty">科目がありません。下のボタンから追加してください。</div>';
+      its.forEach((it, idx) => {
+        const a = "'" + stmt + "','" + grp.id + "','" + it.id + "'";
+        h += '<div class="hd-mgr-row' + (it.hidden ? ' hd-hidden' : '') + '">'
+          + '<div class="hd-mgr-ord">'
+          +   '<button class="hd-mini" ' + (idx === 0 ? 'disabled' : '') + ' title="上へ" onclick="HDSOLO.moveItem(' + a + ',-1)">↑</button>'
+          +   '<button class="hd-mini" ' + (idx === its.length - 1 ? 'disabled' : '') + ' title="下へ" onclick="HDSOLO.moveItem(' + a + ',1)">↓</button>'
+          + '</div>'
+          + '<input class="hd-mgr-name" value="' + esc(it.label) + '" onchange="HDSOLO.renameItem(' + a + ',this.value)">'
+          + (grp.id === 'fin' ? '<select class="hd-mini-sel" onchange="HDSOLO.setSign(' + a + ',this.value)"><option value="1"' + ((it.sign||1) >= 0 ? ' selected' : '') + '>収入(+)</option><option value="-1"' + ((it.sign||1) < 0 ? ' selected' : '') + '>支出(−)</option></select>' : '')
+          + '<button class="hd-mini" title="表示/非表示の切替" onclick="HDSOLO.toggleHidden(' + a + ')">' + (it.hidden ? '🚫 非表示' : '👁 表示') + '</button>'
+          + '<button class="hd-mini hd-del" title="削除" onclick="HDSOLO.deleteItem(' + a + ')">🗑</button>'
+          + '</div>';
+      });
+      h += '<button class="hd-mgr-add" onclick="HDSOLO.addItem(\'' + stmt + '\',\'' + grp.id + '\')">＋ 科目を追加</button>';
+      h += '</div>';
+    });
     h += '</div>';
     return h;
   }
@@ -16518,11 +16560,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const body = $('hd-solo-body'); if (!body) return;
     const yd = getYear(year);
     let html = editBar();
-    if (SOLO.view === 'pl') html += monthlyTable('pl', plLayout(), yd.pl[SOLO.mode]);
-    else if (SOLO.view === 'cf') html += monthlyTable('cf', cfLayout(), yd.cf[SOLO.mode]);
-    else html += bsTable(year);
+    if (SOLO.editing){
+      html += schemaManager(SOLO.view);
+    } else if (SOLO.view === 'pl'){
+      html += monthlyTable('pl', plLayout(), yd.pl[SOLO.mode]);
+    } else if (SOLO.view === 'cf'){
+      html += monthlyTable('cf', cfLayout(), yd.cf[SOLO.mode]);
+    } else {
+      html += bsTable(year);
+    }
     body.innerHTML = html;
-    const mt = $('hd-solo-mode'); if (mt) mt.style.display = (SOLO.view === 'bs') ? 'none' : '';
+    const mt = $('hd-solo-mode'); if (mt) mt.style.display = (SOLO.view === 'bs' || SOLO.editing) ? 'none' : '';
   }
 
   const HDSOLO = {
