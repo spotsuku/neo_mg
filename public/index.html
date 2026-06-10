@@ -10867,7 +10867,7 @@ async function loadDB() {
 
   try {
     if (!IS_LOCAL) {
-      const res = await fetch(`/api/db?action=load_fiscal${currentCompanyId ? "&company_id=" + currentCompanyId : ""}`{currentCompanyId ? "&company_id=" + currentCompanyId : ""}`);
+      const res = await fetch(`/api/db?action=load_fiscal${currentCompanyId ? "&company_id=" + currentCompanyId : ""}`);
       const r = await res.json();
       console.log('[loadDB] Supabase response:', r.ok, Object.keys(r.data || {}));
       if (r.ok && r.data) {
