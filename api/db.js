@@ -18,12 +18,11 @@ export default async function handler(req, res) {
 
       // ── 財務データ 読込 ──
       case 'load_fiscal': {
-        const { data, error } = await supabase
-          .from('fiscal_data')
-          .select('*')
-          .order('fiscal_year', { ascending: true });
+        const companyId = req.query.company_id || null;
+        let query = supabase.from('fiscal_data').select('*').order('fiscal_year', { ascending: true });
+        if (companyId) { query = query.eq('company_id', companyId); } else { query = query.is('company_id', null); }
+        const { data, error } = await query;
         if (error) throw error;
-
         // { '2025': {...}, '2026': {...} } の形に変換
         const result = {};
         for (const row of data) {
@@ -40,7 +39,7 @@ export default async function handler(req, res) {
 
       // ── 財務データ 保存（年度ごと upsert）──
       case 'save_fiscal': {
-        const { fiscal_year, months, pl, cf, bs, reportData } = req.body;
+        const { fiscal_year, months, pl, cf, bs, reportData, company_id } = req.body;
         const payload = {
           fiscal_year,
           months,
@@ -49,13 +48,14 @@ export default async function handler(req, res) {
           report_data: reportData,
           updated_at: new Date().toISOString()
         };
+        if (company_id) payload.company_id = company_id;
+        const conflictCol = company_id ? 'company_id,fiscal_year' : 'fiscal_year';
         // bs 列が存在する Supabase スキーマでのみ書き込み
         // 古いスキーマの場合は最初の試行が失敗するので、再試行で bs 抜きで保存
         if (bs !== undefined && bs !== null) payload.bs = bs;
         let { error } = await supabase
           .from('fiscal_data')
-          .upsert(payload, { onConflict: 'fiscal_year' });
-        // Supabase / PostgREST が返す「列が無い」系のエラーを幅広く検出:
+          .upsert(payload, { onConflict: conflictCol });        // Supabase / PostgREST が返す「列が無い」系のエラーを幅広く検出:
         //   - "column \"bs\" of relation \"fiscal_data\" does not exist"  (Postgres)
         //   - "Could not find the 'bs' column of 'fiscal_data' in the schema cache"  (PostgREST schema cache)
         const isBsColumnMissing = error && /['"]?bs['"]?/i.test(error.message || '')
@@ -65,7 +65,7 @@ export default async function handler(req, res) {
           delete payload.bs;
           const retry = await supabase
             .from('fiscal_data')
-            .upsert(payload, { onConflict: 'fiscal_year' });
+            .upsert(payload, { onConflict: conflictCol });
           error = retry.error;
         }
         if (error) throw error;
@@ -187,11 +187,11 @@ export default async function handler(req, res) {
         const now = new Date().toISOString();
         const rows = cells.map(c => ({
           fiscal_year: String(c.fiscal_year),
-          sheet:       String(c.sheet),
-          row_key:     String(c.row_key),
-          month_idx:   Number(c.month_idx),
-          value:       (c.value === '' || c.value == null) ? null : Number(c.value),
-          updated_at:  now,
+          sheet: String(c.sheet),
+          row_key: String(c.row_key),
+          month_idx: Number(c.month_idx),
+          value: (c.value === '' || c.value == null) ? null : Number(c.value),
+          updated_at: now,
         }));
         const { error } = await supabase
           .from('cells')
@@ -204,10 +204,10 @@ export default async function handler(req, res) {
       // query: ?action=load_cells&fiscal_year=2025[&sheet=sim_cf]
       case 'load_cells': {
         const fiscal_year = req.query.fiscal_year;
-        const sheet       = req.query.sheet;
+        const sheet = req.query.sheet;
         let q = supabase.from('cells').select('fiscal_year,sheet,row_key,month_idx,value,updated_at');
         if (fiscal_year) q = q.eq('fiscal_year', String(fiscal_year));
-        if (sheet)       q = q.eq('sheet', String(sheet));
+        if (sheet) q = q.eq('sheet', String(sheet));
         const { data, error } = await q;
         if (error) throw error;
         return res.status(200).json({ ok: true, data: data || [] });
@@ -220,11 +220,11 @@ export default async function handler(req, res) {
         if (rows.length === 0) return res.status(200).json({ ok: true, count: 0 });
         const payload = rows.map(r => ({
           fiscal_year: String(r.fiscal_year),
-          sheet:       String(r.sheet),
-          row_key:     String(r.row_key),
-          label:       String(r.label || ''),
-          attrs:       r.attrs || {},
-          position:    Number(r.position || 0),
+          sheet: String(r.sheet),
+          row_key: String(r.row_key),
+          label: String(r.label || ''),
+          attrs: r.attrs || {},
+          position: Number(r.position || 0),
         }));
         const { error } = await supabase
           .from('custom_rows')
@@ -291,7 +291,7 @@ export default async function handler(req, res) {
           const { data: simRows, error } = await supabase.from('sim_data').select('*');
           if (error) throw error;
           for (const row of simRows || []) {
-            const fy   = row.fiscal_year;
+            const fy = row.fiscal_year;
             const data = row.data || {};
             const cells = [];
 
@@ -299,21 +299,27 @@ export default async function handler(req, res) {
             for (const [key, arr] of Object.entries(data.pl || {})) {
               if (!Array.isArray(arr)) continue;
               for (let i = 0; i < arr.length; i++) {
-                cells.push({ fiscal_year: fy, sheet: 'sim_pl', row_key: key, month_idx: i,
-                             value: arr[i] === '' || arr[i] == null ? null : Number(arr[i]) });
+                cells.push({
+                  fiscal_year: fy, sheet: 'sim_pl', row_key: key, month_idx: i,
+                  value: arr[i] === '' || arr[i] == null ? null : Number(arr[i])
+                });
               }
             }
             // cf
             for (const [key, val] of Object.entries(data.cf || {})) {
               if (key === 'cfOpenFirst') {
-                cells.push({ fiscal_year: fy, sheet: 'sim_cf', row_key: 'cfOpenFirst', month_idx: -1,
-                             value: val === '' || val == null ? null : Number(val) });
+                cells.push({
+                  fiscal_year: fy, sheet: 'sim_cf', row_key: 'cfOpenFirst', month_idx: -1,
+                  value: val === '' || val == null ? null : Number(val)
+                });
                 continue;
               }
               if (!Array.isArray(val)) continue;
               for (let i = 0; i < val.length; i++) {
-                cells.push({ fiscal_year: fy, sheet: 'sim_cf', row_key: key, month_idx: i,
-                             value: val[i] === '' || val[i] == null ? null : Number(val[i]) });
+                cells.push({
+                  fiscal_year: fy, sheet: 'sim_cf', row_key: key, month_idx: i,
+                  value: val[i] === '' || val[i] == null ? null : Number(val[i])
+                });
               }
             }
             if (cells.length) {
@@ -365,8 +371,10 @@ export default async function handler(req, res) {
               for (const [key, arr] of Object.entries(kvObj || {})) {
                 if (!Array.isArray(arr)) continue;
                 for (let i = 0; i < arr.length; i++) {
-                  cells.push({ fiscal_year: fy, sheet: sheetName, row_key: key, month_idx: i,
-                               value: arr[i] === '' || arr[i] == null ? null : Number(arr[i]) });
+                  cells.push({
+                    fiscal_year: fy, sheet: sheetName, row_key: key, month_idx: i,
+                    value: arr[i] === '' || arr[i] == null ? null : Number(arr[i])
+                  });
                 }
               }
             };
@@ -487,7 +495,7 @@ export default async function handler(req, res) {
 
       case 'decide_expense_request': {
         const { request_id, decision, approved_by, reject_reason } = req.body;
-        if (!['approved','rejected'].includes(decision)) {
+        if (!['approved', 'rejected'].includes(decision)) {
           return res.status(400).json({ error: 'invalid decision' });
         }
         const payload = {
