@@ -668,6 +668,15 @@ input.cells-edit-input {
 #sec-hd .hd-solo-bs td:first-child,#sec-hd .hd-solo-bs th:first-child{text-align:left;font-weight:600}
 #sec-hd .hd-solo-bs tr.hd-auto td{background:var(--bg2);font-weight:700}
 #sec-hd .hd-solo-bs tr.hd-grp td{background:rgba(120,120,128,0.10);font-size:9px;color:var(--text3);font-weight:700}
+/* HD単体: 科目インライン編集 */
+#sec-hd .hd-edit-cell{display:flex;align-items:center;gap:3px;flex-wrap:nowrap}
+#sec-hd .hd-lbl{width:118px;text-align:left}
+#sec-hd .hd-mini{font-size:10px;line-height:1.2;padding:2px 5px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text2);cursor:pointer;font-family:inherit}
+#sec-hd .hd-mini:hover{background:var(--bg2)}
+#sec-hd .hd-mini.hd-del{color:var(--tc-red);border-color:var(--tc-red)}
+#sec-hd .hd-mini-sel{font-size:9px;padding:1px 2px;border:1px solid var(--border2);border-radius:4px;background:var(--bg);color:var(--text);font-family:inherit}
+#sec-hd .hd-solo-tbl tr.hd-hidden td,#sec-hd .hd-solo-bs tr.hd-hidden td{opacity:0.5}
+#sec-hd .hd-add-row td{text-align:left!important;background:rgba(90,171,240,0.06)}
 /* HD会社追加モーダル（セクション外配置・素クラス） */
 .hd-modal{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center}
 .hd-modal.on{display:flex}
@@ -16231,107 +16240,88 @@ document.addEventListener('DOMContentLoaded', function() {
   const LS = 'neo_hd_solo';
   const ML = ['4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月'];
 
-  // ── 行定義（月次財務と同一科目体系）──
-  const PL_ROWS = [
-    { k:'rev', label:'売上高', t:'in' },
-    { grp:'売上原価' },
-    { k:'cogsHomeroom', label:'　ホームルーム', t:'in' },
-    { k:'cogsHyogikai', label:'　評議会', t:'in' },
-    { k:'cogsOenKaigi', label:'　応援会議', t:'in' },
-    { k:'cogsBigEvent', label:'　大型イベント', t:'in' },
-    { k:'cogsOther', label:'　その他原価', t:'in' },
-    { k:'_cogs', label:'売上原価 計', t:'auto', fn:(g,i)=>cogsSum(g,i) },
-    { k:'_gp', label:'売上総利益（粗利）', t:'auto', fn:(g,i)=>num(g.rev,i)-cogsSum(g,i) },
-    { grp:'販管費' },
-    { k:'labor', label:'人件費', t:'in' },
-    { k:'outsource', label:'業務委託費', t:'in' },
-    { k:'adv', label:'広告宣伝費', t:'in' },
-    { k:'gaichu', label:'外注費', t:'in' },
-    { k:'other', label:'その他販管費', t:'in' },
-    { k:'_sga', label:'販管費 計', t:'auto', fn:(g,i)=>sgaSum(g,i) },
-    { k:'_op', label:'営業利益', t:'auto', fn:(g,i)=>num(g.rev,i)-cogsSum(g,i)-sgaSum(g,i) },
-  ];
-  const CF_ROWS = [
-    { k:'open', label:'期首現金', t:'in', bal:true },
-    { grp:'入金' },
-    { k:'cfInMembership', label:'　会費収入', t:'in' },
-    { k:'cfInTraining', label:'　研修収入', t:'in' },
-    { k:'cfInOther', label:'　その他収入', t:'in' },
-    { k:'_cfIn', label:'入金 計', t:'auto', fn:(g,i)=>cfInSum(g,i) },
-    { grp:'販管費（固定）' },
-    { k:'salaryPay', label:'給与', t:'in' },
-    { k:'devOutPay', label:'開発外注', t:'in' },
-    { k:'bizComPay', label:'業務委託', t:'in' },
-    { k:'incentivePay', label:'インセンティブ', t:'in' },
-    { k:'expertPay', label:'専門家報酬', t:'in' },
-    { k:'rentPay', label:'地代家賃', t:'in' },
-    { grp:'販管費（変動）' },
-    { k:'expensePay', label:'経費', t:'in' },
-    { k:'telPay', label:'通信費', t:'in' },
-    { k:'entertainPay', label:'交際費', t:'in' },
-    { k:'taxPay', label:'租税公課', t:'in' },
-    { k:'toolsPay', label:'ツール', t:'in' },
-    { k:'suppliesPay', label:'備品', t:'in' },
-    { k:'adSportsPay', label:'広告', t:'in' },
-    { k:'eventCostPay', label:'イベント費', t:'in' },
-    { k:'recruitPay', label:'採用費', t:'in' },
-    { k:'annualFeePay', label:'年会費', t:'in' },
-    { k:'salesOtherPay', label:'営業その他', t:'in' },
-    { k:'_out', label:'支出 計', t:'auto', fn:(g,i)=>outSum(g,i) },
-    { grp:'事業投資' },
-    { k:'investPay', label:'事業投資', t:'in' },
-    { grp:'財務収支' },
-    { k:'loanIn', label:'借入', t:'in' },
-    { k:'loanOut', label:'返済', t:'in' },
-    { k:'capitalIn', label:'増資', t:'in' },
-    { k:'warrantPay', label:'新株予約権', t:'in' },
-    { k:'finOtherPay', label:'財務その他', t:'in' },
-    { k:'_fin', label:'財務収支 計', t:'auto', fn:(g,i)=>finSum(g,i) },
-    { k:'_net', label:'当月CF', t:'auto', fn:(g,i)=>netCF(g,i) },
-    { k:'_close', label:'期末現金', t:'auto', bal:true, fn:(g,i)=>num(g.open,i)+netCF(g,i) },
-  ];
-  const BS_GROUPS_S = [
-    { grp:'資産', items:[['cash','現預金'],['receivable','売掛金'],['other_ca','その他流動資産'],['fixed','固定資産'],['other_nca','その他非流動資産']], total:'資産合計' },
-    { grp:'負債', items:[['payable','買掛金・未払金'],['borrowing_short','短期借入金'],['borrowing','長期借入金'],['other_cl','その他流動負債'],['other_ncl','その他固定負債']], total:'負債合計' },
-    { grp:'純資産', items:[['capital','資本金・資本剰余金'],['retained','利益剰余金（累積）'],['warrant','新株予約権'],['other_eq','その他純資産']], total:'純資産合計' },
-  ];
-  const PL_EDIT = PL_ROWS.filter(r => r.t === 'in').map(r => r.k);
-  const CF_EDIT = CF_ROWS.filter(r => r.t === 'in').map(r => r.k);
-  const BS_KEYS = BS_GROUPS_S.reduce((a, g) => a.concat(g.items.map(it => it[0])), []);
-  const ASSET_KEYS = BS_GROUPS_S[0].items.map(it => it[0]);
-  const LIAB_KEYS  = BS_GROUPS_S[1].items.map(it => it[0]);
-  const EQ_KEYS    = BS_GROUPS_S[2].items.map(it => it[0]);
+  const LS_SCHEMA = 'neo_hd_solo_schema';
+  const SCHEMA_ID = '__schema__';
 
-  // ── 計算ヘルパー ──
+  // ── 固定グループ（集計の所属）。fin は項目ごとの符号(sign)で集計 ──
+  const PL_GROUPS = [
+    { id:'revenue', label:'売上高' },
+    { id:'cogs',    label:'売上原価' },
+    { id:'sga',     label:'販管費' },
+  ];
+  const CF_GROUPS = [
+    { id:'cfIn',     label:'入金' },
+    { id:'fixedPay', label:'販管費（固定）' },
+    { id:'varPay',   label:'販管費（変動）' },
+    { id:'invest',   label:'事業投資' },
+    { id:'fin',      label:'財務収支' },
+  ];
+  const BS_GROUPS = [
+    { id:'asset',  label:'資産',   total:'資産合計' },
+    { id:'liab',   label:'負債',   total:'負債合計' },
+    { id:'equity', label:'純資産', total:'純資産合計' },
+  ];
+
+  // ── デフォルト科目スキーマ（月次財務と同一科目）。id を保持し、リネームしても値を維持 ──
+  const DEFAULT_SCHEMA = {
+    pl: {
+      revenue: [ {id:'rev', label:'売上高'} ],
+      cogs: [ {id:'cogsHomeroom',label:'ホームルーム'},{id:'cogsHyogikai',label:'評議会'},{id:'cogsOenKaigi',label:'応援会議'},{id:'cogsBigEvent',label:'大型イベント'},{id:'cogsOther',label:'その他原価'} ],
+      sga: [ {id:'labor',label:'人件費'},{id:'outsource',label:'業務委託費'},{id:'adv',label:'広告宣伝費'},{id:'gaichu',label:'外注費'},{id:'other',label:'その他販管費'} ],
+    },
+    cf: {
+      cfIn: [ {id:'cfInMembership',label:'会費収入'},{id:'cfInTraining',label:'研修収入'},{id:'cfInOther',label:'その他収入'} ],
+      fixedPay: [ {id:'salaryPay',label:'給与'},{id:'devOutPay',label:'開発外注'},{id:'bizComPay',label:'業務委託'},{id:'incentivePay',label:'インセンティブ'},{id:'expertPay',label:'専門家報酬'},{id:'rentPay',label:'地代家賃'} ],
+      varPay: [ {id:'expensePay',label:'経費'},{id:'telPay',label:'通信費'},{id:'entertainPay',label:'交際費'},{id:'taxPay',label:'租税公課'},{id:'toolsPay',label:'ツール'},{id:'suppliesPay',label:'備品'},{id:'adSportsPay',label:'広告'},{id:'eventCostPay',label:'イベント費'},{id:'recruitPay',label:'採用費'},{id:'annualFeePay',label:'年会費'},{id:'salesOtherPay',label:'営業その他'} ],
+      invest: [ {id:'investPay',label:'事業投資'} ],
+      fin: [ {id:'loanIn',label:'借入',sign:1},{id:'loanOut',label:'返済',sign:-1},{id:'capitalIn',label:'増資',sign:1},{id:'warrantPay',label:'新株予約権',sign:-1},{id:'finOtherPay',label:'財務その他',sign:-1} ],
+    },
+    bs: {
+      asset: [ {id:'cash',label:'現預金'},{id:'receivable',label:'売掛金'},{id:'other_ca',label:'その他流動資産'},{id:'fixed',label:'固定資産'},{id:'other_nca',label:'その他非流動資産'} ],
+      liab: [ {id:'payable',label:'買掛金・未払金'},{id:'borrowing_short',label:'短期借入金'},{id:'borrowing',label:'長期借入金'},{id:'other_cl',label:'その他流動負債'},{id:'other_ncl',label:'その他固定負債'} ],
+      equity: [ {id:'capital',label:'資本金・資本剰余金'},{id:'retained',label:'利益剰余金（累積）'},{id:'warrant',label:'新株予約権'},{id:'other_eq',label:'その他純資産'} ],
+    },
+  };
+  function clone(o){ return JSON.parse(JSON.stringify(o)); }
+  let SCHEMA = clone(DEFAULT_SCHEMA);
+
+  // ── ユーティリティ・集計 ──
   function num(arr, i){ const v = arr ? arr[i] : 0; return Number(v) || 0; }
-  function cogsSum(g, i){ return num(g.cogsHomeroom,i)+num(g.cogsHyogikai,i)+num(g.cogsOenKaigi,i)+num(g.cogsBigEvent,i)+num(g.cogsOther,i); }
-  function sgaSum(g, i){ return num(g.labor,i)+num(g.outsource,i)+num(g.adv,i)+num(g.gaichu,i)+num(g.other,i); }
-  function cfInSum(g, i){ return num(g.cfInMembership,i)+num(g.cfInTraining,i)+num(g.cfInOther,i); }
-  function outSum(g, i){
-    return num(g.salaryPay,i)+num(g.devOutPay,i)+num(g.bizComPay,i)+num(g.incentivePay,i)+num(g.expertPay,i)+num(g.rentPay,i)
-      + num(g.expensePay,i)+num(g.telPay,i)+num(g.entertainPay,i)+num(g.taxPay,i)+num(g.toolsPay,i)+num(g.suppliesPay,i)
-      + num(g.adSportsPay,i)+num(g.eventCostPay,i)+num(g.recruitPay,i)+num(g.annualFeePay,i)+num(g.salesOtherPay,i);
-  }
-  function finSum(g, i){ return num(g.loanIn,i)-num(g.loanOut,i)+num(g.capitalIn,i)-num(g.warrantPay,i)-num(g.finOtherPay,i); }
-  function netCF(g, i){ return cfInSum(g,i)-outSum(g,i)-num(g.investPay,i)+finSum(g,i); }
   function fmt(n){ return Number(n||0).toLocaleString('ja-JP'); }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function uid(){ return 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
+  function items(stmt, gid){ return (SCHEMA[stmt] && SCHEMA[stmt][gid]) || []; }
+  function visItems(stmt, gid){ return items(stmt, gid).filter(it => !it.hidden); }
+  // グループ集計（非表示は除外、符号適用）
+  function gSum(stmt, gid, g, i){ let s = 0; visItems(stmt, gid).forEach(it => { s += (it.sign || 1) * num(g[it.id], i); }); return s; }
+  // PL 自動計算
+  function plRev(g,i){ return gSum('pl','revenue',g,i); }
+  function plCogs(g,i){ return gSum('pl','cogs',g,i); }
+  function plGp(g,i){ return plRev(g,i) - plCogs(g,i); }
+  function plSga(g,i){ return gSum('pl','sga',g,i); }
+  function plOp(g,i){ return plGp(g,i) - plSga(g,i); }
+  // CF 自動計算
+  function cfInSum(g,i){ return gSum('cf','cfIn',g,i); }
+  function cfOut(g,i){ return gSum('cf','fixedPay',g,i) + gSum('cf','varPay',g,i); }
+  function cfInvest(g,i){ return gSum('cf','invest',g,i); }
+  function cfFin(g,i){ return gSum('cf','fin',g,i); }
+  function cfNet(g,i){ return cfInSum(g,i) - cfOut(g,i) - cfInvest(g,i) + cfFin(g,i); }
+  function cfClose(g,i){ return num(g.open,i) + cfNet(g,i); }
 
   // ── 状態・データ ──
-  const SOLO = { year: 2025, view: 'pl', mode: 'actual', data: {}, loaded: false };
+  const SOLO = { year: 2025, view: 'pl', mode: 'actual', editing: false, data: {}, loaded: false };
 
-  function emptyYear(){
-    const arr = () => Array(12).fill('');
-    const side = (keys) => { const o = {}; keys.forEach(k => o[k] = arr()); return o; };
-    const bsSide = () => { const o = {}; BS_KEYS.forEach(k => o[k] = 0); return o; };
-    return { pl:{ budget:side(PL_EDIT), actual:side(PL_EDIT) }, cf:{ budget:side(CF_EDIT), actual:side(CF_EDIT) }, bs:{ budget:bsSide(), actual:bsSide() } };
-  }
+  function emptyYear(){ return { pl:{ budget:{}, actual:{} }, cf:{ budget:{}, actual:{} }, bs:{ budget:{}, actual:{} } }; }
   function normalizeYear(raw){
     const y = emptyYear();
     if (!raw) return y;
+    ['pl','cf'].forEach(st => ['budget','actual'].forEach(md => {
+      const src = raw[st] && raw[st][md];
+      if (src && typeof src === 'object') Object.keys(src).forEach(k => { if (Array.isArray(src[k])) y[st][md][k] = src[k].slice(0,12); });
+    }));
     ['budget','actual'].forEach(md => {
-      PL_EDIT.forEach(k => { if (Array.isArray(raw.pl && raw.pl[md] && raw.pl[md][k])) y.pl[md][k] = raw.pl[md][k].slice(0,12); });
-      CF_EDIT.forEach(k => { if (Array.isArray(raw.cf && raw.cf[md] && raw.cf[md][k])) y.cf[md][k] = raw.cf[md][k].slice(0,12); });
-      BS_KEYS.forEach(k => { if (raw.bs && raw.bs[md] && raw.bs[md][k] != null) y.bs[md][k] = Number(raw.bs[md][k]) || 0; });
+      const src = raw.bs && raw.bs[md];
+      if (src && typeof src === 'object') Object.keys(src).forEach(k => { y.bs[md][k] = Number(src[k]) || 0; });
     });
     return y;
   }
@@ -16344,6 +16334,20 @@ document.addEventListener('DOMContentLoaded', function() {
       if (d && typeof d === 'object'){ Object.keys(d).forEach(y => { SOLO.data[y] = normalizeYear(d[y]); }); }
     } catch(e){ console.warn('[HDSOLO] load:', e.message); }
   }
+  // ── スキーマ永続化（全年度共通）──
+  function mergeSchema(s){
+    const out = clone(DEFAULT_SCHEMA);
+    if (s && typeof s === 'object'){
+      ['pl','cf','bs'].forEach(st => Object.keys(out[st]).forEach(gid => {
+        if (s[st] && Array.isArray(s[st][gid])) out[st][gid] = s[st][gid];
+      }));
+    }
+    return out;
+  }
+  function saveSchemaLocal(){ try { localStorage.setItem(LS_SCHEMA, JSON.stringify(SCHEMA)); } catch(e){} }
+  function loadSchemaLocal(){
+    try { const s = JSON.parse(localStorage.getItem(LS_SCHEMA) || 'null'); if (s) SCHEMA = mergeSchema(s); } catch(e){}
+  }
   async function sb(){
     if (typeof _sbReady !== 'undefined') { try { await _sbReady; } catch(e){} }
     return (typeof sbClient !== 'undefined' && sbClient) ? sbClient : null;
@@ -16353,7 +16357,11 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
       const r = await c.from('holdings_solo').select('*');
       if (r.error) throw r.error;
-      if (Array.isArray(r.data)){ r.data.forEach(row => { SOLO.data[row.id] = normalizeYear(row.data); }); saveLocal(); }
+      if (Array.isArray(r.data)) r.data.forEach(row => {
+        if (row.id === SCHEMA_ID){ if (row.data && row.data.pl) SCHEMA = mergeSchema(row.data); }
+        else SOLO.data[row.id] = normalizeYear(row.data);
+      });
+      saveLocal(); saveSchemaLocal();
       return true;
     } catch(e){ console.warn('[HDSOLO] remote load:', e.message); return false; }
   }
@@ -16364,52 +16372,119 @@ document.addEventListener('DOMContentLoaded', function() {
       if (r.error) throw r.error;
     } catch(e){ console.warn('[HDSOLO] upsert:', e.message); }
   }
+  async function upsertSchema(){
+    const c = await sb(); if (!c) return;
+    try {
+      const r = await c.from('holdings_solo').upsert({ id: SCHEMA_ID, data: SCHEMA, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+      if (r.error) throw r.error;
+    } catch(e){ console.warn('[HDSOLO] upsertSchema:', e.message); }
+  }
+  function saveSchema(){ saveSchemaLocal(); upsertSchema(); }
 
   // ── 描画 ──
   function inCell(stmt, key, i, val){
     return '<td><input type="number" class="hd-solo-in" value="' + (val === '' || val == null ? '' : val) + '" placeholder="0" onchange="HDSOLO.setCell(\'' + stmt + '\',\'' + key + '\',' + i + ',this.value)"></td>';
   }
-  function monthlyTable(stmt, rows, g){
+  function ctrlCell(stmt, gid, it){
+    const hidden = !!it.hidden;
+    return '<div class="hd-edit-cell">'
+      + '<input class="hd-solo-in hd-lbl" value="' + esc(it.label) + '" onchange="HDSOLO.renameItem(\'' + stmt + '\',\'' + gid + '\',\'' + it.id + '\',this.value)">'
+      + '<button class="hd-mini" title="上へ" onclick="HDSOLO.moveItem(\'' + stmt + '\',\'' + gid + '\',\'' + it.id + '\',-1)">↑</button>'
+      + '<button class="hd-mini" title="下へ" onclick="HDSOLO.moveItem(\'' + stmt + '\',\'' + gid + '\',\'' + it.id + '\',1)">↓</button>'
+      + '<button class="hd-mini" title="表示/非表示" onclick="HDSOLO.toggleHidden(\'' + stmt + '\',\'' + gid + '\',\'' + it.id + '\')">' + (hidden ? '🚫' : '👁') + '</button>'
+      + (gid === 'fin' ? '<select class="hd-mini-sel" onchange="HDSOLO.setSign(\'' + stmt + '\',\'' + gid + '\',\'' + it.id + '\',this.value)"><option value="1"' + ((it.sign||1) >= 0 ? ' selected' : '') + '>収入(+)</option><option value="-1"' + ((it.sign||1) < 0 ? ' selected' : '') + '>支出(−)</option></select>' : '')
+      + '<button class="hd-mini hd-del" title="削除" onclick="HDSOLO.deleteItem(\'' + stmt + '\',\'' + gid + '\',\'' + it.id + '\')">🗑</button>'
+      + '</div>';
+  }
+  function pushItems(L, stmt, gid){
+    const its = SOLO.editing ? items(stmt, gid) : visItems(stmt, gid);
+    its.forEach(it => L.push({ type:'item', stmt:stmt, gid:gid, it:it }));
+    if (SOLO.editing) L.push({ type:'add', stmt:stmt, gid:gid });
+  }
+  function plLayout(){
+    const L = [];
+    L.push({ type:'group', label:'売上高' }); pushItems(L,'pl','revenue');
+    if (visItems('pl','revenue').length > 1) L.push({ type:'auto', label:'売上高 計', fn:plRev });
+    L.push({ type:'group', label:'売上原価' }); pushItems(L,'pl','cogs');
+    L.push({ type:'auto', label:'売上原価 計', fn:plCogs });
+    L.push({ type:'auto', label:'売上総利益（粗利）', fn:plGp });
+    L.push({ type:'group', label:'販管費' }); pushItems(L,'pl','sga');
+    L.push({ type:'auto', label:'販管費 計', fn:plSga });
+    L.push({ type:'auto', label:'営業利益', fn:plOp });
+    return L;
+  }
+  function cfLayout(){
+    const L = [];
+    L.push({ type:'special', stmt:'cf', key:'open', label:'期首現金', bal:true });
+    L.push({ type:'group', label:'入金' }); pushItems(L,'cf','cfIn');
+    L.push({ type:'auto', label:'入金 計', fn:cfInSum });
+    L.push({ type:'group', label:'販管費（固定）' }); pushItems(L,'cf','fixedPay');
+    L.push({ type:'group', label:'販管費（変動）' }); pushItems(L,'cf','varPay');
+    L.push({ type:'auto', label:'支出 計（固定+変動）', fn:cfOut });
+    L.push({ type:'group', label:'事業投資' }); pushItems(L,'cf','invest');
+    if (visItems('cf','invest').length > 1) L.push({ type:'auto', label:'事業投資 計', fn:cfInvest });
+    L.push({ type:'group', label:'財務収支（収入+/支出−）' }); pushItems(L,'cf','fin');
+    L.push({ type:'auto', label:'財務収支 計', fn:cfFin });
+    L.push({ type:'auto', label:'当月CF', fn:cfNet });
+    L.push({ type:'auto', label:'期末現金', fn:cfClose, bal:true });
+    return L;
+  }
+  function monthlyTable(stmt, layout, g){
+    const COLS = 14;
     let h = '<table class="hd-solo-tbl"><thead><tr><th>科目</th>';
     ML.forEach(m => { h += '<th>' + m + '</th>'; });
     h += '<th>年計</th></tr></thead><tbody>';
-    rows.forEach(r => {
-      if (r.grp){ h += '<tr class="hd-grp"><td colspan="14">' + r.grp + '</td></tr>'; return; }
-      const isAuto = r.t === 'auto';
-      h += '<tr class="' + (isAuto ? 'hd-auto' : '') + '"><td>' + r.label + '</td>';
-      let total = 0;
-      for (let i = 0; i < 12; i++){
-        if (isAuto){ const v = r.fn(g, i); total += v; h += '<td>' + fmt(v) + '</td>'; }
-        else { const v = num(g[r.k], i); total += v; h += inCell(stmt, r.k, i, g[r.k] ? g[r.k][i] : ''); }
+    layout.forEach(r => {
+      if (r.type === 'group'){ h += '<tr class="hd-grp"><td colspan="' + COLS + '">' + esc(r.label) + '</td></tr>'; return; }
+      if (r.type === 'add'){ h += '<tr class="hd-add-row"><td colspan="' + COLS + '"><button class="btn" style="font-size:9px;padding:2px 8px" onclick="HDSOLO.addItem(\'' + r.stmt + '\',\'' + r.gid + '\')">＋ 科目を追加</button></td></tr>'; return; }
+      if (r.type === 'auto'){
+        h += '<tr class="hd-auto"><td>' + esc(r.label) + '</td>';
+        let total = 0;
+        for (let i = 0; i < 12; i++){ const v = r.fn(g, i); total += v; h += '<td>' + fmt(v) + '</td>'; }
+        h += '<td class="hd-total-col">' + fmt(r.bal ? r.fn(g, 11) : total) + '</td></tr>';
+        return;
       }
-      // 年計: 残高系(期首/期末)は期末(=i11)を表示、その他はフロー合計
-      const totalCell = r.bal ? (isAuto ? r.fn(g, 11) : num(g[r.k], 11)) : total;
-      h += '<td class="hd-total-col">' + fmt(totalCell) + '</td></tr>';
+      if (r.type === 'special'){
+        h += '<tr><td>' + esc(r.label) + '</td>';
+        let total = 0;
+        for (let i = 0; i < 12; i++){ total += num(g[r.key], i); h += inCell(stmt, r.key, i, g[r.key] ? g[r.key][i] : ''); }
+        h += '<td class="hd-total-col">' + fmt(r.bal ? num(g[r.key], 11) : total) + '</td></tr>';
+        return;
+      }
+      // item
+      const it = r.it;
+      const first = SOLO.editing ? ctrlCell(r.stmt, r.gid, it) : esc(it.label);
+      h += '<tr class="hd-item' + (it.hidden ? ' hd-hidden' : '') + '"><td>' + first + '</td>';
+      let total = 0;
+      for (let i = 0; i < 12; i++){ total += num(g[it.id], i); h += inCell(stmt, it.id, i, g[it.id] ? g[it.id][i] : ''); }
+      h += '<td class="hd-total-col">' + fmt(total) + '</td></tr>';
     });
     h += '</tbody></table>';
     return h;
   }
   function bsTable(year){
     const d = getYear(year).bs;
-    const sum = (md, keys) => keys.reduce((a, k) => a + (Number(d[md][k]) || 0), 0);
+    const sumG = (md, gid) => visItems('bs', gid).reduce((a, it) => a + (Number(d[md][it.id]) || 0), 0);
     let h = '<table class="hd-solo-bs"><thead><tr><th>科目</th><th>予算</th><th>実績</th></tr></thead><tbody>';
-    BS_GROUPS_S.forEach(g => {
-      h += '<tr class="hd-grp"><td colspan="3">' + g.grp + '</td></tr>';
-      g.items.forEach(it => {
-        const k = it[0];
-        h += '<tr><td>' + it[1] + '</td>'
-          + '<td><input type="number" class="hd-solo-in" value="' + (d.budget[k] || '') + '" onchange="HDSOLO.setBS(\'' + k + '\',\'budget\',this.value)"></td>'
-          + '<td><input type="number" class="hd-solo-in" value="' + (d.actual[k] || '') + '" onchange="HDSOLO.setBS(\'' + k + '\',\'actual\',this.value)"></td></tr>';
+    BS_GROUPS.forEach(grp => {
+      h += '<tr class="hd-grp"><td colspan="3">' + esc(grp.label) + '</td></tr>';
+      const its = SOLO.editing ? items('bs', grp.id) : visItems('bs', grp.id);
+      its.forEach(it => {
+        const first = SOLO.editing ? ctrlCell('bs', grp.id, it) : esc(it.label);
+        h += '<tr class="hd-item' + (it.hidden ? ' hd-hidden' : '') + '"><td>' + first + '</td>'
+          + '<td><input type="number" class="hd-solo-in" value="' + (d.budget[it.id] || '') + '" onchange="HDSOLO.setBS(\'' + it.id + '\',\'budget\',this.value)"></td>'
+          + '<td><input type="number" class="hd-solo-in" value="' + (d.actual[it.id] || '') + '" onchange="HDSOLO.setBS(\'' + it.id + '\',\'actual\',this.value)"></td></tr>';
       });
-      const keys = g.items.map(it => it[0]);
-      h += '<tr class="hd-auto"><td>' + g.total + '</td><td>' + fmt(sum('budget', keys)) + '</td><td>' + fmt(sum('actual', keys)) + '</td></tr>';
+      if (SOLO.editing) h += '<tr class="hd-add-row"><td colspan="3"><button class="btn" style="font-size:9px;padding:2px 8px" onclick="HDSOLO.addItem(\'bs\',\'' + grp.id + '\')">＋ 科目を追加</button></td></tr>';
+      h += '<tr class="hd-auto"><td>' + grp.total + '</td><td>' + fmt(sumG('budget', grp.id)) + '</td><td>' + fmt(sumG('actual', grp.id)) + '</td></tr>';
     });
-    const leB = sum('budget', LIAB_KEYS) + sum('budget', EQ_KEYS);
-    const leA = sum('actual', LIAB_KEYS) + sum('actual', EQ_KEYS);
-    const taB = sum('budget', ASSET_KEYS), taA = sum('actual', ASSET_KEYS);
+    const eqB = sumG('budget','equity'), eqA = sumG('actual','equity');
+    const liB = sumG('budget','liab'),   liA = sumG('actual','liab');
+    const taB = sumG('budget','asset'),  taA = sumG('actual','asset');
+    const leB = liB + eqB, leA = liA + eqA;
     const ratio = (eq, asset) => asset ? Math.round(eq / asset * 1000) / 10 : 0;
     h += '<tr class="hd-auto"><td>負債純資産合計</td><td>' + fmt(leB) + '</td><td>' + fmt(leA) + '</td></tr>';
-    h += '<tr class="hd-auto"><td>自己資本比率</td><td>' + ratio(sum('budget', EQ_KEYS), taB) + '%</td><td>' + ratio(sum('actual', EQ_KEYS), taA) + '%</td></tr>';
+    h += '<tr class="hd-auto"><td>自己資本比率</td><td>' + ratio(eqB, taB) + '%</td><td>' + ratio(eqA, taA) + '%</td></tr>';
     h += '</tbody></table>';
     const diffB = taB - leB, diffA = taA - leA;
     h += '<div class="hd-note">バランス差額（資産−負債純資産）: 予算 ' + (diffB === 0 ? '0' : '<span class="hd-elim">' + fmt(diffB) + '</span>') + ' / 実績 ' + (diffA === 0 ? '0' : '<span class="hd-elim">' + fmt(diffA) + '</span>')
@@ -16421,21 +16496,32 @@ document.addEventListener('DOMContentLoaded', function() {
     const yd = getYear(year);
     const pa = yd.pl.actual, ca = yd.cf.actual, ba = yd.bs.actual;
     let rev = 0, op = 0, net = 0;
-    for (let i = 0; i < 12; i++){ rev += num(pa.rev, i); op += num(pa.rev, i) - cogsSum(pa, i) - sgaSum(pa, i); net += netCF(ca, i); }
+    for (let i = 0; i < 12; i++){ rev += plRev(pa, i); op += plOp(pa, i); net += cfNet(ca, i); }
     const endCash = num(ca.open, 0) + net;
-    const equity = EQ_KEYS.reduce((a, k) => a + (Number(ba[k]) || 0), 0);
-    const card = (label, val, sub) => '<div class="mc"><div class="mc-l">' + label + '</div><div class="mc-v">' + fmt(val) + '</div><div class="mc-s">' + (sub || '千円') + '</div></div>';
+    const equity = visItems('bs','equity').reduce((a, it) => a + (Number(ba[it.id]) || 0), 0);
+    const card = (label, val) => '<div class="mc"><div class="mc-l">' + label + '</div><div class="mc-v">' + fmt(val) + '</div><div class="mc-s">千円</div></div>';
     el.innerHTML = card('売上高(実績/年)', rev) + card('営業利益(実績/年)', op) + card('期末現金(実績)', endCash) + card('純資産(実績)', equity);
+  }
+  function editBar(){
+    let h = '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">';
+    h += '<button class="btn ' + (SOLO.editing ? 'btn-p' : '') + '" style="font-size:10px;padding:4px 12px" onclick="HDSOLO.toggleEdit()">' + (SOLO.editing ? '✓ 編集を終了' : '⚙ 科目を編集') + '</button>';
+    if (SOLO.editing){
+      h += '<button class="btn" style="font-size:10px;padding:4px 12px;color:var(--tc-red);border-color:var(--tc-red)" onclick="HDSOLO.resetSchema()">デフォルトに戻す</button>';
+      h += '<span class="hd-note" style="margin:0">名称変更・追加(＋)・削除(🗑)・並べ替え(↑↓)・表示/非表示(👁)。非表示の科目は集計から除外。科目定義は全年度共通です。</span>';
+    }
+    h += '</div>';
+    return h;
   }
   function draw(){
     const year = SOLO.year;
     renderKPI(year);
     const body = $('hd-solo-body'); if (!body) return;
     const yd = getYear(year);
-    if (SOLO.view === 'pl') body.innerHTML = monthlyTable('pl', PL_ROWS, yd.pl[SOLO.mode]);
-    else if (SOLO.view === 'cf') body.innerHTML = monthlyTable('cf', CF_ROWS, yd.cf[SOLO.mode]);
-    else body.innerHTML = bsTable(year);
-    // モード切替（BS時は予算/実績トグルを隠す）
+    let html = editBar();
+    if (SOLO.view === 'pl') html += monthlyTable('pl', plLayout(), yd.pl[SOLO.mode]);
+    else if (SOLO.view === 'cf') html += monthlyTable('cf', cfLayout(), yd.cf[SOLO.mode]);
+    else html += bsTable(year);
+    body.innerHTML = html;
     const mt = $('hd-solo-mode'); if (mt) mt.style.display = (SOLO.view === 'bs') ? 'none' : '';
   }
 
@@ -16444,7 +16530,7 @@ document.addEventListener('DOMContentLoaded', function() {
       SOLO.year = Number(year) || SOLO.year;
       if (!SOLO.loaded){
         SOLO.loaded = true;
-        loadLocal(); draw();
+        loadSchemaLocal(); loadLocal(); draw();
         loadRemote().then(ok => { if (ok) draw(); });
         return;
       }
@@ -16460,6 +16546,7 @@ document.addEventListener('DOMContentLoaded', function() {
       document.querySelectorAll('#hd-solo-mode .pa-btn').forEach(b => b.classList.toggle('active', b === btn));
       draw();
     },
+    toggleEdit: function(){ SOLO.editing = !SOLO.editing; draw(); },
     setCell: function(stmt, key, i, val){
       const g = getYear(SOLO.year)[stmt][SOLO.mode];
       if (!Array.isArray(g[key])) g[key] = Array(12).fill('');
@@ -16469,6 +16556,48 @@ document.addEventListener('DOMContentLoaded', function() {
     setBS: function(key, mode, val){
       getYear(SOLO.year).bs[mode][key] = (val === '' ? 0 : Math.round(Number(val) || 0));
       saveLocal(); upsertYear(SOLO.year); draw();
+    },
+    addItem: function(stmt, gid){
+      const it = { id: uid(), label: '新規科目' };
+      if (gid === 'fin') it.sign = 1;
+      if (!SCHEMA[stmt][gid]) SCHEMA[stmt][gid] = [];
+      SCHEMA[stmt][gid].push(it);
+      saveSchema(); draw();
+    },
+    renameItem: function(stmt, gid, id, label){
+      const it = (SCHEMA[stmt][gid] || []).find(x => x.id === id);
+      if (it){ it.label = label; saveSchema(); }
+    },
+    deleteItem: function(stmt, gid, id){
+      if (!confirm('この科目を削除しますか？入力済みの値も全年度で削除されます。')) return;
+      SCHEMA[stmt][gid] = (SCHEMA[stmt][gid] || []).filter(x => x.id !== id);
+      Object.keys(SOLO.data).forEach(y => {
+        const yd = SOLO.data[y];
+        if (stmt === 'bs'){ delete yd.bs.budget[id]; delete yd.bs.actual[id]; }
+        else { delete yd[stmt].budget[id]; delete yd[stmt].actual[id]; }
+        upsertYear(y);
+      });
+      saveSchema(); saveLocal(); draw();
+    },
+    moveItem: function(stmt, gid, id, dir){
+      const arr = SCHEMA[stmt][gid] || [];
+      const i = arr.findIndex(x => x.id === id), j = i + dir;
+      if (i < 0 || j < 0 || j >= arr.length) return;
+      const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+      saveSchema(); draw();
+    },
+    toggleHidden: function(stmt, gid, id){
+      const it = (SCHEMA[stmt][gid] || []).find(x => x.id === id);
+      if (it){ it.hidden = !it.hidden; saveSchema(); draw(); }
+    },
+    setSign: function(stmt, gid, id, val){
+      const it = (SCHEMA[stmt][gid] || []).find(x => x.id === id);
+      if (it){ it.sign = Number(val) < 0 ? -1 : 1; saveSchema(); draw(); }
+    },
+    resetSchema: function(){
+      if (!confirm('科目をデフォルト構成に戻しますか？（入力済みの値は保持されます）')) return;
+      SCHEMA = clone(DEFAULT_SCHEMA);
+      saveSchema(); draw();
     },
   };
   window.HDSOLO = HDSOLO;
