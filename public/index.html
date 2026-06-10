@@ -691,6 +691,14 @@ input.cells-edit-input {
 #sec-hd .hd-mgr-empty{font-size:10px;color:var(--text3);padding:5px 0}
 #sec-hd .hd-mgr-add{margin-top:8px;font-size:11px;padding:6px 12px;border:1px dashed var(--border2);border-radius:7px;background:transparent;color:var(--text2);cursor:pointer;font-family:inherit;width:100%}
 #sec-hd .hd-mgr-add:hover{background:var(--bg2);border-color:#5aabf0;color:var(--text)}
+#sec-hd .hd-mgr-handle{flex:0 0 auto;cursor:grab;color:var(--text3);font-size:15px;line-height:1;letter-spacing:-3px;padding:0 4px 0 0;user-select:none}
+#sec-hd .hd-mgr-handle:active{cursor:grabbing}
+#sec-hd .hd-mgr-row.hd-dragging{opacity:0.4}
+#sec-hd .hd-mgr-row.hd-drop-target{border-top:2px solid #4f46e5}
+#sec-hd .hd-mgr-vis{flex:0 0 auto;display:flex;align-items:center;margin:0}
+#sec-hd .hd-mgr-vis input{cursor:pointer;width:15px;height:15px}
+#sec-hd .hd-mgr-del{flex:0 0 auto;width:22px;height:22px;line-height:1;font-size:15px;border:1px solid var(--border2);border-radius:5px;background:var(--bg);color:var(--text3);cursor:pointer;font-family:inherit;padding:0}
+#sec-hd .hd-mgr-del:hover{color:var(--tc-red);border-color:var(--tc-red)}
 /* HD会社追加モーダル（セクション外配置・素クラス） */
 .hd-modal{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center}
 .hd-modal.on{display:flex}
@@ -16526,6 +16534,20 @@ document.addEventListener('DOMContentLoaded', function() {
     h += '</div>';
     return h;
   }
+  function reorderBefore(stmt, gid, fromId, toId){
+    const arr = SCHEMA[stmt] && SCHEMA[stmt][gid];
+    if (!arr) return;
+    const fi = arr.findIndex(x => x.id === fromId);
+    if (fi < 0) return;
+    const moved = arr.splice(fi, 1)[0];
+    let ti = arr.findIndex(x => x.id === toId);
+    if (ti < 0) ti = arr.length;
+    arr.splice(ti, 0, moved);
+    saveSchema();
+  }
+  function clearDragClasses(){
+    document.querySelectorAll('#hd-solo-body .hd-mgr-row').forEach(r => r.classList.remove('hd-dragging', 'hd-drop-target'));
+  }
   function schemaManager(view){
     const stmt = view; // 'pl' | 'cf' | 'bs'
     const groups = stmt === 'pl' ? PL_GROUPS : (stmt === 'cf' ? CF_GROUPS : BS_GROUPS);
@@ -16537,15 +16559,18 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!its.length) h += '<div class="hd-mgr-empty">科目がありません。下のボタンから追加してください。</div>';
       its.forEach((it, idx) => {
         const a = "'" + stmt + "','" + grp.id + "','" + it.id + "'";
-        h += '<div class="hd-mgr-row' + (it.hidden ? ' hd-hidden' : '') + '">'
-          + '<div class="hd-mgr-ord">'
-          +   '<button class="hd-mini" ' + (idx === 0 ? 'disabled' : '') + ' title="上へ" onclick="HDSOLO.moveItem(' + a + ',-1)">↑</button>'
-          +   '<button class="hd-mini" ' + (idx === its.length - 1 ? 'disabled' : '') + ' title="下へ" onclick="HDSOLO.moveItem(' + a + ',1)">↓</button>'
-          + '</div>'
+        h += '<div class="hd-mgr-row' + (it.hidden ? ' hd-hidden' : '') + '" draggable="true"'
+          + ' data-stmt="' + stmt + '" data-gid="' + grp.id + '" data-id="' + it.id + '"'
+          + ' ondragstart="HDSOLO.dragStart(event,' + a + ')"'
+          + ' ondragover="HDSOLO.dragOver(event)"'
+          + ' ondragleave="HDSOLO.dragLeave(event)"'
+          + ' ondrop="HDSOLO.drop(event,' + a + ')"'
+          + ' ondragend="HDSOLO.dragEnd(event)">'
+          + '<span class="hd-mgr-handle" title="ドラッグで並べ替え">⋮⋮</span>'
           + '<input class="hd-mgr-name" value="' + esc(it.label) + '" onchange="HDSOLO.renameItem(' + a + ',this.value)">'
           + (grp.id === 'fin' ? '<select class="hd-mini-sel" onchange="HDSOLO.setSign(' + a + ',this.value)"><option value="1"' + ((it.sign||1) >= 0 ? ' selected' : '') + '>収入(+)</option><option value="-1"' + ((it.sign||1) < 0 ? ' selected' : '') + '>支出(−)</option></select>' : '')
-          + '<button class="hd-mini" title="表示/非表示の切替" onclick="HDSOLO.toggleHidden(' + a + ')">' + (it.hidden ? '🚫 非表示' : '👁 表示') + '</button>'
-          + '<button class="hd-mini hd-del" title="削除" onclick="HDSOLO.deleteItem(' + a + ')">🗑</button>'
+          + '<label class="hd-mgr-vis" title="チェックで表示"><input type="checkbox" ' + (it.hidden ? '' : 'checked') + ' onchange="HDSOLO.toggleHidden(' + a + ')"></label>'
+          + '<button class="hd-mgr-del" title="削除" onclick="HDSOLO.deleteItem(' + a + ')">×</button>'
           + '</div>';
       });
       h += '<button class="hd-mgr-add" onclick="HDSOLO.addItem(\'' + stmt + '\',\'' + grp.id + '\')">＋ 科目を追加</button>';
@@ -16646,6 +16671,36 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!confirm('科目をデフォルト構成に戻しますか？（入力済みの値は保持されます）')) return;
       SCHEMA = clone(DEFAULT_SCHEMA);
       saveSchema(); draw();
+    },
+    // ── ドラッグ&ドロップ並べ替え（同一グループ内・vanilla）──
+    dragStart: function(e, stmt, gid, id){
+      SOLO._drag = { stmt: stmt, gid: gid, id: id };
+      try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch(_){}
+      const row = e.currentTarget; if (row && row.classList) row.classList.add('hd-dragging');
+    },
+    dragOver: function(e){
+      const d = SOLO._drag; if (!d) return;
+      const row = e.currentTarget;
+      // 同一グループのみドロップ可
+      if (!row || row.dataset.stmt !== d.stmt || row.dataset.gid !== d.gid) return;
+      e.preventDefault();
+      try { e.dataTransfer.dropEffect = 'move'; } catch(_){}
+      if (!row.classList.contains('hd-dragging')) row.classList.add('hd-drop-target');
+    },
+    dragLeave: function(e){
+      const row = e.currentTarget; if (row && row.classList) row.classList.remove('hd-drop-target');
+    },
+    drop: function(e, stmt, gid, id){
+      e.preventDefault();
+      const d = SOLO._drag;
+      if (d && d.stmt === stmt && d.gid === gid && d.id !== id) reorderBefore(stmt, gid, d.id, id);
+      SOLO._drag = null;
+      clearDragClasses();
+      draw();
+    },
+    dragEnd: function(){
+      SOLO._drag = null;
+      clearDragClasses();
     },
   };
   window.HDSOLO = HDSOLO;
