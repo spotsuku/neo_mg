@@ -2384,8 +2384,7 @@ function setEntity(ent, el) {
   currentEntity = ent;
   try { localStorage.setItem('neo_entity', ent); } catch(e) {}
   document.querySelectorAll('.entity-bar .ent-btn').forEach(b => b.classList.toggle('active', b.dataset.ent === ent));
-  const logoEl = document.querySelector('.nav-title .logo');
-  if (logoEl) logoEl.textContent = ENTITY_TITLES[ent] || ENTITY_TITLES.neo;
+  // 注: タイトルは会社選択ドロップダウン(#company-sel)になったため textContent では上書きしない
 
   // 対象に属するタブだけ表示
   let firstTab = null, firstBtn = null;
