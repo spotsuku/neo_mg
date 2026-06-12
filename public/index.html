@@ -749,6 +749,13 @@ input.cells-edit-input {
 .wf-modal label{display:block;font-size:11px;margin-bottom:4px;color:var(--text3)}
 .wf-modal input{width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;margin-bottom:10px;font-size:12px;background:var(--bg);color:var(--text);font-family:inherit}
 .wf-modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+/* 対象（エンティティ）切替バー：ページ全体の最上位階層 */
+.entity-bar{display:flex;gap:8px;align-items:center;padding:9px 18px;background:var(--bg2);border-bottom:1px solid var(--border);flex-wrap:wrap}
+.entity-bar .ent-label{font-size:10px;color:var(--text3);margin-right:2px;font-weight:700;letter-spacing:.02em}
+.ent-btn{padding:7px 18px;font-size:12px;font-weight:700;border:1px solid var(--border2);border-radius:9px;background:var(--bg);color:var(--text2);cursor:pointer;font-family:inherit;transition:background .15s,color .15s,border-color .15s}
+.ent-btn:hover{border-color:var(--text3)}
+.ent-btn.active{background:var(--text);color:var(--bg);border-color:var(--text)}
+.ent-btn .ent-sub{font-size:9px;font-weight:500;opacity:.7;margin-left:5px}
 </style>
 </head>
 <body>
@@ -790,20 +797,28 @@ input.cells-edit-input {
         <button class="yt" onclick="setYear('2026',this)">2026年度</button>
       </div>
       <div class="tabs">
-        <button class="tab active" onclick="sw('weekly',this)">📊 サマリー</button>
-        <button class="tab" onclick="sw('pl-cf',this)">📈 月次財務</button>
-        <button class="tab" onclick="sw('import',this)">🔗 MF連携</button>
-        <button class="tab" onclick="sw('sim',this)">🔮 シミュレーション</button>
-        <button class="tab" onclick="sw('workforce',this)">⚙️ 工数管理</button>
-        <button class="tab" onclick="sw('payroll',this)">💴 人件費</button>
-        <button class="tab" onclick="sw('expense',this)">💳 経費申請</button>
-        <button class="tab" onclick="sw('report',this)">📋 月次レポート</button>
-        <button class="tab" onclick="sw('pdf',this)">📄 役員PDF</button>
-        <button class="tab" onclick="sw('hd',this)">🏢 HD管理</button>
-        <button class="tab" onclick="sw('gsummary',this)">📊 経営サマリー</button>
+        <button class="tab active" data-ent="neo" data-tab="weekly" onclick="sw('weekly',this)">📊 サマリー</button>
+        <button class="tab" data-ent="neo" data-tab="pl-cf" onclick="sw('pl-cf',this)">📈 月次財務</button>
+        <button class="tab" data-ent="neo" data-tab="import" onclick="sw('import',this)">🔗 MF連携</button>
+        <button class="tab" data-ent="neo" data-tab="sim" onclick="sw('sim',this)">🔮 シミュレーション</button>
+        <button class="tab" data-ent="neo" data-tab="workforce" onclick="sw('workforce',this)">⚙️ 工数管理</button>
+        <button class="tab" data-ent="neo" data-tab="payroll" onclick="sw('payroll',this)">💴 人件費</button>
+        <button class="tab" data-ent="neo" data-tab="expense" onclick="sw('expense',this)">💳 経費申請</button>
+        <button class="tab" data-ent="neo" data-tab="report" onclick="sw('report',this)">📋 月次レポート</button>
+        <button class="tab" data-ent="neo" data-tab="pdf" onclick="sw('pdf',this)">📄 役員PDF</button>
+        <button class="tab" data-ent="group solo" data-tab="gsummary" onclick="sw('gsummary',this)">📊 経営サマリー</button>
+        <button class="tab" data-ent="group solo" data-tab="hd" onclick="sw('hd',this)">📑 財務・連結</button>
       </div>
     </div>
   </div>
+</div>
+
+<!-- ── 対象（エンティティ）切替：ページ全体の最上位階層 ── -->
+<div class="entity-bar" id="entity-bar">
+  <span class="ent-label">対象</span>
+  <button class="ent-btn active" data-ent="group" onclick="setEntity('group',this)">🏢 HD連結<span class="ent-sub">グループ全体</span></button>
+  <button class="ent-btn" data-ent="solo" onclick="setEntity('solo',this)">🏛 HD単独<span class="ent-sub">持株会社</span></button>
+  <button class="ent-btn" data-ent="neo" onclick="setEntity('neo',this)">🏪 NEO福岡<span class="ent-sub">子会社</span></button>
 </div>
 
 <!-- ──────────────────────────────────────
@@ -2354,6 +2369,39 @@ function sw(id, el) {
   if (id === 'expense' && window.EXPENSE) setTimeout(() => window.EXPENSE.init(), 30);
   if (id === 'hd' && window.HD) setTimeout(() => window.HD.init(), 30);
   if (id === 'gsummary' && window.GSUMMARY) setTimeout(() => window.GSUMMARY.render(), 30);
+}
+
+// ── 対象（エンティティ）切替：ページ全体を HD連結 / HD単独 / 子会社(NEO福岡) で切替える ──
+let currentEntity = 'group';
+const ENTITY_TITLES = {
+  group: 'NEOホールディングス ｜ 連結ダッシュボード',
+  solo:  'NEOホールディングス ｜ 単体ダッシュボード',
+  neo:   'NEO福岡 ｜ 経営ダッシュボード',
+};
+function setEntity(ent, el) {
+  currentEntity = ent;
+  try { localStorage.setItem('neo_entity', ent); } catch(e) {}
+  document.querySelectorAll('.entity-bar .ent-btn').forEach(b => b.classList.toggle('active', b.dataset.ent === ent));
+  const logoEl = document.querySelector('.nav-title .logo');
+  if (logoEl) logoEl.textContent = ENTITY_TITLES[ent] || ENTITY_TITLES.neo;
+
+  // 対象に属するタブだけ表示
+  let firstTab = null, firstBtn = null;
+  document.querySelectorAll('.tabs .tab').forEach(b => {
+    const ents = (b.dataset.ent || '').split(' ');
+    const show = ents.indexOf(ent) >= 0;
+    b.style.display = show ? '' : 'none';
+    if (show && !firstTab) { firstTab = b.dataset.tab; firstBtn = b; }
+  });
+
+  // 対象コンテキストを各モジュールへ反映
+  if ((ent === 'group' || ent === 'solo') && window.GSUMMARY && window.GSUMMARY.setScope) window.GSUMMARY.setScope(ent);
+  if (window.HD && window.HD.applyEntity) window.HD.applyEntity(ent);
+
+  // 現在のアクティブタブが対象外なら、対象の先頭タブへ切替（対象内なら維持）
+  const activeTab = document.querySelector('.tabs .tab.active');
+  const activeBelongs = activeTab && (activeTab.dataset.ent || '').split(' ').indexOf(ent) >= 0 && activeTab.style.display !== 'none';
+  if (!activeBelongs && firstBtn) sw(firstTab, firstBtn);
 }
 
 function setYear(y, el) {
@@ -11338,6 +11386,13 @@ window.addEventListener('load', async () => {
       if (tBtns[tIdx]) sw(savedTab, tBtns[tIdx]);
     }
   } catch(e) { console.warn('restore tab/year:', e); }
+
+  // 対象（エンティティ）を復元・適用（既定は HD連結）。タブ復元の後に実行して対象が支配する。
+  try {
+    const savedEnt = localStorage.getItem('neo_entity') || 'group';
+    const entBtn = document.querySelector('.entity-bar .ent-btn[data-ent="' + savedEnt + '"]');
+    setEntity(savedEnt, entBtn);
+  } catch(e) { console.warn('restore entity:', e); }
 });
 </script>
     <script>
@@ -16301,6 +16356,16 @@ document.addEventListener('DOMContentLoaded', function() {
       return { revCum: sales, cogsCum: cogs, gpCum: gp, sgaCum: sgaCum, opCum: op, budSga: 0, cash: cash, equity: equity, asset: asset, revA: revA, revB: null, sgaByItem: sgaByItem, burn: Math.max(0, -op / 12), overItems: [], hasBudget: false, companyCount: ids.length };
     },
     ensureLoaded: function(){ if (!state.initialized){ state.initialized = true; loadLocal(); loadRemote(); } },
+    // 対象（エンティティ）に応じて表示するサブタブを出し分け
+    applyEntity: function(ent){
+      const allowed = (ent === 'solo') ? ['solo'] : ['consolidated','companies','financials','intercompany'];
+      document.querySelectorAll('#hd-subtabs .pa-btn').forEach(b => {
+        b.style.display = allowed.indexOf(b.dataset.panel) >= 0 ? '' : 'none';
+      });
+      const firstP = allowed[0];
+      const btn = document.querySelector('#hd-subtabs .pa-btn[data-panel="' + firstP + '"]');
+      if (btn) HD.switchPanel(firstP, btn);
+    },
   };
   window.HD = HD;
 })();
@@ -16954,6 +17019,13 @@ document.addEventListener('DOMContentLoaded', function() {
     switchScope: function(s, btn){
       scope = s;
       document.querySelectorAll('#gs-scope .pa-btn').forEach(b => b.classList.toggle('active', b === btn));
+      render();
+    },
+    // 対象バー（エンティティ）からスコープを設定。内部トグルは対象バーに統合するため隠す。
+    setScope: function(s){
+      scope = s;
+      const sc = $('gs-scope'); if (sc) sc.style.display = 'none';
+      document.querySelectorAll('#gs-scope .pa-btn').forEach(b => b.classList.toggle('active', b.dataset.scope === s));
       render();
     },
   };

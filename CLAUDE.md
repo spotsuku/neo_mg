@@ -79,6 +79,8 @@
 - [2026-06-09] 経営状況の見せ方は「対象切替（連結/HD単独/子会社）」で、置き場所はHD管理の外＝新トップレベルタブ `#sec-gsummary`(window.GSUMMARY)。子会社単独は既存サマリー(NEO福岡=DB)を流用。連結は HD単独(HDSOLO)+NEO福岡(DB)+各社財務(HD)−内部取引 の簡易管理連結を「高位集計(売上/原価/販管費/営業利益/現金/純資産)」で metric 合算。重要: DB・HDSOLO・各社財務は全て千円単位(既存KPIの fmt万 が"千円単位"コメントで確認)なので桁変換不要。各モジュールは metric getter (HDSOLO.summary / HD.consolidatedMetrics) を window 公開し、GSUMMARY が optional check で集約。Chart.js は window.Chart を共有しつつ GSUMMARY 専用インスタンスを destroy→再生成で管理。既存サマリー/KPIカードは読み取りのみで一切変更しない。
 - [2026-06-09] HD単体の科目カスタマイズは「グループ固定・科目のみ可変」のスキーマ駆動に。集計グループ(原価/販管費/入金/固定費/変動費/事業投資/財務収支/資産/負債/純資産)は固定配列、その中の科目を {id,label,sign?,hidden?} 配列で定義。科目は内部 id で管理し、入力値(data[year][stmt][mode][id])と id でひも付け→リネームしても値を保持、削除時のみ全年度の値を削除。財務収支は項目ごと sign(±1) で符号集計、非表示科目は集計から除外。スキーマは全年度共通で `holdings_solo` の特殊行 id='__schema__'(data=schema) に保存(別テーブル不要)。loadRemote で年度行とスキーマ行を id で振り分ける。
 
+- [2026-06-12] ページ全体を「対象(エンティティ)」で切替える2階層ナビを導入。最上位=対象バー(`.entity-bar`: HD連結/HD単独/子会社NEO福岡)、第2階層=既存タブ。各 `.tab` に `data-ent`(空白区切りで複数可)と `data-tab` を付与し、`setEntity(ent)` が data-ent で表示タブをフィルタ→対象の先頭タブへ。現アクティブタブが対象内なら維持(neoのタブ復元を壊さない)。対象は `localStorage 'neo_entity'`(既定 group)で復元、タブ復元の後に適用して対象が支配する。gsummaryのスコープは対象バーが駆動(`GSUMMARY.setScope`、内部 `#gs-scope` トグルは非表示化)、HDサブタブは `HD.applyEntity(ent)` で出し分け(group=連結/会社/内部取引、solo=HD単体)。重要: 既存9タブ(月次財務/工数/人件費/経費/MF/シミュ等)はNEOのグローバルデータ(DB/WF/PAYROLL/EXPENSE)直結なので、HD単独に同粒度の運用タブを持たせるにはデータ層のエンティティ・スコープ化(大規模)が必要→段階導入(フェーズ1=ナビ土台、既存NEOは無改変)。
+
 # プロジェクト固有ルール（neo_mg）
 
 - 単一HTMLファイル構成（`public/index.html`）+ Vercel serverless（`api/*.js`）+ Supabase
