@@ -801,6 +801,7 @@ input.cells-edit-input {
         <button class="tab" onclick="sw('report',this)">📋 月次レポート</button>
         <button class="tab" onclick="sw('pdf',this)">📄 役員PDF</button>
         <button class="tab" onclick="sw('hd',this)">🏢 HD管理</button>
+        <button class="tab" onclick="sw('gsummary',this)">📊 経営サマリー</button>
       </div>
     </div>
   </div>
@@ -2043,6 +2044,28 @@ input.cells-edit-input {
 </div>
 
 <!-- ──────────────────────────────────────
+     経営サマリー（対象切替: 連結 / HD単独 / 子会社）
+────────────────────────────────────── -->
+<div class="sec" id="sec-gsummary">
+  <div class="pa-toggle" id="gs-scope" style="margin-bottom:12px">
+    <button class="pa-btn active" data-scope="group" onclick="GSUMMARY.switchScope('group',this)">🏢 HD全体（連結）</button>
+    <button class="pa-btn" data-scope="solo" onclick="GSUMMARY.switchScope('solo',this)">🏛 HD単独</button>
+    <button class="pa-btn" data-scope="neo" onclick="GSUMMARY.switchScope('neo',this)">🏪 子会社（NEO福岡）</button>
+  </div>
+  <div id="gs-health" class="metrics" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-bottom:12px"></div>
+  <div id="gs-kpi" class="metrics" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin-bottom:12px"></div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="ct">⚠️ アラート</div>
+    <div id="gs-alert"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px">
+    <div class="card"><div class="ct">月次売上推移（千円）</div><div class="ch" style="height:200px"><canvas id="gs-rev-chart"></canvas></div></div>
+    <div class="card"><div class="ct">費用カテゴリ別（累積・千円）</div><div class="ch" style="height:200px"><canvas id="gs-cost-chart"></canvas></div></div>
+  </div>
+  <div class="hd-note" id="gs-foot" style="margin-top:8px"></div>
+</div>
+
+<!-- ──────────────────────────────────────
      月次レポート
 ────────────────────────────────────── -->
 <div class="sec" id="sec-report">
@@ -2332,6 +2355,7 @@ function sw(id, el) {
   if (id === 'payroll' && window.PAYROLL) setTimeout(() => window.PAYROLL.init(), 30);
   if (id === 'expense' && window.EXPENSE) setTimeout(() => window.EXPENSE.init(), 30);
   if (id === 'hd' && window.HD) setTimeout(() => window.HD.init(), 30);
+  if (id === 'gsummary' && window.GSUMMARY) setTimeout(() => window.GSUMMARY.render(), 30);
 }
 
 function setYear(y, el) {
@@ -2356,6 +2380,8 @@ function setYear(y, el) {
   renderAnnualSummary();
   renderReportTabs();
   loadImportedList();
+  const gsSec = document.getElementById('sec-gsummary');
+  if (gsSec && gsSec.classList.contains('on') && window.GSUMMARY) window.GSUMMARY.render();
 }
 
 function setPaView(v, el) {
@@ -11336,7 +11362,7 @@ window.addEventListener('load', async () => {
       const yBtns = document.querySelectorAll('.year-toggle .yt');
       if (yBtns[yIdx]) setYear(savedYear, yBtns[yIdx]);
     }
-    const tabOrder = ['weekly','pl-cf','import','sim','workforce','payroll','expense','report','pdf','hd'];
+    const tabOrder = ['weekly','pl-cf','import','sim','workforce','payroll','expense','report','pdf','hd','gsummary'];
     const savedTab = localStorage.getItem('neo_active_tab');
     const tIdx = tabOrder.indexOf(savedTab);
     if (tIdx > 0) { // 0='weekly' はデフォルトなのでスキップ
@@ -16289,6 +16315,35 @@ document.addEventListener('DOMContentLoaded', function() {
       renderIntercompany();
     },
     renderFinancials: renderFinancials,
+    // 経営サマリー用: 各社財務（連結対象会社）の集計メトリクス（千円・内部取引消去）
+    consolidatedMetrics: function(year){
+      const ids = consolidatedCompanyIds();
+      const sgaCodes = ['personnel','outsourcing','advertising','subcontract','sga_other'];
+      let sales = 0, cogs = 0;
+      const sgaObj = { personnel:0, outsourcing:0, advertising:0, subcontract:0, sga_other:0 };
+      const revA = [];
+      for (let m = 1; m <= 12; m++){
+        let mSales = 0;
+        ids.forEach(cid => {
+          sales += getFin(cid, year, m, 'sales'); cogs += getFin(cid, year, m, 'cogs'); mSales += getFin(cid, year, m, 'sales');
+          sgaCodes.forEach(c => sgaObj[c] += getFin(cid, year, m, c));
+        });
+        const e = eliminations(year, m); sales -= e.sales; cogs -= e.cogs; mSales -= e.sales;
+        revA.push(mSales);
+      }
+      const sgaCum = sgaCodes.reduce((a, c) => a + sgaObj[c], 0);
+      const gp = sales - cogs, op = gp - sgaCum;
+      let cash = 0, equity = 0, asset = 0; const lm = 12;
+      ids.forEach(cid => {
+        cash += getFin(cid, year, lm, 'cash');
+        equity += getFin(cid, year, lm, 'capital') + getFin(cid, year, lm, 'retained');
+        asset += getFin(cid, year, lm, 'cash') + getFin(cid, year, lm, 'receivable') + getFin(cid, year, lm, 'other_current') + getFin(cid, year, lm, 'fixed_asset');
+      });
+      asset -= eliminations(year, lm).other_current;
+      const sgaByItem = [['人件費','personnel'],['業務委託費','outsourcing'],['広告費','advertising'],['外注費','subcontract'],['その他販管費','sga_other']].map(p => ({ label: p[0], value: sgaObj[p[1]] }));
+      return { revCum: sales, cogsCum: cogs, gpCum: gp, sgaCum: sgaCum, opCum: op, budSga: 0, cash: cash, equity: equity, asset: asset, revA: revA, revB: null, sgaByItem: sgaByItem, burn: Math.max(0, -op / 12), overItems: [], hasBudget: false, companyCount: ids.length };
+    },
+    ensureLoaded: function(){ if (!state.initialized){ state.initialized = true; loadLocal(); loadRemote(); } },
   };
   window.HD = HD;
 })();
@@ -16745,8 +16800,207 @@ document.addEventListener('DOMContentLoaded', function() {
       SOLO._drag = null;
       clearDragClasses();
     },
+    // 経営サマリー用メトリクス（千円）。未ロードなら localStorage/スキーマを読む
+    summary: function(year){
+      if (!SOLO.loaded){ SOLO.loaded = true; loadSchemaLocal(); loadLocal(); loadRemote().then(ok => { if (ok && window.GSUMMARY) window.GSUMMARY.render(); }); }
+      const yd = getYear(year);
+      const pa = yd.pl.actual, pb = yd.pl.budget, ca = yd.cf.actual, ba = yd.bs.actual;
+      let revCum = 0, cogsCum = 0, sgaCum = 0, opCum = 0, budSga = 0, netSum = 0;
+      const revA = [], revB = [];
+      for (let i = 0; i < 12; i++){
+        revA.push(plRev(pa, i)); revB.push(plRev(pb, i));
+        revCum += plRev(pa, i); cogsCum += plCogs(pa, i); sgaCum += plSga(pa, i); opCum += plOp(pa, i);
+        budSga += plSga(pb, i); netSum += cfNet(ca, i);
+      }
+      const cash = num(ca.open, 0) + netSum;
+      const equity = visItems('bs','equity').reduce((a, it) => a + (Number(ba[it.id]) || 0), 0);
+      const asset = visItems('bs','asset').reduce((a, it) => a + (Number(ba[it.id]) || 0), 0);
+      const sgaByItem = visItems('pl','sga').map(it => { let s = 0; for (let i = 0; i < 12; i++) s += num(pa[it.id], i); return { label: it.label, value: s }; });
+      const overItems = visItems('pl','sga').map(it => { let a = 0, b = 0; for (let i = 0; i < 12; i++){ a += num(pa[it.id], i); b += num(pb[it.id], i); } return { label: it.label, a: a, b: b }; }).filter(x => x.b > 0 && x.a > x.b * 1.2);
+      return { revCum: revCum, cogsCum: cogsCum, gpCum: revCum - cogsCum, sgaCum: sgaCum, opCum: opCum, budSga: budSga, cash: cash, equity: equity, asset: asset, revA: revA, revB: revB, sgaByItem: sgaByItem, burn: Math.max(0, -netSum / 12), overItems: overItems, hasBudget: true };
+    },
   };
   window.HDSOLO = HDSOLO;
+})();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         GSUMMARY: 経営サマリー（対象切替）
+         連結（HD単独+NEO福岡+各社財務−内部取引・簡易管理連結）/ HD単独 / 子会社(NEO福岡)
+         全て千円。既存サマリー・KPIカードは変更しない（読み取りのみ）
+         ════════════════════════════════════════════════════════════════ -->
+    <script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const ML = ['4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月'];
+  let scope = 'group';
+  const _charts = {};
+
+  function fmt(n){ return Math.round(Number(n)||0).toLocaleString('ja-JP'); }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function curYear(){ return (typeof currentYear !== 'undefined' && currentYear) ? String(currentYear) : '2026'; }
+  function sum(arr){ return (arr||[]).reduce((a,v)=>a+(Number(v)||0),0); }
+
+  function emptyMetrics(){
+    return { revCum:0, cogsCum:0, gpCum:0, sgaCum:0, opCum:0, budSga:0, cash:0, equity:0, asset:0,
+      revA:Array(12).fill(0), revB:null, sgaByItem:[], burn:0, overItems:[], hasBudget:false };
+  }
+
+  // NEO福岡（既存 DB）からメトリクス算出（千円）
+  function neoMetrics(year){
+    const DBref = (typeof DB !== 'undefined') ? DB : (typeof window !== 'undefined' ? window.DB : null);
+    const d = DBref && DBref[year] ? DBref[year] : null;
+    if (!d || !d.pl) return null;
+    const A = d.pl.actual || {}, B = d.pl.budget || {};
+    const cogsKeys = ['cogs','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
+    const sgaPairs = [['人件費','labor'],['業務委託','outsource'],['広告','adv'],['外注','gaichu'],['その他','other']];
+    const revCum = sum(A.rev), cogsCum = cogsKeys.reduce((a,k)=>a+sum(A[k]),0);
+    const sgaCum = sgaPairs.reduce((a,p)=>a+sum(A[p[1]]),0);
+    const opCum = revCum - cogsCum - sgaCum;
+    const budSga = sgaPairs.reduce((a,p)=>a+sum(B[p[1]]),0);
+    const revA = (A.rev||[]).slice(0,12); while (revA.length < 12) revA.push(0);
+    const revB = (B.rev||[]).slice(0,12); while (revB.length < 12) revB.push(0);
+    // BS 最終データ月
+    let cash = 0, equity = 0, asset = 0;
+    const bsA = d.bs && d.bs.actual ? d.bs.actual : null;
+    if (bsA){
+      const idxs = Object.keys(bsA).map(Number).filter(n => !isNaN(n));
+      const b = idxs.length ? bsA[Math.max.apply(null, idxs)] : null;
+      if (b){
+        cash = Number(b.cash)||0;
+        equity = (Number(b.capital)||0)+(Number(b.retained)||0)+(Number(b.warrant)||0)+(Number(b.other_eq)||0);
+        asset = (Number(b.cash)||0)+(Number(b.receivable)||0)+(Number(b.other_ca)||0)+(Number(b.fixed)||0)+(Number(b.other_nca)||0);
+      }
+    }
+    if (!cash && d.cf && d.cf.actual && Array.isArray(d.cf.actual.cfClose)){
+      const cc = d.cf.actual.cfClose.filter(v => Number(v));
+      if (cc.length) cash = Number(cc[cc.length-1]) || 0;
+    }
+    const sgaByItem = sgaPairs.map(p => ({ label: p[0], value: sum(A[p[1]]) }));
+    const overItems = sgaPairs.map(p => ({ label: p[0], a: sum(A[p[1]]), b: sum(B[p[1]]) })).filter(x => x.b > 0 && x.a > x.b * 1.2);
+    return { revCum, cogsCum, gpCum: revCum-cogsCum, sgaCum, opCum, budSga, cash, equity, asset, revA, revB, sgaByItem, burn: Math.max(0, -opCum/12), overItems, hasBudget: true };
+  }
+
+  function combine(parts){
+    const m = emptyMetrics();
+    const byLabel = {};
+    parts.forEach(p => {
+      if (!p) return;
+      ['revCum','cogsCum','gpCum','sgaCum','opCum','cash','equity','asset','budSga'].forEach(k => m[k] += Number(p[k])||0);
+      for (let i = 0; i < 12; i++) m.revA[i] += Number((p.revA||[])[i])||0;
+      if (p.hasBudget){
+        m.hasBudget = true;
+        if (!m.revB) m.revB = Array(12).fill(0);
+        for (let i = 0; i < 12; i++) m.revB[i] += Number((p.revB||[])[i])||0;
+      }
+      (p.sgaByItem||[]).forEach(it => { byLabel[it.label] = (byLabel[it.label]||0) + (Number(it.value)||0); });
+      (p.overItems||[]).forEach(o => m.overItems.push(o));
+    });
+    m.sgaByItem = Object.keys(byLabel).map(l => ({ label: l, value: byLabel[l] }));
+    m.burn = Math.max(0, -m.opCum/12);
+    return m;
+  }
+
+  function getMetrics(){
+    const y = curYear();
+    if (scope === 'solo') return (window.HDSOLO && window.HDSOLO.summary) ? window.HDSOLO.summary(y) : emptyMetrics();
+    if (scope === 'neo') return neoMetrics(y) || emptyMetrics();
+    // group（簡易管理連結）
+    const parts = [];
+    if (window.HDSOLO && window.HDSOLO.summary) parts.push(window.HDSOLO.summary(y));
+    const neo = neoMetrics(y); if (neo) parts.push(neo);
+    if (window.HD){
+      if (window.HD.ensureLoaded) window.HD.ensureLoaded();
+      if (window.HD.consolidatedMetrics) parts.push(window.HD.consolidatedMetrics(Number(y)));
+    }
+    return combine(parts);
+  }
+
+  function card(label, valHtml, sub){
+    return '<div class="mc"><div class="mc-l">' + label + '</div><div class="mc-v">' + valHtml + '</div><div class="mc-s">' + (sub||'') + '</div></div>';
+  }
+  function signed(v, unit){
+    const s = fmt(Math.abs(v)) + (unit||'千円');
+    if (v >= 0) return '<span class="g">' + fmt(v) + (unit||'千円') + '</span>';
+    return '<span class="r">▲' + s + '</span>';
+  }
+  function healthHtml(m){
+    let h = '';
+    if (m.hasBudget && m.budSga > 0){
+      const pct = Math.round(m.sgaCum / m.budSga * 100);
+      h += card('予算消費率（累積販管費）', pct + '%', '実績' + fmt(m.sgaCum) + ' / 予算' + fmt(m.budSga) + '千円');
+    } else {
+      h += card('予算消費率（累積販管費）', '—', '予算データなし');
+    }
+    const runway = m.burn > 0 ? (m.cash / m.burn) : null;
+    h += card('残キャッシュ期間', runway != null ? ('約' + runway.toFixed(1) + 'ヶ月') : '—',
+      m.burn > 0 ? ('バーンレート ' + fmt(m.burn) + '千円/月 ・ 残高 ' + fmt(m.cash) + '千円') : '営業黒字 or バーン未確定');
+    const eqr = m.asset ? Math.round(m.equity / m.asset * 1000) / 10 : 0;
+    h += card('自己資本比率', eqr + '%', '純資産' + fmt(m.equity) + ' / 資産' + fmt(m.asset) + '千円');
+    return h;
+  }
+  function kpiHtml(m){
+    return card('現金残高', fmt(m.cash) + '千円')
+      + card('売上（累積）', fmt(m.revCum) + '千円')
+      + card('粗利（累積）', signed(m.gpCum))
+      + card('販管費（累積）', '<span class="r">' + fmt(m.sgaCum) + '千円</span>')
+      + card('営業利益（累積）', signed(m.opCum))
+      + card('純資産', fmt(m.equity) + '千円');
+  }
+  function alertHtml(m){
+    const a = [];
+    m.overItems.forEach(o => a.push('販管費「' + esc(o.label) + '」が予算比 ' + Math.round(o.a / o.b * 100) + '% (+' + fmt(o.a - o.b) + '千円超過)'));
+    if (m.opCum < 0) a.push('営業利益が累積赤字（▲' + fmt(Math.abs(m.opCum)) + '千円）');
+    const runway = m.burn > 0 ? m.cash / m.burn : null;
+    if (runway != null && runway < 6) a.push('残キャッシュ ' + runway.toFixed(1) + 'ヶ月 — 資金繰り注意');
+    if (!a.length) return '<div class="hd-note">特筆すべきアラートはありません。</div>';
+    return a.map(t => '<div style="font-size:11px;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--tc-red)">⚠</span> ' + t + '</div>').join('');
+  }
+  function drawCharts(m){
+    if (typeof Chart === 'undefined') return;
+    const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v) || '';
+    // 月次売上推移
+    if (_charts.rev){ _charts.rev.destroy(); _charts.rev = null; }
+    const rc = $('gs-rev-chart');
+    if (rc){
+      const ds = [];
+      if (m.hasBudget && m.revB) ds.push({ label:'予算', data:m.revB, backgroundColor:'rgba(120,160,240,0.45)' });
+      ds.push({ label:'実績', data:m.revA, backgroundColor:'#4f46e5' });
+      _charts.rev = new Chart(rc, { type:'bar', data:{ labels:ML, datasets:ds },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:true, labels:{ boxWidth:10, font:{ size:10 } } } }, scales:{ x:{ ticks:{ font:{ size:9 } } }, y:{ ticks:{ font:{ size:9 } } } } } });
+    }
+    // 費用カテゴリ
+    if (_charts.cost){ _charts.cost.destroy(); _charts.cost = null; }
+    const cc = $('gs-cost-chart');
+    if (cc){
+      _charts.cost = new Chart(cc, { type:'bar', data:{ labels:m.sgaByItem.map(x=>x.label), datasets:[{ label:'累積', data:m.sgaByItem.map(x=>x.value), backgroundColor:'#5dbd7e' }] },
+        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:{ font:{ size:9 } } }, y:{ ticks:{ font:{ size:10 } } } } } });
+    }
+  }
+  function footNote(){
+    const y = curYear();
+    if (scope === 'solo') return y + '年度 ｜ HD単独（持株会社単体・HDSOLOデータ）。';
+    if (scope === 'neo') return y + '年度 ｜ 子会社単独（NEO福岡＝既存月次財務データ）。';
+    return y + '年度 ｜ HD全体（簡易管理連結）＝ HD単独 ＋ NEO福岡 ＋ 各社財務（連結対象）− 内部取引消去。各データ源の科目を高位集計で合算した管理連結です。';
+  }
+  function render(){
+    const m = getMetrics();
+    if ($('gs-health')) $('gs-health').innerHTML = healthHtml(m);
+    if ($('gs-kpi')) $('gs-kpi').innerHTML = kpiHtml(m);
+    if ($('gs-alert')) $('gs-alert').innerHTML = alertHtml(m);
+    if ($('gs-foot')) $('gs-foot').textContent = footNote();
+    drawCharts(m);
+  }
+
+  const GSUMMARY = {
+    render: render,
+    switchScope: function(s, btn){
+      scope = s;
+      document.querySelectorAll('#gs-scope .pa-btn').forEach(b => b.classList.toggle('active', b === btn));
+      render();
+    },
+  };
+  window.GSUMMARY = GSUMMARY;
 })();
     </script>
 

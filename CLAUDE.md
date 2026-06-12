@@ -76,6 +76,7 @@
 - [2026-06-09] HD連結を最初「科目×金額」の単列表＋円単位＋インライン会社追加で作ったが、ユーザー要望は「科目｜会社A｜会社B｜…｜消去額｜連結合計」の会社別カラム＋千円単位＋モーダル追加だった → 財務テーブルは着手前に①単位(円/千円)②表の向き(単列集計 or 会社別カラム)③入出力UI(インライン or モーダル)を確認・確定する。連結表は会社別カラム＋消去額列＋合計列が既定と考える。
 - [2026-06-09] 全タブから/特定タブからに関わらず、開閉するモーダルは `.sec` の外（body直下相当）に素クラスで配置し、`.on` で display を切替える。`.hd-modal{position:fixed;inset:0}` + `.hd-modal.on{display:flex}`。親が display:none になると子も消える問題を構造的に回避。
 - [2026-06-09] HD単体（持株会社単体の財務三表）は月次財務と同一科目を独立IIFE `window.HDSOLO` で実装。多数の科目×12ヶ月×予算実績はセル単位テーブルではなく「年度ごとJSONBブロブ」(`holdings_solo` id=年度, data jsonb)で保持し year 単位 upsert/select。cells方式より実装が単純で、localStorage(全年度1ブロブ)へ即時保存しリロード耐性を確保。横長月次表は科目列を position:sticky で固定する。
+- [2026-06-09] 経営状況の見せ方は「対象切替（連結/HD単独/子会社）」で、置き場所はHD管理の外＝新トップレベルタブ `#sec-gsummary`(window.GSUMMARY)。子会社単独は既存サマリー(NEO福岡=DB)を流用。連結は HD単独(HDSOLO)+NEO福岡(DB)+各社財務(HD)−内部取引 の簡易管理連結を「高位集計(売上/原価/販管費/営業利益/現金/純資産)」で metric 合算。重要: DB・HDSOLO・各社財務は全て千円単位(既存KPIの fmt万 が"千円単位"コメントで確認)なので桁変換不要。各モジュールは metric getter (HDSOLO.summary / HD.consolidatedMetrics) を window 公開し、GSUMMARY が optional check で集約。Chart.js は window.Chart を共有しつつ GSUMMARY 専用インスタンスを destroy→再生成で管理。既存サマリー/KPIカードは読み取りのみで一切変更しない。
 - [2026-06-09] HD単体の科目カスタマイズは「グループ固定・科目のみ可変」のスキーマ駆動に。集計グループ(原価/販管費/入金/固定費/変動費/事業投資/財務収支/資産/負債/純資産)は固定配列、その中の科目を {id,label,sign?,hidden?} 配列で定義。科目は内部 id で管理し、入力値(data[year][stmt][mode][id])と id でひも付け→リネームしても値を保持、削除時のみ全年度の値を削除。財務収支は項目ごと sign(±1) で符号集計、非表示科目は集計から除外。スキーマは全年度共通で `holdings_solo` の特殊行 id='__schema__'(data=schema) に保存(別テーブル不要)。loadRemote で年度行とスキーマ行を id で振り分ける。
 
 # プロジェクト固有ルール（neo_mg）
