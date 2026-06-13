@@ -757,6 +757,29 @@ input.cells-edit-input {
 .ent-btn:hover{border-color:var(--text3)}
 .ent-btn.active{background:var(--text);color:var(--bg);border-color:var(--text)}
 .ent-btn .ent-sub{font-size:9px;font-weight:500;opacity:.7;margin-left:5px}
+/* ── AI経営相談（フローティング・チャット） ── */
+.aic-fab{position:fixed;right:22px;bottom:22px;z-index:1200;width:56px;height:56px;border-radius:50%;border:none;background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff;font-size:24px;cursor:pointer;box-shadow:0 6px 20px rgba(79,70,229,0.45);display:flex;align-items:center;justify-content:center;transition:transform .15s}
+.aic-fab:hover{transform:scale(1.06)}
+.aic-panel{position:fixed;right:22px;bottom:88px;z-index:1200;width:min(420px,92vw);height:min(620px,76vh);background:var(--bg);border:1px solid var(--border2);border-radius:16px;box-shadow:0 14px 50px rgba(0,0,0,0.28);display:none;flex-direction:column;overflow:hidden}
+.aic-panel.on{display:flex}
+.aic-head{display:flex;align-items:center;gap:8px;padding:12px 14px;background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff}
+.aic-head .aic-title{font-weight:700;font-size:13px}
+.aic-head .aic-ctx{font-size:9px;opacity:.85;margin-left:2px}
+.aic-head .aic-x{margin-left:auto;background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1}
+.aic-body{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--bg2)}
+.aic-msg{max-width:88%;padding:9px 12px;border-radius:12px;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.aic-msg.user{align-self:flex-end;background:#4f46e5;color:#fff;border-bottom-right-radius:4px}
+.aic-msg.bot{align-self:flex-start;background:var(--bg);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px}
+.aic-msg.sys{align-self:center;font-size:10px;color:var(--text3);background:transparent;max-width:100%;text-align:center}
+.aic-suggest{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 8px;background:var(--bg2)}
+.aic-chip{font-size:10px;padding:5px 10px;border:1px solid var(--border2);border-radius:980px;background:var(--bg);color:var(--text2);cursor:pointer;font-family:inherit}
+.aic-chip:hover{border-color:#6366f1;color:var(--text)}
+.aic-foot{display:flex;gap:8px;padding:10px;border-top:1px solid var(--border);background:var(--bg)}
+.aic-input{flex:1;resize:none;height:38px;max-height:120px;padding:9px 11px;border:1px solid var(--border2);border-radius:9px;font-size:12px;font-family:inherit;background:var(--bg);color:var(--text);line-height:1.4}
+.aic-input:focus{outline:2px solid #6366f1}
+.aic-send{flex:0 0 auto;padding:0 16px;border:none;border-radius:9px;background:#4f46e5;color:#fff;font-weight:700;cursor:pointer;font-family:inherit;font-size:12px}
+.aic-send:disabled{opacity:.5;cursor:default}
+.aic-typing{align-self:flex-start;font-size:11px;color:var(--text3);padding:4px 8px}
 </style>
 </head>
 <body>
@@ -820,6 +843,22 @@ input.cells-edit-input {
   <button class="ent-btn active" data-ent="group" onclick="setEntity('group',this)">🏢 HD連結<span class="ent-sub">グループ全体</span></button>
   <button class="ent-btn" data-ent="solo" onclick="setEntity('solo',this)">🏛 HD単独<span class="ent-sub">持株会社</span></button>
   <button class="ent-btn" data-ent="neo" onclick="setEntity('neo',this)">🏪 NEO福岡<span class="ent-sub">子会社</span></button>
+</div>
+
+<!-- ── AI経営相談（フローティング・チャット） ── -->
+<button class="aic-fab" id="aic-fab" title="AI経営相談" onclick="AICHAT.toggle()">🤖</button>
+<div class="aic-panel" id="aic-panel">
+  <div class="aic-head">
+    <span class="aic-title">🤖 AI経営相談</span>
+    <span class="aic-ctx" id="aic-ctx"></span>
+    <button class="aic-x" onclick="AICHAT.toggle()" title="閉じる">×</button>
+  </div>
+  <div class="aic-body" id="aic-body"></div>
+  <div class="aic-suggest" id="aic-suggest"></div>
+  <div class="aic-foot">
+    <textarea class="aic-input" id="aic-input" placeholder="経営状況について質問・相談…（Enterで送信）"></textarea>
+    <button class="aic-send" id="aic-send" onclick="AICHAT.send()">送信</button>
+  </div>
 </div>
 
 <!-- ──────────────────────────────────────
@@ -17072,6 +17111,135 @@ document.addEventListener('DOMContentLoaded', function() {
     },
   };
   window.GSUMMARY = GSUMMARY;
+})();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         AICHAT: AI経営相談（対話型）
+         現在の対象(連結/HD単独/子会社)のダッシュボード状況を system に注入し、
+         /api/chat(Anthropic Claude) とマルチターン会話。既存UIには非干渉。
+         ════════════════════════════════════════════════════════════════ -->
+    <script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const state = { messages: [], busy: false, ready: false };
+  const SUGGEST = [
+    '今月の最大の経営リスクは？',
+    '資金繰りで打つべき手は？',
+    '販管費で削減余地のある科目は？',
+    '来月の重点アクションを3つ提案して',
+  ];
+
+  function txt(id){ const el = $(id); return el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : ''; }
+  function entityLabel(){
+    const e = (typeof currentEntity !== 'undefined') ? currentEntity : 'neo';
+    return { group:'HD連結（グループ全体）', solo:'HD単独（持株会社）', neo:'NEO福岡（子会社）' }[e] || 'NEO福岡（子会社）';
+  }
+  function buildContext(){
+    const e = (typeof currentEntity !== 'undefined') ? currentEntity : 'neo';
+    const yr = (typeof currentYear !== 'undefined') ? currentYear : '';
+    const L = [];
+    L.push('あなたはNEOグループのCFO/経営参謀AIです。以下の最新ダッシュボード指標（金額は千円単位）に基づき、根拠（具体的な数値）を示しながら、簡潔・実務的に経営判断を支援してください。提供された数値の範囲で答え、不明な点は「データ未入力」と明示すること。回答は日本語で、必要に応じて箇条書きを用いる。');
+    L.push('【対象】' + entityLabel() + ' ／ 年度: ' + yr);
+    if (e === 'group' || e === 'solo'){
+      const k = txt('gs-kpi'), h = txt('gs-health'), a = txt('gs-alert');
+      if (k) L.push('【主要KPI】' + k);
+      if (h) L.push('【経営健全性】' + h);
+      if (a) L.push('【アラート】' + a);
+    } else {
+      L.push('【主要KPI】現金残高:' + txt('kpi-cash') + ' / 売上累積:' + txt('kpi-rev') + ' / 粗利累積:' + txt('kpi-gp') + ' / 販管費累積:' + txt('kpi-opex') + ' / 営業利益累積:' + txt('kpi-op') + ' / 純資産:' + txt('kpi-equity'));
+      L.push('【経営健全性】予算消費率:' + txt('exec-budget-val') + '(' + txt('exec-budget-sub') + ') / 人件費生産性:' + txt('exec-prod-val') + ' / 残キャッシュ:' + txt('exec-runway-val') + '(' + txt('exec-runway-sub') + ')');
+      const al = txt('exec-alert-list'); if (al) L.push('【アラート】' + al);
+    }
+    try {
+      if (window.WF && typeof window.WF.totalRealizedRev === 'function'){
+        const rr = window.WF.totalRealizedRev(), ca = window.WF.totalCost();
+        L.push('【工数管理】実現売上 約' + Math.round(rr/10000) + '万円 / 総人件費 約' + Math.round(ca/10000) + '万円');
+      }
+    } catch(_){}
+    try {
+      if (window.EXPENSE && window.EXPENSE.state && Array.isArray(window.EXPENSE.state.requests)){
+        const p = window.EXPENSE.state.requests.filter(r => r.status === 'pending');
+        if (p.length) L.push('【経費申請】承認待ち ' + p.length + '件 / 合計 ' + p.reduce((s,x)=>s+(Number(x.amount)||0),0).toLocaleString() + '円');
+      }
+    } catch(_){}
+    return L.join('\n');
+  }
+
+  function bubble(cls, text){ const d = document.createElement('div'); d.className = 'aic-msg ' + cls; d.textContent = text; return d; }
+  function render(){
+    const body = $('aic-body'); if (!body) return;
+    body.innerHTML = '';
+    if (!state.messages.length){
+      body.appendChild(bubble('bot', 'こんにちは。現在の対象は「' + entityLabel() + '」です。ダッシュボードの最新数値をもとに経営のご相談にお答えします。下の例から選ぶか、自由にご質問ください。'));
+    }
+    state.messages.forEach(m => body.appendChild(bubble(m.role === 'user' ? 'user' : 'bot', m.content)));
+    body.scrollTop = body.scrollHeight;
+  }
+  function addTyping(){
+    const body = $('aic-body'); if (!body) return;
+    const d = document.createElement('div'); d.className = 'aic-typing'; d.id = 'aic-typing'; d.textContent = 'AIが考えています…';
+    body.appendChild(d); body.scrollTop = body.scrollHeight;
+  }
+  function removeTyping(){ const t = $('aic-typing'); if (t) t.remove(); }
+
+  function renderSuggest(){
+    const s = $('aic-suggest'); if (!s || state.ready) return;
+    s.innerHTML = '';
+    SUGGEST.forEach(q => {
+      const b = document.createElement('button'); b.className = 'aic-chip'; b.textContent = q;
+      b.onclick = () => AICHAT.ask(q);
+      s.appendChild(b);
+    });
+    state.ready = true;
+  }
+
+  async function doSend(text){
+    if (!text || state.busy) return;
+    state.messages.push({ role:'user', content:text });
+    render();
+    state.busy = true; const sendBtn = $('aic-send'); if (sendBtn) sendBtn.disabled = true;
+    addTyping();
+    try {
+      const res = await fetch('/api/chat', {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ system: buildContext(), max_tokens: 1024, messages: state.messages }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(typeof data.error === 'string' ? data.error : (data.error.message || 'APIエラー'));
+      const blk = (data.content || []).find(b => b.type === 'text');
+      state.messages.push({ role:'assistant', content: blk ? blk.text : '(応答がありませんでした)' });
+    } catch(e){
+      state.messages.push({ role:'assistant', content: '⚠ エラー: ' + e.message + '\n（Vercel の環境変数 ANTHROPIC_API_KEY が未設定の可能性があります）' });
+    }
+    state.busy = false; if (sendBtn) sendBtn.disabled = false; removeTyping(); render();
+  }
+
+  const AICHAT = {
+    toggle: function(){
+      const p = $('aic-panel'); if (!p) return;
+      const open = !p.classList.contains('on');
+      p.classList.toggle('on', open);
+      if (open){
+        renderSuggest();
+        const ctx = $('aic-ctx'); if (ctx) ctx.textContent = '対象: ' + entityLabel();
+        render();
+        const inp = $('aic-input'); if (inp) setTimeout(() => inp.focus(), 50);
+      }
+    },
+    ask: function(q){ const inp = $('aic-input'); if (inp) inp.value = ''; doSend(q); },
+    send: function(){ const inp = $('aic-input'); const t = inp ? (inp.value || '').trim() : ''; if (inp) inp.value = ''; doSend(t); },
+  };
+  window.AICHAT = AICHAT;
+
+  document.addEventListener('DOMContentLoaded', function(){
+    const inp = $('aic-input');
+    if (inp){
+      inp.addEventListener('keydown', function(ev){
+        if (ev.key === 'Enter' && !ev.shiftKey){ ev.preventDefault(); AICHAT.send(); }
+      });
+    }
+  });
 })();
     </script>
 
