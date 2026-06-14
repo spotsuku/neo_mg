@@ -10901,6 +10901,9 @@ function switchCompany(id) {
       if (typeof setYear === 'function') setYear(currentYear);
     });
   }
+  // 工数管理(WF)・人件費(PAYROLL)・経費申請(EXPENSE) も会社別に再ロード
+  try { if (window.WF && window.WF.state && window.WF.state.initialized && window.WF.reloadForCompany) window.WF.reloadForCompany(); } catch(e){}
+  try { if (window.EXPENSE && window.EXPENSE.state && window.EXPENSE.state.initialized && window.EXPENSE.refresh) window.EXPENSE.refresh(); } catch(e){}
 }
 
 function initCompanySelector() {
@@ -13563,7 +13566,10 @@ document.addEventListener('DOMContentLoaded', function() {
   //                (履歴一覧表示からは除外)
   // - BroadcastChannel: 同一ブラウザの他タブを即時同期
   // 名前付きバージョン (version_id != 0) は別軸で「明示的に保存したスナップショット」として管理。
-  const DRAFT_KEY = 'neo_workforce_draft_v1';
+  // 会社スコープ（currentCompanyId / null = 基本会社NEO → '' で扱う）
+  function wfCompany(){ return (typeof currentCompanyId !== 'undefined' && currentCompanyId) ? String(currentCompanyId) : ''; }
+  function draftKey(){ const c = wfCompany(); return 'neo_workforce_draft_v1' + (c ? '_' + c : ''); }
+  let _wfDefaultSnapshot = null; // 会社切替時のリセット用（初期スナップショット）
   const DRAFT_VERSION_ID = 0;
   const DRAFT_NAME = '__autosave__';
   let _draftSaveTimer = null;
@@ -13600,7 +13606,7 @@ document.addEventListener('DOMContentLoaded', function() {
           currentVersionId: state.currentVersionId,
           savedAt: new Date().toISOString(),
         };
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+        localStorage.setItem(draftKey(), JSON.stringify(payload));
         state._lastDraftSavedAt = payload.savedAt;
         state._lastLocalSaveAt = Date.now(); // Realtime echo 防止用
         // 同一ブラウザの他タブにブロードキャスト
@@ -13622,6 +13628,7 @@ document.addEventListener('DOMContentLoaded', function() {
           name: DRAFT_NAME,
           memo: '',
           snapshot: payload.snapshot,
+          company_id: wfCompany(),
         }, true);
         const ind = $('payroll-sync-status');
         if (ind) ind.textContent = '✓ クラウド同期 ' + new Date().toLocaleTimeString('ja-JP');
@@ -13635,7 +13642,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function loadDraftLocal(){
     try {
-      const s = localStorage.getItem(DRAFT_KEY);
+      const s = localStorage.getItem(draftKey());
       if (!s) return null;
       return JSON.parse(s);
     } catch(e){
@@ -13644,7 +13651,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   function clearDraftLocal(){
-    try { localStorage.removeItem(DRAFT_KEY); } catch(e){}
+    try { localStorage.removeItem(draftKey()); } catch(e){}
   }
 
   // ─── Supabase Realtime: 別デバイスの編集を即時反映 ───
@@ -14363,7 +14370,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   async function loadVersionsFromSupabase(){
     try {
-      const r = await apiCall('load_workforce_versions');
+      const r = await apiCall('load_workforce_versions', { company_id: wfCompany() });
       if (r.ok && Array.isArray(r.data)){
         // 自動保存スロット (version_id=0) は state.draftRemote に分離して、履歴一覧には含めない
         state.draftRemote = r.data.find(v => Number(v.version_id) === DRAFT_VERSION_ID) || null;
@@ -14380,17 +14387,17 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   async function saveVersionToSupabase(payload){
-    const r = await apiCall('save_workforce_version', payload, true);
+    const r = await apiCall('save_workforce_version', { ...payload, company_id: wfCompany() }, true);
     if (!r.ok) throw new Error('save failed');
     return r;
   }
 
   async function deleteVersionFromSupabase(version_id){
-    return apiCall('delete_workforce_version', { version_id }, true);
+    return apiCall('delete_workforce_version', { version_id, company_id: wfCompany() }, true);
   }
 
   async function setCurrentInSupabase(version_id){
-    return apiCall('set_workforce_current', { version_id }, true);
+    return apiCall('set_workforce_current', { version_id, company_id: wfCompany() }, true);
   }
 
   function updateDirtyFlag(){
@@ -14876,6 +14883,8 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       if (state.initialized) { renderAll(); return; }
       state.initialized = true;
+      // 会社切替リセット用に初期スナップショットを一度だけ保持
+      if (!_wfDefaultSnapshot) { try { _wfDefaultSnapshot = JSON.parse(JSON.stringify(takeSnapshot())); } catch(e){} }
       // 復元優先順位:
       //  1. Supabase 下書き (version_id=0) と localStorage 下書きを比較し、新しい方を採用
       //     → 別デバイスで編集 → リロードで取込 (リアルタイム同期の最低限)
@@ -14912,6 +14921,16 @@ document.addEventListener('DOMContentLoaded', function() {
       renderAll();
       // Supabase Realtime 購読を開始 (sbClient 未初期化なら自動リトライ)
       setupRealtimeSync();
+    },
+    // 会社切替時: 状態を初期化して対象会社のデータで再ロード
+    reloadForCompany: async function(){
+      try { if (_wfDefaultSnapshot) restoreSnapshot(JSON.parse(JSON.stringify(_wfDefaultSnapshot))); } catch(e){}
+      state.initialized = false;
+      state.versions = [];
+      state.draftRemote = null;
+      state.currentVersionId = null;
+      await window.WF.init();
+      if (window.PAYROLL && window.PAYROLL.state && window.PAYROLL.state.initialized && window.PAYROLL.renderAll) window.PAYROLL.renderAll();
     },
     toggleSection: function(key){ state.collapsed[key] = !state.collapsed[key]; renderPL(); },
     switchSubtab: function(name, btn){
@@ -15655,9 +15674,10 @@ document.addEventListener('DOMContentLoaded', function() {
     return r.json();
   }
 
+  function expCompany(){ return (typeof currentCompanyId !== 'undefined' && currentCompanyId) ? String(currentCompanyId) : ''; }
   async function loadAll(){
     try {
-      const r = await api('load_expense_requests');
+      const r = await api('load_expense_requests', { company_id: expCompany() });
       state.requests = (r.ok && r.data) ? r.data : [];
     } catch (e){
       console.warn('[EXPENSE] load failed:', e.message);
@@ -15765,6 +15785,7 @@ document.addEventListener('DOMContentLoaded', function() {
         await api('create_expense_request', {
           request_id: Date.now(), requester_name: name, requester_email: email || null,
           category, amount, description, receipt_url: receipt_url || null,
+          company_id: expCompany(),
         }, true);
         EXPENSE.clearForm();
         await loadAll();

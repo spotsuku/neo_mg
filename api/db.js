@@ -409,21 +409,25 @@ export default async function handler(req, res) {
       //  工数配分シミュレーター (workforce_versions)
       // ────────────────────────────────────────────────────────────
 
-      // 一覧（最新順）
+      // 一覧（最新順）※会社別（company_id 未指定 = '' = 基本会社/NEO）
       case 'load_workforce_versions': {
+        const companyId = req.query.company_id != null ? String(req.query.company_id) : '';
         const { data, error } = await supabase
           .from('workforce_versions')
-          .select('version_id, name, memo, is_current, snapshot, saved_at')
+          .select('version_id, name, memo, is_current, snapshot, saved_at, company_id')
+          .eq('company_id', companyId)
           .order('saved_at', { ascending: false });
         if (error) throw error;
         return res.status(200).json({ ok: true, data: data || [] });
       }
 
-      // 保存（新規 or 上書き）
+      // 保存（新規 or 上書き）※会社別
       case 'save_workforce_version': {
-        const { version_id, name, memo, snapshot, is_current } = req.body;
+        const { version_id, name, memo, snapshot, is_current, company_id } = req.body;
+        const companyId = company_id != null ? String(company_id) : '';
         const payload = {
           version_id,
+          company_id: companyId,
           name,
           memo: memo || null,
           snapshot,
@@ -431,37 +435,41 @@ export default async function handler(req, res) {
           updated_at: new Date().toISOString(),
         };
         if (is_current === true) {
-          // 他レコードの is_current を一旦下ろす
-          await supabase.from('workforce_versions').update({ is_current: false }).neq('version_id', version_id);
+          // 同一会社内の他レコードの is_current を一旦下ろす
+          await supabase.from('workforce_versions').update({ is_current: false }).eq('company_id', companyId).neq('version_id', version_id);
           payload.is_current = true;
         }
         const { error } = await supabase
           .from('workforce_versions')
-          .upsert(payload, { onConflict: 'version_id' });
+          .upsert(payload, { onConflict: 'company_id,version_id' });
         if (error) throw error;
         return res.status(200).json({ ok: true });
       }
 
-      // 削除
+      // 削除 ※会社別
       case 'delete_workforce_version': {
-        const { version_id } = req.body;
+        const { version_id, company_id } = req.body;
+        const companyId = company_id != null ? String(company_id) : '';
         const { error } = await supabase
           .from('workforce_versions')
           .delete()
+          .eq('company_id', companyId)
           .eq('version_id', version_id);
         if (error) throw error;
         return res.status(200).json({ ok: true });
       }
 
-      // 「現在採用中」フラグの設定（指定IDのみ true、他は false）
+      // 「現在採用中」フラグの設定（同一会社内で指定IDのみ true、他は false）
       case 'set_workforce_current': {
-        const { version_id } = req.body;
-        // 全レコードを false に
-        await supabase.from('workforce_versions').update({ is_current: false }).neq('version_id', -1);
+        const { version_id, company_id } = req.body;
+        const companyId = company_id != null ? String(company_id) : '';
+        // 同一会社の全レコードを false に
+        await supabase.from('workforce_versions').update({ is_current: false }).eq('company_id', companyId);
         if (version_id != null) {
           const { error } = await supabase
             .from('workforce_versions')
             .update({ is_current: true })
+            .eq('company_id', companyId)
             .eq('version_id', version_id);
           if (error) throw error;
         }
@@ -474,7 +482,8 @@ export default async function handler(req, res) {
 
       case 'load_expense_requests': {
         const status = req.query.status; // 'pending' | 'approved' | 'rejected' | undefined
-        let q = supabase.from('expense_requests').select('*').order('created_at', { ascending: false }).limit(200);
+        const companyId = req.query.company_id != null ? String(req.query.company_id) : '';
+        let q = supabase.from('expense_requests').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(200);
         if (status) q = q.eq('status', String(status));
         const { data, error } = await q;
         if (error) throw error;
@@ -482,11 +491,12 @@ export default async function handler(req, res) {
       }
 
       case 'create_expense_request': {
-        const { request_id, requester_name, requester_email, category, amount, description, receipt_url } = req.body;
+        const { request_id, requester_name, requester_email, category, amount, description, receipt_url, company_id } = req.body;
         const { error } = await supabase.from('expense_requests').insert({
           request_id, requester_name, requester_email: requester_email || null,
           category, amount: Number(amount) || 0, description: description || null,
           status: 'pending', receipt_url: receipt_url || null,
+          company_id: company_id != null ? String(company_id) : '',
           created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
         });
         if (error) throw error;
