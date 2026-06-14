@@ -81,6 +81,10 @@
 
 - [2026-06-12] ページ全体を「対象(エンティティ)」で切替える2階層ナビを導入。最上位=対象バー(`.entity-bar`: HD連結/HD単独/子会社NEO福岡)、第2階層=既存タブ。各 `.tab` に `data-ent`(空白区切りで複数可)と `data-tab` を付与し、`setEntity(ent)` が data-ent で表示タブをフィルタ→対象の先頭タブへ。現アクティブタブが対象内なら維持(neoのタブ復元を壊さない)。対象は `localStorage 'neo_entity'`(既定 group)で復元、タブ復元の後に適用して対象が支配する。gsummaryのスコープは対象バーが駆動(`GSUMMARY.setScope`、内部 `#gs-scope` トグルは非表示化)、HDサブタブは `HD.applyEntity(ent)` で出し分け(group=連結/会社/内部取引、solo=HD単体)。重要: 既存9タブ(月次財務/工数/人件費/経費/MF/シミュ等)はNEOのグローバルデータ(DB/WF/PAYROLL/EXPENSE)直結なので、HD単独に同粒度の運用タブを持たせるにはデータ層のエンティティ・スコープ化(大規模)が必要→段階導入(フェーズ1=ナビ土台、既存NEOは無改変)。
 
+- [2026-06-13] AI経営相談(対話型)は独立IIFE `window.AICHAT`(フローティングチャット)で実装。`/api/chat`(Anthropic Claude, claude-sonnet-4-6)をマルチターンで利用。コンテキストは Anthropic の `system` で渡す→`api/chat.js` に `system` パススルーを追加(後方互換)。状況はDOM由来でスクレイプ(現在の対象=currentEntityに応じて neo は kpi-*/exec-*、group/solo は gs-kpi/gs-health/gs-alert)し、WF/EXPENSE はオプショナルに注入。setEntity が GSUMMARY.setScope→render を呼ぶため対象切替後は gs-* が埋まっている。メッセージは textContent で描画(XSS回避)。既存 genAI(ワンショット)とは別系統で非干渉。
+
+- [2026-06-14] 工数管理(WF)/人件費(PAYROLL)/経費申請(EXPENSE)を会社別に分離。基本会社(NEO)は company_id='' (空文字, DEFAULT)で扱う(fiscal_data の NULL とは別運用)。workforce_versions は version_id UNIQUE → (company_id,version_id) UNIQUE へ、is_current の部分一意は会社ごとに変更(supabase_company_scope.sql)。api/db.js の load/save/delete/set_workforce_current・load/create_expense_request に company_id を追加。フロントは wfCompany()/expCompany()=currentCompanyId||'' で全API呼び出し・localStorage draftKey() を会社別に。WFは状態が常駐するため switchCompany→WF.reloadForCompany()(初期スナップショット_wfDefaultSnapshotで一旦リセット→対象会社で再init、データ無ければ既定値でbleed防止)。EXPENSE/PAYROLLはstate差し替えなのでrefresh/renderAllで足りる。移行SQL未実行だとSupabase同期のみ劣化しlocalStorageで動作。
+
 # プロジェクト固有ルール（neo_mg）
 
 - 単一HTMLファイル構成（`public/index.html`）+ Vercel serverless（`api/*.js`）+ Supabase
