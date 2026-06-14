@@ -821,17 +821,17 @@ input.cells-edit-input {
         <button class="yt" onclick="setYear('2026',this)">2026年度</button>
       </div>
       <div class="tabs">
-        <button class="tab active" data-ent="neo" data-tab="weekly" onclick="sw('weekly',this)">📊 サマリー</button>
-        <button class="tab" data-ent="neo" data-tab="pl-cf" onclick="sw('pl-cf',this)">📈 月次財務</button>
-        <button class="tab" data-ent="neo" data-tab="import" onclick="sw('import',this)">🔗 MF連携</button>
-        <button class="tab" data-ent="neo" data-tab="sim" onclick="sw('sim',this)">🔮 シミュレーション</button>
-        <button class="tab" data-ent="neo" data-tab="workforce" onclick="sw('workforce',this)">⚙️ 工数管理</button>
-        <button class="tab" data-ent="neo" data-tab="payroll" onclick="sw('payroll',this)">💴 人件費</button>
-        <button class="tab" data-ent="neo" data-tab="expense" onclick="sw('expense',this)">💳 経費申請</button>
-        <button class="tab" data-ent="neo" data-tab="report" onclick="sw('report',this)">📋 月次レポート</button>
-        <button class="tab" data-ent="neo" data-tab="pdf" onclick="sw('pdf',this)">📄 役員PDF</button>
-        <button class="tab" data-ent="group solo" data-tab="gsummary" onclick="sw('gsummary',this)">📊 経営サマリー</button>
-        <button class="tab" data-ent="group solo" data-tab="hd" onclick="sw('hd',this)">📑 財務・連結</button>
+        <button class="tab active" data-ent="neo solo" data-tab="weekly" onclick="sw('weekly',this)">📊 サマリー</button>
+        <button class="tab" data-ent="neo solo" data-tab="pl-cf" onclick="sw('pl-cf',this)">📈 月次財務</button>
+        <button class="tab" data-ent="neo solo" data-tab="import" onclick="sw('import',this)">🔗 MF連携</button>
+        <button class="tab" data-ent="neo solo" data-tab="sim" onclick="sw('sim',this)">🔮 シミュレーション</button>
+        <button class="tab" data-ent="neo solo" data-tab="workforce" onclick="sw('workforce',this)">⚙️ 工数管理</button>
+        <button class="tab" data-ent="neo solo" data-tab="payroll" onclick="sw('payroll',this)">💴 人件費</button>
+        <button class="tab" data-ent="neo solo" data-tab="expense" onclick="sw('expense',this)">💳 経費申請</button>
+        <button class="tab" data-ent="neo solo" data-tab="report" onclick="sw('report',this)">📋 月次レポート</button>
+        <button class="tab" data-ent="neo solo" data-tab="pdf" onclick="sw('pdf',this)">📄 役員PDF</button>
+        <button class="tab" data-ent="group" data-tab="gsummary" onclick="sw('gsummary',this)">📊 経営サマリー</button>
+        <button class="tab" data-ent="group" data-tab="hd" onclick="sw('hd',this)">📑 財務・連結</button>
       </div>
     </div>
   </div>
@@ -2434,8 +2434,16 @@ function setEntity(ent, el) {
     if (show && !firstTab) { firstTab = b.dataset.tab; firstBtn = b; }
   });
 
+  // 財務データの会社スコープを対象に合わせて切替（solo=HD単独専用 fiscal_data、neo/group=NEOベース）
+  // ※ 既存の switchCompany(currentCompanyId / fiscal_data.company_id) 機構を利用
+  const COMPANY_FOR = { neo: '', solo: 'HD_SOLO', group: '' };
+  const wantCompany = COMPANY_FOR[ent] || '';
+  if (typeof switchCompany === 'function' && (typeof currentCompanyId === 'undefined' || (currentCompanyId || '') !== wantCompany)) {
+    switchCompany(wantCompany); // loadDB → setYear で再描画
+  }
+
   // 対象コンテキストを各モジュールへ反映
-  if ((ent === 'group' || ent === 'solo') && window.GSUMMARY && window.GSUMMARY.setScope) window.GSUMMARY.setScope(ent);
+  if (ent === 'group' && window.GSUMMARY && window.GSUMMARY.setScope) window.GSUMMARY.setScope('group');
   if (window.HD && window.HD.applyEntity) window.HD.applyEntity(ent);
 
   // 現在のアクティブタブが対象外なら、対象の先頭タブへ切替（対象内なら維持）
@@ -17141,12 +17149,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const L = [];
     L.push('あなたはNEOグループのCFO/経営参謀AIです。以下の最新ダッシュボード指標（金額は千円単位）に基づき、根拠（具体的な数値）を示しながら、簡潔・実務的に経営判断を支援してください。提供された数値の範囲で答え、不明な点は「データ未入力」と明示すること。回答は日本語で、必要に応じて箇条書きを用いる。');
     L.push('【対象】' + entityLabel() + ' ／ 年度: ' + yr);
-    if (e === 'group' || e === 'solo'){
+    if (e === 'group'){
       const k = txt('gs-kpi'), h = txt('gs-health'), a = txt('gs-alert');
       if (k) L.push('【主要KPI】' + k);
       if (h) L.push('【経営健全性】' + h);
       if (a) L.push('【アラート】' + a);
     } else {
+      // solo / neo は標準ダッシュボード(会社スコープ)を参照
       L.push('【主要KPI】現金残高:' + txt('kpi-cash') + ' / 売上累積:' + txt('kpi-rev') + ' / 粗利累積:' + txt('kpi-gp') + ' / 販管費累積:' + txt('kpi-opex') + ' / 営業利益累積:' + txt('kpi-op') + ' / 純資産:' + txt('kpi-equity'));
       L.push('【経営健全性】予算消費率:' + txt('exec-budget-val') + '(' + txt('exec-budget-sub') + ') / 人件費生産性:' + txt('exec-prod-val') + ' / 残キャッシュ:' + txt('exec-runway-val') + '(' + txt('exec-runway-sub') + ')');
       const al = txt('exec-alert-list'); if (al) L.push('【アラート】' + al);
