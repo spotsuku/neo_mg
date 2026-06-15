@@ -18,9 +18,10 @@ export default async function handler(req, res) {
 
       // ── 財務データ 読込 ──
       case 'load_fiscal': {
-        const companyId = req.query.company_id || null;
+        const companyId = req.query.company_id != null ? String(req.query.company_id) : '';
         let query = supabase.from('fiscal_data').select('*').order('fiscal_year', { ascending: true });
-        if (companyId) { query = query.eq('company_id', companyId); } else { query = query.is('company_id', null); }
+        if (companyId) { query = query.eq('company_id', companyId); }
+        else { query = query.or('company_id.is.null,company_id.eq.'); } // 基本会社(NEO): NULL でも '' でも対象
         const { data, error } = await query;
         if (error) throw error;
         // { '2025': {...}, '2026': {...} } の形に変換
@@ -38,35 +39,44 @@ export default async function handler(req, res) {
       }
 
       // ── 財務データ 保存（年度ごと upsert）──
+      // スキーマ状態(company_id列の有無 / 一意制約が fiscal_year か (company_id,fiscal_year) か / bs列の有無)
+      // に応じてフォールバックし、ON CONFLICT 不一致や列欠落でも保存できるようにする。
       case 'save_fiscal': {
         const { fiscal_year, months, pl, cf, bs, reportData, company_id } = req.body;
+        const cid = company_id != null ? String(company_id) : ''; // 基本会社(NEO)は '' で統一
         const payload = {
           fiscal_year,
           months,
           pl,
           cf,
           report_data: reportData,
-          updated_at: new Date().toISOString()
+          company_id: cid,
+          updated_at: new Date().toISOString(),
         };
-        if (company_id) payload.company_id = company_id;
-        const conflictCol = company_id ? 'company_id,fiscal_year' : 'fiscal_year';
-        // bs 列が存在する Supabase スキーマでのみ書き込み
-        // 古いスキーマの場合は最初の試行が失敗するので、再試行で bs 抜きで保存
         if (bs !== undefined && bs !== null) payload.bs = bs;
-        let { error } = await supabase
-          .from('fiscal_data')
-          .upsert(payload, { onConflict: conflictCol });        // Supabase / PostgREST が返す「列が無い」系のエラーを幅広く検出:
-        //   - "column \"bs\" of relation \"fiscal_data\" does not exist"  (Postgres)
-        //   - "Could not find the 'bs' column of 'fiscal_data' in the schema cache"  (PostgREST schema cache)
-        const isBsColumnMissing = error && /['"]?bs['"]?/i.test(error.message || '')
-          && /(does not exist|could not find|schema cache)/i.test(error.message || '');
-        if (isBsColumnMissing) {
-          console.warn('[save_fiscal] bs column missing, retrying without bs:', error.message);
+
+        const attempt = (p, conflictCol) => supabase.from('fiscal_data').upsert(p, { onConflict: conflictCol });
+        const colMissing = (msg, col) => new RegExp(`['"]?${col}['"]?`, 'i').test(msg || '') && /(does not exist|could not find|schema cache)/i.test(msg || '');
+
+        let conflictCol = 'company_id,fiscal_year';
+        let { error } = await attempt(payload, conflictCol);
+
+        // bs 列が無い旧スキーマ → bs を抜いて再試行
+        if (error && colMissing(error.message, 'bs')) {
           delete payload.bs;
-          const retry = await supabase
-            .from('fiscal_data')
-            .upsert(payload, { onConflict: conflictCol });
-          error = retry.error;
+          ({ error } = await attempt(payload, conflictCol));
+        }
+        // company_id 列が無い旧スキーマ → company_id を抜き fiscal_year で再試行
+        if (error && colMissing(error.message, 'company_id')) {
+          delete payload.company_id;
+          conflictCol = 'fiscal_year';
+          ({ error } = await attempt(payload, conflictCol));
+        }
+        // (company_id,fiscal_year) の一意制約が無い → fiscal_year で再試行（基本会社向け）
+        if (error && /(unique or exclusion constraint|on conflict)/i.test(error.message || '')) {
+          const legacy = { ...payload };
+          delete legacy.company_id;
+          ({ error } = await attempt(legacy, 'fiscal_year'));
         }
         if (error) throw error;
         return res.status(200).json({ ok: true });

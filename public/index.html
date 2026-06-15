@@ -10988,6 +10988,14 @@ async function loadDB() {
     });
   }
 
+  // 初期値0(空)の年度構造を生成（データの無い会社/年度のリセット用）
+  function emptyYearFor(yr) {
+    const m = (typeof ALL_MONTHS !== 'undefined' && ALL_MONTHS[yr]) ? ALL_MONTHS[yr] : (typeof MONTHS_2025 !== 'undefined' ? MONTHS_2025 : []);
+    const s = (typeof makeEmptyYearStruct === 'function') ? makeEmptyYearStruct(m) : { months: m, pl:{budget:{},actual:{}}, cf:{budget:{},actual:{}}, reportData:{} };
+    sanitizeYear(s, yr);
+    return s;
+  }
+
   try {
     if (!IS_LOCAL) {
       const res = await fetch(`/api/db?action=load_fiscal${currentCompanyId ? "&company_id=" + currentCompanyId : ""}`);
@@ -11020,11 +11028,16 @@ async function loadDB() {
             sanitizeYear(DB[yr], yr);
             console.log(`[loadDB] ${yr} loaded from Supabase, rev budget[0]:`, DB[yr].pl.budget.rev?.[0], 'bs.actualKeys:', DB[yr].bs?.actual ? Object.keys(DB[yr].bs.actual).length : 0);
           } else {
-            // JSONB にこの年度のデータが無い → localStorage から復旧
-            const raw = localStorage.getItem(`neo_db_${yr}`);
+            // この会社・年度のSupabaseデータ無し → 会社別localStorage → 無ければ初期値0で初期化
+            const lsKey = currentCompanyId ? `neo_db_${currentCompanyId}_${yr}` : `neo_db_${yr}`;
+            const raw = localStorage.getItem(lsKey);
             if (raw) {
-              try { DB[yr] = JSON.parse(raw); sanitizeYear(DB[yr], yr); console.log(`[loadDB] ${yr} restored from localStorage`); }
-              catch(e) { console.warn(`localStorage parse failed for ${yr}`, e); }
+              try { DB[yr] = JSON.parse(raw); sanitizeYear(DB[yr], yr); console.log(`[loadDB] ${yr} restored from localStorage (${lsKey})`); }
+              catch(e) { console.warn(`localStorage parse failed for ${yr}`, e); DB[yr] = emptyYearFor(yr); }
+            } else if (currentCompanyId) {
+              // 子会社/HD単独はデータが無ければ全て0（NEOや前会社のデータを引き継がない）
+              DB[yr] = emptyYearFor(yr);
+              console.log(`[loadDB] ${yr} reset to empty for company ${currentCompanyId}`);
             }
           }
         }
@@ -11037,14 +11050,17 @@ async function loadDB() {
         return;
       }
     }
-    // localStorage フォールバック
+    // localStorage フォールバック（会社別キー。子会社/HD単独でデータが無ければ初期値0）
     for (const yr of ['2024', '2025', '2026']) {
-      const raw = localStorage.getItem(`neo_db_${yr}`);
+      const lsKey = currentCompanyId ? `neo_db_${currentCompanyId}_${yr}` : `neo_db_${yr}`;
+      const raw = localStorage.getItem(lsKey);
       if (raw) {
         try {
           DB[yr] = JSON.parse(raw);
           sanitizeYear(DB[yr], yr);
-        } catch(e) { console.warn(`localStorage parse failed for ${yr}`, e); }
+        } catch(e) { console.warn(`localStorage parse failed for ${yr}`, e); if (currentCompanyId) DB[yr] = emptyYearFor(yr); }
+      } else if (currentCompanyId) {
+        DB[yr] = emptyYearFor(yr);
       }
     }
   } catch (e) {
