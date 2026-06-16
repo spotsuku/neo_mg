@@ -13363,19 +13363,20 @@ document.addEventListener('DOMContentLoaded', function() {
     '事業開発': [],
   };
 
+  // 販管費 正準リスト（月次財務・シミュレーション・工数管理で統一）
   const DEFAULT_SGA_ITEMS = [
-    {name:'経営戦略 国本',                   amount:2400000},
-    {name:'コミュニティ設計 加藤',           amount:2400000},
-    {name:'財務・法務 太田',                 amount:2400000},
-    {name:'広報 野呂',                       amount:1200000},
-    {name:'デザイナー 久保木',               amount:1200000},
-    {name:'バックオフィス 和泉、池内',       amount:1680000},
-    {name:'旅費交通費',                      amount:2400000},
-    {name:'通信費',                          amount:2400000},
-    {name:'会議費',                          amount:2400000},
-    {name:'家賃',                            amount:2400000},
-    {name:'専門家',                          amount:2400000},
-    {name:'その他',                          amount:2400000},
+    {name:'人件費(社保込み)',      amount:0},
+    {name:'業務委託費',            amount:0},
+    {name:'支払い報酬',            amount:0},
+    {name:'外注費',                amount:0},
+    {name:'採用研修費',            amount:0},
+    {name:'広告販促費',            amount:0},
+    {name:'旅費交通費',            amount:0},
+    {name:'通信費',                amount:0},
+    {name:'会議・交際費',          amount:0},
+    {name:'賃料(本社のみ)',        amount:0},
+    {name:'消耗品・減価償却費',    amount:0},
+    {name:'その他',                amount:0},
   ];
 
   // 役割ウェイト (合計100% / 事業内の売上配分)
