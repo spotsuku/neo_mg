@@ -432,6 +432,9 @@ input.cells-edit-input {
 #sec-payroll input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
 #sec-workforce input[type="number"],
 #sec-payroll input[type="number"]{ -moz-appearance:textfield; appearance:textfield }
+#sec-products input[type="number"]::-webkit-outer-spin-button,
+#sec-products input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
+#sec-products input[type="number"]{ -moz-appearance:textfield; appearance:textfield }
 
 /* 人件費タブ: スプレッドシート風セル */
 #sec-payroll .wf-pl-table th,#sec-payroll .wf-pl-table td{padding:4px 6px;font-size:10px}
@@ -823,6 +826,7 @@ input.cells-edit-input {
       <div class="tabs">
         <button class="tab active" data-ent="neo solo" data-tab="weekly" onclick="sw('weekly',this)">📊 サマリー</button>
         <button class="tab" data-ent="neo solo" data-tab="pl-cf" onclick="sw('pl-cf',this)">📈 月次財務</button>
+        <button class="tab" data-ent="neo solo" data-tab="products" onclick="sw('products',this)">🛍️ 商品別売上</button>
         <button class="tab" data-ent="neo solo" data-tab="import" onclick="sw('import',this)">🔗 MF連携</button>
         <button class="tab" data-ent="neo solo" data-tab="sim" onclick="sw('sim',this)">🔮 シミュレーション</button>
         <button class="tab" data-ent="neo solo" data-tab="workforce" onclick="sw('workforce',this)">⚙️ 工数管理</button>
@@ -1224,6 +1228,32 @@ input.cells-edit-input {
       <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none">シミュレーションから「予算に反映」した際の変更ログ</span>
     </div>
     <div id="budget-history-list" style="font-size:11px;color:var(--text3)">変更履歴はまだありません</div>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────
+     商品別 売上進捗
+────────────────────────────────────── -->
+<div class="sec" id="sec-products">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;gap:8px;flex-wrap:wrap">
+    <div>
+      <div style="font-size:14px;font-weight:700">🛍️ 商品別 売上進捗</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">会費 / 研修 / イベント・その他 の売上を、年間目標と月次予算の両面で進捗管理（千円）</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:11px;color:var(--text3)">年度</span>
+      <select id="prod-year-sel" onchange="window.PRODUCTS && window.PRODUCTS.setYear(this.value)"
+        style="padding:5px 8px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-family:inherit"></select>
+    </div>
+  </div>
+  <div id="prod-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px"></div>
+  <div class="card" style="margin-top:14px">
+    <div class="ct">📈 商品別 累積売上の推移</div>
+    <div style="position:relative;height:300px"><canvas id="prod-chart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="ct">📋 月次 予算 / 実績（千円）</div>
+    <div id="prod-monthly" style="overflow-x:auto"></div>
   </div>
 </div>
 
@@ -2434,7 +2464,178 @@ function sw(id, el) {
   if (id === 'expense' && window.EXPENSE) setTimeout(() => window.EXPENSE.init(), 30);
   if (id === 'hd' && window.HD) setTimeout(() => window.HD.init(), 30);
   if (id === 'gsummary' && window.GSUMMARY) setTimeout(() => window.GSUMMARY.render(), 30);
+  if (id === 'products' && window.PRODUCTS) setTimeout(() => window.PRODUCTS.open(), 30);
 }
+
+// ── 商品別 売上進捗 (window.PRODUCTS) ──
+// 商品 = 会費(cfInFee + 後方互換 cfInMembership) / 研修(cfInTraining) / イベント・その他(cfInEvent)。
+// 進捗 = 年間目標(reportData.salesTargets) と 月次予算(cf.budget) の両建て。
+// DB[year].cf を読み取り専用で流用し、既存KPI/CF表示は一切変更しない。
+window.PRODUCTS = (function(){
+  const DEFS = [
+    { key:'cfInFee',      label:'NEO会費',          legacy:'cfInMembership', color:'#378ADD' },
+    { key:'cfInTraining', label:'研修',             color:'#3BB273' },
+    { key:'cfInEvent',    label:'イベント・その他',  color:'#EF9F27' },
+  ];
+  let _year = null, _chart = null;
+
+  const fmtK = (v) => Math.round(Number(v)||0).toLocaleString();
+  const yr   = () => _year || (typeof currentYear !== 'undefined' ? currentYear : '2025');
+  const db   = () => (typeof DB !== 'undefined' && DB[yr()]) || null;
+  const axisFmt = (v) => (typeof fmtAxisJPY === 'function') ? fmtAxisJPY(v) : Number(v).toLocaleString();
+
+  function arr(d, kind, def){
+    const N = (d.months||[]).length;
+    const base = (d.cf && d.cf[kind] && d.cf[kind][def.key]) || [];
+    const out = Array.from({length:N}, (_,i)=> Number((base||[])[i])||0);
+    if (def.legacy){
+      const leg = (d.cf && d.cf[kind] && d.cf[kind][def.legacy]) || [];
+      for (let i=0;i<N;i++) out[i] += Number(leg[i])||0;
+    }
+    return out;
+  }
+  function lastIdx(d){
+    const N=(d.months||[]).length; let idx=-1;
+    for (let i=0;i<N;i++){ let tot=0; DEFS.forEach(def=> tot += arr(d,'actual',def)[i]); if (tot>0) idx=i; }
+    return idx;
+  }
+  function targets(d){
+    if (!d.reportData) d.reportData={};
+    if (!d.reportData.salesTargets) d.reportData.salesTargets={};
+    return d.reportData.salesTargets;
+  }
+  function setTarget(key,val){
+    const d=db(); if(!d) return;
+    targets(d)[key]=Math.max(0, Math.round(Number(val)||0));
+    try{ localStorage.setItem('neo_db_'+yr(), JSON.stringify(d)); }catch(e){}
+    if (typeof scheduleAutoSave==='function') scheduleAutoSave('商品目標編集');
+    render();
+  }
+  const cum = (a, end) => a.slice(0, end+1).reduce((s,v)=>s+v,0);
+  function bar(pct, color){
+    const w = Math.max(0, Math.min(100, pct));
+    return `<div style="height:7px;border-radius:4px;background:var(--bg3);overflow:hidden;margin-top:4px"><div style="height:100%;width:${w}%;background:${color};border-radius:4px"></div></div>`;
+  }
+  function pctTxt(num, den){
+    if (!den) return '<span style="color:var(--text3)">—</span>';
+    const p = Math.round(num/den*100);
+    const c = p>=100?'var(--tc-green)':p>=70?'var(--tc-amber)':'var(--tc-red)';
+    return `<span style="color:${c};font-weight:700">${p}%</span>`;
+  }
+
+  function render(){
+    const d=db(); if(!d) return;
+    const li = lastIdx(d);
+    const sel=document.getElementById('prod-year-sel');
+    if (sel){
+      const years = (typeof ALL_MONTHS!=='undefined') ? Object.keys(ALL_MONTHS) : ['2024','2025','2026'];
+      sel.innerHTML = years.map(y=>`<option value="${y}" ${y===yr()?'selected':''}>${y}年度</option>`).join('');
+    }
+    const monthsDone = li+1;
+    const tgt=targets(d);
+    let cardsHtml='';
+    const totals={actCum:0, budCum:0, budYr:0, tgt:0};
+    DEFS.forEach(def=>{
+      const aA=arr(d,'actual',def), bA=arr(d,'budget',def);
+      const actCum=cum(aA,li), budCum=cum(bA,li), budYr=bA.reduce((s,v)=>s+v,0);
+      const t = Number(tgt[def.key]) || budYr; // 目標未設定なら年間予算をフォールバック
+      totals.actCum+=actCum; totals.budCum+=budCum; totals.budYr+=budYr; totals.tgt+=t;
+      cardsHtml += `
+      <div class="card" style="margin-bottom:0;border-top:3px solid ${def.color}">
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">${def.label}</div>
+        <div style="font-size:10px;color:var(--text3)">累積実績（${monthsDone>0?monthsDone+'ヶ月':'—'}）</div>
+        <div style="font-size:22px;font-weight:800;color:${def.color};line-height:1.1">${fmtK(actCum)}<span style="font-size:11px;color:var(--text3);font-weight:600"> 千円</span></div>
+        <div style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;font-size:11px"><span>🎯 年間目標比</span>${pctTxt(actCum,t)}</div>
+          ${bar(t?actCum/t*100:0, def.color)}
+          <div style="display:flex;align-items:center;gap:5px;margin-top:6px">
+            <span style="font-size:10px;color:var(--text3)">年間目標</span>
+            <input type="number" value="${Number(tgt[def.key])?Math.round(tgt[def.key]):''}" placeholder="${fmtK(budYr)}"
+              onchange="window.PRODUCTS.setTarget('${def.key}', this.value)"
+              style="width:100px;padding:3px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:11px;text-align:right;font-family:inherit">
+            <span style="font-size:10px;color:var(--text3)">千円</span>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;font-size:11px"><span>📊 月次予算比（累積）</span>${pctTxt(actCum,budCum)}</div>
+          ${bar(budCum?actCum/budCum*100:0, def.color)}
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">累積予算 ${fmtK(budCum)} / 年間予算 ${fmtK(budYr)} 千円</div>
+        </div>
+      </div>`;
+    });
+    cardsHtml += `
+      <div class="card" style="margin-bottom:0;border-top:3px solid var(--text2);background:var(--bg2)">
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">合計</div>
+        <div style="font-size:10px;color:var(--text3)">累積実績</div>
+        <div style="font-size:22px;font-weight:800;line-height:1.1">${fmtK(totals.actCum)}<span style="font-size:11px;color:var(--text3);font-weight:600"> 千円</span></div>
+        <div style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;font-size:11px"><span>🎯 年間目標比</span>${pctTxt(totals.actCum,totals.tgt)}</div>
+          ${bar(totals.tgt?totals.actCum/totals.tgt*100:0,'var(--text2)')}
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">年間目標計 ${fmtK(totals.tgt)} 千円</div>
+        </div>
+        <div style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;font-size:11px"><span>📊 月次予算比（累積）</span>${pctTxt(totals.actCum,totals.budCum)}</div>
+          ${bar(totals.budCum?totals.actCum/totals.budCum*100:0,'var(--text2)')}
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">累積予算 ${fmtK(totals.budCum)} / 年間予算 ${fmtK(totals.budYr)} 千円</div>
+        </div>
+      </div>`;
+    const cardsEl=document.getElementById('prod-cards'); if(cardsEl) cardsEl.innerHTML=cardsHtml;
+    renderMonthly(d, li);
+    renderChart(d, li);
+  }
+
+  function renderMonthly(d, li){
+    const el=document.getElementById('prod-monthly'); if(!el) return;
+    const N=(d.months||[]).length;
+    const mlab=(m)=>(typeof MONTH_LABELS!=='undefined' && MONTH_LABELS[m])||m;
+    let h=`<table class="dt" style="min-width:${130+N*60}px;border-collapse:separate;border-spacing:0;font-size:11px"><thead><tr><th class="l" style="position:sticky;left:0;background:var(--bg2);min-width:130px">商品 / 区分</th>`;
+    (d.months||[]).forEach((m,i)=>{ h+=`<th style="${i===li?'color:var(--tc-blue)':''}">${mlab(m)}</th>`; });
+    h+=`<th>合計</th></tr></thead><tbody>`;
+    DEFS.forEach(def=>{
+      const aA=arr(d,'actual',def), bA=arr(d,'budget',def);
+      h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2);font-weight:700;border-top:2px solid ${def.color}">${def.label} <span style="font-size:9px;color:var(--text3);font-weight:400">予算</span></td>`;
+      bA.forEach(v=>{ h+=`<td style="text-align:right;color:var(--text3)">${v?fmtK(v):'─'}</td>`; });
+      h+=`<td style="text-align:right;font-weight:700;color:var(--text3)">${fmtK(bA.reduce((s,v)=>s+v,0))}</td></tr>`;
+      h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2)"><span style="font-size:9px;color:var(--text);font-weight:700">実績</span></td>`;
+      aA.forEach((v,i)=>{ const dv=v-bA[i]; const col=i>li?'color:var(--text3)':dv>=0?'color:var(--tc-green)':'color:var(--tc-red)'; h+=`<td style="text-align:right;${col}">${(i<=li&&v)?fmtK(v):'─'}</td>`; });
+      h+=`<td style="text-align:right;font-weight:700">${fmtK(aA.slice(0,li+1).reduce((s,v)=>s+v,0))}</td></tr>`;
+    });
+    h+=`</tbody></table>`;
+    el.innerHTML=h;
+  }
+
+  function renderChart(d, li){
+    if (typeof Chart==='undefined') return;
+    const cv=document.getElementById('prod-chart'); if(!cv) return;
+    const mlab=(m)=>(typeof MONTH_LABELS!=='undefined' && MONTH_LABELS[m])||m;
+    const labels=(d.months||[]).map(mlab);
+    const ds = DEFS.map(def=>{
+      const aA=arr(d,'actual',def); let c=0;
+      const data=aA.map((v,i)=>{ c+=v; return i<=li ? c : null; });
+      return { label:def.label, data, borderColor:def.color, backgroundColor:def.color+'22', tension:.3, pointRadius:2, fill:false, spanGaps:false };
+    });
+    let cb=0; const budTot=(d.months||[]).map((_,i)=>{ let s=0; DEFS.forEach(def=> s+=arr(d,'budget',def)[i]); cb+=s; return cb; });
+    const rs=getComputedStyle(document.documentElement);
+    const tc=(rs.getPropertyValue('--text3')||'#888').trim();
+    const gc='rgba(120,120,120,0.12)';
+    ds.push({ label:'予算累計', data:budTot, borderColor:tc, borderDash:[5,4], tension:.2, pointRadius:0, fill:false });
+    if (_chart) { try{ _chart.destroy(); }catch(e){} }
+    _chart=new Chart(cv,{ type:'line', data:{labels,datasets:ds},
+      options:{ responsive:true, maintainAspectRatio:false,
+        interaction:{ mode:'index', intersect:false },
+        plugins:{ legend:{ labels:{ color:tc, font:{size:11}, boxWidth:12 } },
+          tooltip:{ callbacks:{ label:ctx=> ctx.parsed.y==null?null:` ${ctx.dataset.label}：${Math.round(ctx.parsed.y).toLocaleString()}千円` } } },
+        scales:{ x:{ ticks:{color:tc,font:{size:10}},grid:{color:gc} },
+          y:{ beginAtZero:true, ticks:{color:tc,font:{size:10},callback:axisFmt},grid:{color:gc} } } } });
+  }
+
+  return {
+    open(){ _year = (typeof currentYear!=='undefined') ? currentYear : _year; render(); },
+    setYear(y){ _year=y; render(); },
+    setTarget,
+    render,
+  };
+})();
 
 // ── 対象（エンティティ）切替：ページ全体を HD連結 / HD単独 / 子会社(NEO福岡) で切替える ──
 let currentEntity = 'group';
@@ -11500,7 +11701,7 @@ window.addEventListener('load', async () => {
       const yBtns = document.querySelectorAll('.year-toggle .yt');
       if (yBtns[yIdx]) setYear(savedYear, yBtns[yIdx]);
     }
-    const tabOrder = ['weekly','pl-cf','import','sim','workforce','payroll','expense','report','pdf','hd','gsummary'];
+    const tabOrder = ['weekly','pl-cf','products','import','sim','workforce','payroll','expense','report','pdf','hd','gsummary'];
     const savedTab = localStorage.getItem('neo_active_tab');
     const tIdx = tabOrder.indexOf(savedTab);
     if (tIdx > 0) { // 0='weekly' はデフォルトなのでスキップ
