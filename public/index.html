@@ -1713,8 +1713,8 @@ input.cells-edit-input {
   <div class="metrics" style="grid-template-columns:repeat(5,minmax(0,1fr));margin-bottom:1rem">
     <div class="mc"><div class="mc-l">総人件費</div><div class="mc-v" id="wf-kpi-cost">—</div><div class="mc-s" id="wf-kpi-member-count"></div></div>
     <div class="mc"><div class="mc-l">総売上（設定）</div><div class="mc-v" id="wf-kpi-target-rev">—</div></div>
-    <div class="mc"><div class="mc-l">実現売上</div><div class="mc-v" id="wf-kpi-rev">—</div><div class="mc-s" id="wf-kpi-rev-sub"></div></div>
-    <div class="mc" title="実現売上 ÷ 総人件費"><div class="mc-l">生産性倍率</div><div class="mc-v" id="wf-kpi-ratio">—</div><div class="mc-s">目標 3.0倍以上</div></div>
+    <div class="mc"><div class="mc-l">粗利（売上−原価）</div><div class="mc-v" id="wf-kpi-rev">—</div><div class="mc-s" id="wf-kpi-rev-sub"></div></div>
+    <div class="mc" title="総売上 ÷ 総人件費"><div class="mc-l">生産性倍率</div><div class="mc-v" id="wf-kpi-ratio">—</div><div class="mc-s">目標 3.0倍以上</div></div>
     <div class="mc"><div class="mc-l">想定営業利益</div><div class="mc-v" id="wf-kpi-profit">—</div><div class="mc-s">PL基準</div></div>
   </div>
 
@@ -13537,7 +13537,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function bizRealizedRev(biz){
     return ROLES.reduce((s,r) => s + roleRealizedRev(biz, r), 0);
   }
-  function bizGrossProfit(biz){ return bizRealizedRev(biz) - bizCostTotal(biz); }
+  function bizGrossProfit(biz){ return bizRevenue(biz) - bizCostTotal(biz); }
   function bizOperatingProfit(biz){ return bizGrossProfit(biz) - bizPersonnelCost(biz) - sgaPerBiz(); }
 
   function memberRevenue(idx){
@@ -13787,15 +13787,15 @@ document.addEventListener('DOMContentLoaded', function() {
   function renderKPI(){
     const cost      = totalCost();
     const targetRev = totalTargetRevenue();
-    const realRev   = totalRealizedRev();
-    const ratio     = cost > 0 ? realRev / cost : 0;
+    const grossProfit = BIZ.reduce((s,b) => s + bizGrossProfit(b), 0);
+    const ratio     = cost > 0 ? targetRev / cost : 0;
     const profit    = totalOperatingProfit();
     if ($('wf-kpi-cost'))         $('wf-kpi-cost').textContent = fmtJPY(cost);
     if ($('wf-kpi-member-count')) $('wf-kpi-member-count').textContent = state.members.length + '名';
     if ($('wf-kpi-target-rev'))   $('wf-kpi-target-rev').textContent = fmtJPY(targetRev);
-    if ($('wf-kpi-rev'))          $('wf-kpi-rev').textContent = fmtJPY(realRev);
-    const lossRate = targetRev > 0 ? (1 - realRev / targetRev) * 100 : 0;
-    if ($('wf-kpi-rev-sub'))      $('wf-kpi-rev-sub').textContent = `機会損失 ${lossRate.toFixed(1)}%`;
+    if ($('wf-kpi-rev'))          $('wf-kpi-rev').textContent = fmtJPY(grossProfit);
+    const gpRate = targetRev > 0 ? (grossProfit / targetRev) * 100 : 0;
+    if ($('wf-kpi-rev-sub'))      $('wf-kpi-rev-sub').textContent = `粗利率 ${gpRate.toFixed(1)}%`;
     const ratioEl = $('wf-kpi-ratio');
     if (ratioEl){
       ratioEl.textContent = ratio.toFixed(2) + '倍';
@@ -13845,16 +13845,6 @@ document.addEventListener('DOMContentLoaded', function() {
       h += `<td></td></tr>`;
     }
 
-    // 実現売上
-    h += `<tr class="row-section"><td>実現売上（充足度反映後）</td>`;
-    BIZ.forEach(b => {
-      const real = bizRealizedRev(b);
-      const target = bizRevenue(b);
-      const lossRate = target > 0 ? (1 - real/target)*100 : 0;
-      h += `<td class="num">${fmtCol(real)}<br><span style="font-size:9px;font-weight:400;color:${lossRate>0?'var(--tc-amber)':'var(--text3)'}">損失${lossRate.toFixed(1)}%</span></td>`;
-    });
-    h += `<td class="num">${fmtCol(totalRealizedRev())}</td></tr>`;
-
     // 原価
     h += `<tr class="row-cat ${state.collapsed.costs ? 'collapsed' : ''}" onclick="WF.toggleSection('costs')"><td>原価</td>`;
     BIZ.forEach(b => h += `<td class="num">${fmtCol(bizCostTotal(b))}</td>`);
@@ -13897,15 +13887,15 @@ document.addEventListener('DOMContentLoaded', function() {
     h += `<td class="num">${fmtCol(totalPersonnel)}</td></tr>`;
 
     // 人件費比率
-    h += `<tr class="row-detail"><td>　└ 人件費比率（実現売上比）</td>`;
+    h += `<tr class="row-detail"><td>　└ 人件費比率（売上比）</td>`;
     BIZ.forEach(b => {
-      const real = bizRealizedRev(b);
-      const ratio = real > 0 ? (bizPersonnelCost(b) / real * 100) : 0;
+      const rev = bizRevenue(b);
+      const ratio = rev > 0 ? (bizPersonnelCost(b) / rev * 100) : 0;
       let cls = 'good'; if (ratio > 80) cls = 'bad'; else if (ratio > 50) cls = 'warn';
       h += `<td class="num wf-ratio-cell ${cls}">${ratio.toFixed(1)}%</td>`;
     });
-    const totalReal = totalRealizedRev();
-    const totalRatio = totalReal > 0 ? (totalPersonnel / totalReal * 100) : 0;
+    const totalRev = totalTargetRevenue();
+    const totalRatio = totalRev > 0 ? (totalPersonnel / totalRev * 100) : 0;
     let totalRatioCls = 'good'; if (totalRatio > 80) totalRatioCls = 'bad'; else if (totalRatio > 50) totalRatioCls = 'warn';
     h += `<td class="num wf-ratio-cell ${totalRatioCls}">${totalRatio.toFixed(1)}%</td></tr>`;
 
@@ -13939,26 +13929,26 @@ document.addEventListener('DOMContentLoaded', function() {
     h += `<td class="num" style="color:${totalOP>=0?'#5dbd7e':'#ff8a8a'}">${fmtCol(totalOP)}</td></tr>`;
 
     // 営業利益率
-    h += `<tr class="row-detail"><td>　└ 営業利益率（実現売上比）</td>`;
+    h += `<tr class="row-detail"><td>　└ 営業利益率（売上比）</td>`;
     BIZ.forEach(b => {
       const op = bizOperatingProfit(b);
-      const real = bizRealizedRev(b);
-      const m = real > 0 ? (op / real * 100) : 0;
+      const rev = bizRevenue(b);
+      const m = rev > 0 ? (op / rev * 100) : 0;
       h += `<td class="num" style="color:${op>=0?'var(--tc-green)':'var(--tc-red)'}">${m.toFixed(1)}%</td>`;
     });
-    const totalMargin = totalReal > 0 ? (totalOP / totalReal * 100) : 0;
+    const totalMargin = totalRev > 0 ? (totalOP / totalRev * 100) : 0;
     h += `<td class="num" style="color:${totalOP>=0?'var(--tc-green)':'var(--tc-red)'}">${totalMargin.toFixed(1)}%</td></tr>`;
 
     // 生産性倍率
-    h += `<tr class="row-detail"><td>　└ 生産性倍率（実現売上÷人件費）</td>`;
+    h += `<tr class="row-detail"><td>　└ 生産性倍率（売上÷人件費）</td>`;
     BIZ.forEach(b => {
-      const real = bizRealizedRev(b);
+      const rev = bizRevenue(b);
       const personnel = bizPersonnelCost(b);
-      const r = personnel > 0 ? real / personnel : 0;
+      const r = personnel > 0 ? rev / personnel : 0;
       let cls = 'bad'; if (r >= 3) cls = 'good'; else if (r >= 1) cls = 'warn';
       h += `<td class="num wf-ratio-cell ${cls}">${r.toFixed(2)}倍</td>`;
     });
-    const totalR = totalPersonnel > 0 ? totalReal / totalPersonnel : 0;
+    const totalR = totalPersonnel > 0 ? totalRev / totalPersonnel : 0;
     let totalRCls = 'bad'; if (totalR >= 3) totalRCls = 'good'; else if (totalR >= 1) totalRCls = 'warn';
     h += `<td class="num wf-ratio-cell ${totalRCls}">${totalR.toFixed(2)}倍</td></tr>`;
 
