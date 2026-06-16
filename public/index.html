@@ -2584,6 +2584,24 @@ window.PRODUCTS = (function(){
     if (typeof scheduleAutoSave==='function') scheduleAutoSave('商品目標編集');
     render();
   }
+  // 月次目標（reportData.salesTargetsMonthly[key] = 12ヶ月配列）
+  function tgtMonthly(d){
+    if (!d.reportData) d.reportData={};
+    if (!d.reportData.salesTargetsMonthly) d.reportData.salesTargetsMonthly={};
+    return d.reportData.salesTargetsMonthly;
+  }
+  function tgtMArr(d, key){
+    const N=(d.months||[]).length;
+    const base=tgtMonthly(d)[key]||[];
+    return Array.from({length:N},(_,i)=>Number(base[i])||0);
+  }
+  // 年間目標 = 月次目標合計(入力時) → 年間目標スカラー → 年間予算 の優先で解決
+  function annualTargetOf(d, key, budYr){
+    const msum=tgtMArr(d,key).reduce((s,v)=>s+v,0);
+    if (msum>0) return msum;
+    const a=Number(targets(d)[key]);
+    return a>0 ? a : budYr;
+  }
   const cum = (a, end) => a.slice(0, end+1).reduce((s,v)=>s+v,0);
   function bar(pct, color){
     const w = Math.max(0, Math.min(100, pct));
@@ -2611,8 +2629,10 @@ window.PRODUCTS = (function(){
     defs().forEach(def=>{
       const aA=arr(d,'actual',def), bA=arr(d,'budget',def);
       const actCum=cum(aA,li), budCum=cum(bA,li), budYr=bA.reduce((s,v)=>s+v,0);
-      const t = Number(tgt[def.key]) || budYr; // 目標未設定なら年間予算をフォールバック
-      totals.actCum+=actCum; totals.budCum+=budCum; totals.budYr+=budYr; totals.tgt+=t;
+      const tmA=tgtMArr(d,def.key), tmSum=tmA.reduce((s,v)=>s+v,0);
+      const tgtCum=cum(tmA,li);                 // 月次目標の累積（当月まで）
+      const t = annualTargetOf(d, def.key, budYr); // 月次合計→年間スカラー→年間予算
+      totals.actCum+=actCum; totals.budCum+=budCum; totals.budYr+=budYr; totals.tgt+=t; totals.tgtCum=(totals.tgtCum||0)+tgtCum;
       const delBtn = def.custom ? `<span onclick="window.PRODUCTS.remove('${def.key}')" title="この売上項目を削除" style="cursor:pointer;color:var(--tc-red);font-size:11px;opacity:.6;float:right">✕</span>` : '';
       const renBtn = `<span onclick="window.PRODUCTS.rename('${def.key}')" title="名称を変更" style="cursor:pointer;color:var(--text3);font-size:11px;opacity:.7;float:right;margin-left:6px">✎</span>`;
       cardsHtml += `
@@ -2625,11 +2645,11 @@ window.PRODUCTS = (function(){
           ${bar(t?actCum/t*100:0, def.color)}
           <div style="display:flex;align-items:center;gap:5px;margin-top:6px">
             <span style="font-size:10px;color:var(--text3)">年間目標</span>
-            <input type="number" value="${Number(tgt[def.key])?Math.round(tgt[def.key]):''}" placeholder="${fmtK(budYr)}"
-              onchange="window.PRODUCTS.setTarget('${def.key}', this.value)"
-              style="width:100px;padding:3px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:11px;text-align:right;font-family:inherit">
-            <span style="font-size:10px;color:var(--text3)">千円</span>
+            ${tmSum>0
+              ? `<span style="font-size:11px;font-weight:700;color:var(--text)">${fmtK(tmSum)}</span><span style="font-size:9px;color:var(--text3)">千円（月次合計）</span>`
+              : `<input type="number" value="${Number(tgt[def.key])?Math.round(tgt[def.key]):''}" placeholder="${fmtK(budYr)}" onchange="window.PRODUCTS.setTarget('${def.key}', this.value)" style="width:100px;padding:3px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:11px;text-align:right;font-family:inherit"><span style="font-size:10px;color:var(--text3)">千円</span>`}
           </div>
+          ${tmSum>0?`<div style="display:flex;justify-content:space-between;font-size:11px;margin-top:8px"><span>🎯 月次目標比（累積）</span>${pctTxt(actCum,tgtCum)}</div>${bar(tgtCum?actCum/tgtCum*100:0, def.color)}<div style="font-size:10px;color:var(--text3);margin-top:4px">累積目標 ${fmtK(tgtCum)} / 年間目標 ${fmtK(t)} 千円</div>`:''}
         </div>
         <div style="margin-top:12px">
           <div style="display:flex;justify-content:space-between;font-size:11px"><span>📊 月次予算比（累積）</span>${pctTxt(actCum,budCum)}</div>
@@ -2647,6 +2667,7 @@ window.PRODUCTS = (function(){
           <div style="display:flex;justify-content:space-between;font-size:11px"><span>🎯 年間目標比</span>${pctTxt(totals.actCum,totals.tgt)}</div>
           ${bar(totals.tgt?totals.actCum/totals.tgt*100:0,'var(--text2)')}
           <div style="font-size:10px;color:var(--text3);margin-top:4px">年間目標計 ${fmtK(totals.tgt)} 千円</div>
+          ${(totals.tgtCum||0)>0?`<div style="display:flex;justify-content:space-between;font-size:11px;margin-top:8px"><span>🎯 月次目標比（累積）</span>${pctTxt(totals.actCum,totals.tgtCum)}</div>${bar(totals.tgtCum?totals.actCum/totals.tgtCum*100:0,'var(--text2)')}<div style="font-size:10px;color:var(--text3);margin-top:4px">累積目標計 ${fmtK(totals.tgtCum)} 千円</div>`:''}
         </div>
         <div style="margin-top:12px">
           <div style="display:flex;justify-content:space-between;font-size:11px"><span>📊 月次予算比（累積）</span>${pctTxt(totals.actCum,totals.budCum)}</div>
@@ -2672,15 +2693,24 @@ window.PRODUCTS = (function(){
     (d.months||[]).forEach((m,i)=>{ h+=`<th style="${i===li?'color:var(--tc-blue)':''}">${mlab(m)}</th>`; });
     h+=`<th>合計</th></tr></thead><tbody>`;
     D.forEach((def,di)=>{
-      const bA=bAll[di], aA=aAll[di];
+      const bA=bAll[di], aA=aAll[di], tA=tgtMArr(d,def.key);
       const _ren=`<span onclick="event.stopPropagation();window.PRODUCTS.rename('${def.key}')" title="名称を変更" style="cursor:pointer;color:var(--text3);font-size:10px;opacity:.7;margin-left:4px">✎</span>`;
       const _del=def.custom?`<span onclick="event.stopPropagation();window.PRODUCTS.remove('${def.key}')" title="削除" style="cursor:pointer;color:var(--tc-red);font-size:10px;opacity:.6;margin-left:3px">✕</span>`:'';
-      h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2);font-weight:700;border-top:2px solid ${def.color}">${def.label}${_ren}${_del} <span style="font-size:9px;color:var(--text3);font-weight:400">予算</span></td>`;
+      // 🎯目標 行（編集可・reportData.salesTargetsMonthly[key]）。商品ラベル＋操作はこの行に集約
+      h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2);font-weight:700;border-top:2px solid ${def.color}">${def.label}${_ren}${_del} <span style="font-size:9px;color:var(--tc-amber);font-weight:700">🎯目標</span></td>`;
+      tA.forEach((v,i)=>{ h+=`<td class="budget" tabindex="0" data-cell-key="reportData.salesTargetsMonthly.${def.key}" data-cell-idx="${i}" style="text-align:right;color:var(--tc-amber)">${v?fmtK(v):'─'}</td>`; });
+      h+=`<td style="text-align:right;font-weight:700;color:var(--tc-amber)">${fmtK(tA.reduce((s,v)=>s+v,0))}</td></tr>`;
+      // 予算 行
+      h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2)"><span style="font-size:9px;color:var(--text3);font-weight:700">予算</span></td>`;
       bA.forEach((v,i)=>{ h+=`<td class="budget" tabindex="0" data-cell-key="pl.budget.${def.key}" data-cell-idx="${i}" style="text-align:right;color:var(--text3)">${v?fmtK(v):'─'}</td>`; });
       h+=`<td style="text-align:right;font-weight:700;color:var(--text3)">${fmtK(bA.reduce((s,v)=>s+v,0))}</td></tr>`;
+      // 実績 行（色は目標比較→目標未設定月は予算比較。合計列に対目標 達成率）
       h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2)"><span style="font-size:9px;color:var(--text);font-weight:700">実績</span></td>`;
-      aA.forEach((v,i)=>{ const dv=v-bA[i]; const col=(i>li||!v)?'color:var(--text3)':(dv>=0?'color:var(--tc-green)':'color:var(--tc-red)'); h+=`<td class="actual" tabindex="0" data-cell-key="pl.actual.${def.key}" data-cell-idx="${i}" style="text-align:right;${col}">${v?fmtK(v):'─'}</td>`; });
-      h+=`<td style="text-align:right;font-weight:700">${fmtK(aA.slice(0,li+1).reduce((s,v)=>s+v,0))}</td></tr>`;
+      aA.forEach((v,i)=>{ const ref=tA[i]>0?tA[i]:bA[i]; const dv=v-ref; const col=(i>li||!v)?'color:var(--text3)':(dv>=0?'color:var(--tc-green)':'color:var(--tc-red)'); const tt=tA[i]>0?` title="対目標 ${dv>=0?'+':''}${fmtK(dv)}千円"`:''; h+=`<td class="actual" tabindex="0" data-cell-key="pl.actual.${def.key}" data-cell-idx="${i}" style="text-align:right;${col}"${tt}>${v?fmtK(v):'─'}</td>`; });
+      const aCum=aA.slice(0,li+1).reduce((s,v)=>s+v,0), tCum=tA.slice(0,li+1).reduce((s,v)=>s+v,0);
+      const rate=tCum>0?Math.round(aCum/tCum*100):null;
+      const rc=rate==null?'var(--text3)':(rate>=100?'var(--tc-green)':rate>=70?'var(--tc-amber)':'var(--tc-red)');
+      h+=`<td style="text-align:right;font-weight:700">${fmtK(aCum)}${rate!=null?`<br><span style="font-size:9px;color:${rc};font-weight:700">達成 ${rate}%</span>`:''}</td></tr>`;
     });
     // ── 突合: 商品計 と PL売上合計(rev) ──
     h+=`<tr style="background:var(--bg3)"><td class="l" style="position:sticky;left:0;background:var(--bg3);font-weight:700;border-top:2px solid var(--text2)">商品計 <span style="font-size:9px;color:var(--text3);font-weight:400">予算</span></td>`;
@@ -2714,7 +2744,8 @@ window.PRODUCTS = (function(){
         const last=parts[parts.length-1]; const ex=o[last];
         if(!Array.isArray(ex)||ex.length<n){ o[last]=Array.from({length:n},(_,i)=>Array.isArray(ex)&&ex[i]!==undefined?ex[i]:''); }
         o[last][idx]=val;
-        if(parts.length===3 && typeof enqueueCell==='function') enqueueCell(yr(), `fiscal_${parts[0]}_${parts[1]}`, parts[2], idx, val);
+        // PL/CFのみセルアウトボックスに積む。reportData(月次目標等)は全行saveDBで同期するためスキップ
+        if(parts.length===3 && (parts[0]==='pl'||parts[0]==='cf') && typeof enqueueCell==='function') enqueueCell(yr(), `fiscal_${parts[0]}_${parts[1]}`, parts[2], idx, val);
         try{ localStorage.setItem('neo_db_'+yr(), JSON.stringify(d)); }catch(e){}
       },
       format: (v)=> (v!==''&&v!=null&&Number(v)!==0) ? Number(v).toLocaleString() : '─',
