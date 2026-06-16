@@ -1238,7 +1238,7 @@ input.cells-edit-input {
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;gap:8px;flex-wrap:wrap">
     <div>
       <div style="font-size:14px;font-weight:700">🛍️ 商品別 売上進捗</div>
-      <div style="font-size:10px;color:var(--text3);margin-top:2px">会費 / 研修 / イベント・その他 の売上を、年間目標と月次予算の両面で進捗管理（千円）</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">会費 / 研修 / イベント・その他 の売上（PL・売上計上ベース）を、年間目標と月次予算の両面で進捗管理（千円）。セルは直接編集できます。</div>
     </div>
     <div style="display:flex;align-items:center;gap:6px">
       <span style="font-size:11px;color:var(--text3)">年度</span>
@@ -2419,8 +2419,8 @@ function makeEmptyYearStruct(months) {
   return {
     months,
     pl: {
-      budget: { rev:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[],reward:[],recruit:[],travel:[],comm:[],entertain:[],rent:[],supplies:[] },
-      actual: { rev:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[],reward:[],recruit:[],travel:[],comm:[],entertain:[],rent:[],supplies:[] }
+      budget: { rev:[],revFee:[],revTraining:[],revEvent:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[],reward:[],recruit:[],travel:[],comm:[],entertain:[],rent:[],supplies:[] },
+      actual: { rev:[],revFee:[],revTraining:[],revEvent:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[],reward:[],recruit:[],travel:[],comm:[],entertain:[],rent:[],supplies:[] }
     },
     cf: {
       budget: { open:[],cfIn:[],cfInMembership:[],cfInTraining:[],cfInOther:[],salaryPay:[],devOutPay:[],bizComPay:[],incentivePay:[],expertPay:[],rentPay:[],expensePay:[],telPay:[],entertainPay:[],taxPay:[],toolsPay:[],suppliesPay:[],adSportsPay:[],eventCostPay:[],recruitPay:[],annualFeePay:[],salesOtherPay:[],investPay:[],loanIn:[],loanOut:[],capitalIn:[],warrantPay:[],finOtherPay:[],funding:[] },
@@ -2472,10 +2472,11 @@ function sw(id, el) {
 // 進捗 = 年間目標(reportData.salesTargets) と 月次予算(cf.budget) の両建て。
 // DB[year].cf を読み取り専用で流用し、既存KPI/CF表示は一切変更しない。
 window.PRODUCTS = (function(){
+  // 商品 = PLの商品別売上(売上計上ベース)。月次財務PLの売上合計(rev)とは別キーで保持し、突合表示する。
   const DEFS = [
-    { key:'cfInFee',      label:'NEO会費',          legacy:'cfInMembership', color:'#378ADD' },
-    { key:'cfInTraining', label:'研修',             color:'#3BB273' },
-    { key:'cfInEvent',    label:'イベント・その他',  color:'#EF9F27' },
+    { key:'revFee',      label:'NEO会費',          color:'#378ADD' },
+    { key:'revTraining', label:'研修',             color:'#3BB273' },
+    { key:'revEvent',    label:'イベント・その他',  color:'#EF9F27' },
   ];
   let _year = null, _chart = null;
 
@@ -2486,13 +2487,14 @@ window.PRODUCTS = (function(){
 
   function arr(d, kind, def){
     const N = (d.months||[]).length;
-    const base = (d.cf && d.cf[kind] && d.cf[kind][def.key]) || [];
-    const out = Array.from({length:N}, (_,i)=> Number((base||[])[i])||0);
-    if (def.legacy){
-      const leg = (d.cf && d.cf[kind] && d.cf[kind][def.legacy]) || [];
-      for (let i=0;i<N;i++) out[i] += Number(leg[i])||0;
-    }
-    return out;
+    const base = (d.pl && d.pl[kind] && d.pl[kind][def.key]) || [];
+    return Array.from({length:N}, (_,i)=> Number((base||[])[i])||0);
+  }
+  // PL売上合計(rev)の配列（突合用）
+  function revArr(d, kind){
+    const N=(d.months||[]).length;
+    const base=(d.pl && d.pl[kind] && d.pl[kind].rev) || [];
+    return Array.from({length:N}, (_,i)=> Number((base||[])[i])||0);
   }
   function lastIdx(d){
     const N=(d.months||[]).length; let idx=-1;
@@ -2588,20 +2590,61 @@ window.PRODUCTS = (function(){
     const el=document.getElementById('prod-monthly'); if(!el) return;
     const N=(d.months||[]).length;
     const mlab=(m)=>(typeof MONTH_LABELS!=='undefined' && MONTH_LABELS[m])||m;
-    let h=`<table class="dt" style="min-width:${130+N*60}px;border-collapse:separate;border-spacing:0;font-size:11px"><thead><tr><th class="l" style="position:sticky;left:0;background:var(--bg2);min-width:130px">商品 / 区分</th>`;
+    const bAll=DEFS.map(def=>arr(d,'budget',def));
+    const aAll=DEFS.map(def=>arr(d,'actual',def));
+    const sumAt=(arrs,i)=>arrs.reduce((s,a)=>s+(a[i]||0),0);
+    const revB=revArr(d,'budget'), revA=revArr(d,'actual');
+    let h=`<table id="prod-pl-table" class="dt" style="min-width:${140+N*58}px;border-collapse:separate;border-spacing:0;font-size:11px"><thead><tr><th class="l" style="position:sticky;left:0;background:var(--bg2);min-width:140px">商品 / 区分</th>`;
     (d.months||[]).forEach((m,i)=>{ h+=`<th style="${i===li?'color:var(--tc-blue)':''}">${mlab(m)}</th>`; });
     h+=`<th>合計</th></tr></thead><tbody>`;
-    DEFS.forEach(def=>{
-      const aA=arr(d,'actual',def), bA=arr(d,'budget',def);
+    DEFS.forEach((def,di)=>{
+      const bA=bAll[di], aA=aAll[di];
       h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2);font-weight:700;border-top:2px solid ${def.color}">${def.label} <span style="font-size:9px;color:var(--text3);font-weight:400">予算</span></td>`;
-      bA.forEach(v=>{ h+=`<td style="text-align:right;color:var(--text3)">${v?fmtK(v):'─'}</td>`; });
+      bA.forEach((v,i)=>{ h+=`<td class="budget" tabindex="0" data-cell-key="pl.budget.${def.key}" data-cell-idx="${i}" style="text-align:right;color:var(--text3)">${v?fmtK(v):'─'}</td>`; });
       h+=`<td style="text-align:right;font-weight:700;color:var(--text3)">${fmtK(bA.reduce((s,v)=>s+v,0))}</td></tr>`;
       h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2)"><span style="font-size:9px;color:var(--text);font-weight:700">実績</span></td>`;
-      aA.forEach((v,i)=>{ const dv=v-bA[i]; const col=i>li?'color:var(--text3)':dv>=0?'color:var(--tc-green)':'color:var(--tc-red)'; h+=`<td style="text-align:right;${col}">${(i<=li&&v)?fmtK(v):'─'}</td>`; });
+      aA.forEach((v,i)=>{ const dv=v-bA[i]; const col=(i>li||!v)?'color:var(--text3)':(dv>=0?'color:var(--tc-green)':'color:var(--tc-red)'); h+=`<td class="actual" tabindex="0" data-cell-key="pl.actual.${def.key}" data-cell-idx="${i}" style="text-align:right;${col}">${v?fmtK(v):'─'}</td>`; });
       h+=`<td style="text-align:right;font-weight:700">${fmtK(aA.slice(0,li+1).reduce((s,v)=>s+v,0))}</td></tr>`;
     });
+    // ── 突合: 商品計 と PL売上合計(rev) ──
+    h+=`<tr style="background:var(--bg3)"><td class="l" style="position:sticky;left:0;background:var(--bg3);font-weight:700;border-top:2px solid var(--text2)">商品計 <span style="font-size:9px;color:var(--text3);font-weight:400">予算</span></td>`;
+    (d.months||[]).forEach((_,i)=>{ const s=sumAt(bAll,i); h+=`<td style="text-align:right;font-weight:600">${s?fmtK(s):'─'}</td>`; });
+    h+=`<td style="text-align:right;font-weight:700">${fmtK(bAll.reduce((t,a)=>t+a.reduce((s,v)=>s+v,0),0))}</td></tr>`;
+    h+=`<tr style="background:var(--bg3)"><td class="l" style="position:sticky;left:0;background:var(--bg3)"><span style="font-size:9px;color:var(--text);font-weight:700">実績</span></td>`;
+    (d.months||[]).forEach((_,i)=>{ const s=sumAt(aAll,i); h+=`<td style="text-align:right;font-weight:600">${(i<=li&&s)?fmtK(s):'─'}</td>`; });
+    h+=`<td style="text-align:right;font-weight:700">${fmtK(aAll.reduce((t,a)=>t+a.slice(0,li+1).reduce((s,v)=>s+v,0),0))}</td></tr>`;
+    // PL売上合計(rev) 参照（実績優先・差異を⚠表示）
+    h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2);color:var(--text3)">参考 PL売上合計(rev)</td>`;
+    (d.months||[]).forEach((_,i)=>{ const past=i<=li; const rv=past?revA[i]:revB[i]; const diff=rv-(past?sumAt(aAll,i):sumAt(bAll,i)); const warn=past&&Math.abs(diff)>0; h+=`<td style="text-align:right;font-size:10px;color:var(--text3)" title="${warn?'商品計との差異 '+fmtK(diff)+'千円':''}">${rv?fmtK(rv):'─'}${warn?' ⚠':''}</td>`; });
+    h+=`<td style="text-align:right;font-size:10px;color:var(--text3)">${fmtK(revB.reduce((s,v)=>s+v,0))}<span style="opacity:.6">/</span>${fmtK(revA.slice(0,li+1).reduce((s,v)=>s+v,0))}</td></tr>`;
     h+=`</tbody></table>`;
+    h+=`<div style="font-size:10px;color:var(--text3);margin-top:6px">※ 商品別売上(PL)は月次財務の売上合計(rev)とは別キーで保持します。⚠ は「商品計」と「PL売上合計(rev)」に差異がある月です（一致するよう入力してください）。セルは直接編集→自動保存されます。</div>`;
     el.innerHTML=h;
+    attachCells();
+  }
+
+  function attachCells(){
+    const tbl=document.getElementById('prod-pl-table');
+    if(!tbl || typeof Cells==='undefined') return;
+    tbl.setAttribute('data-cells-wrap','prod-pl');
+    const N=(db()?.months?.length)||12;
+    Cells.attach('prod-pl-table', {
+      maxIdx: N-1,
+      read: (key, idx) => { const parts=key.split('.'); let o=DB[yr()]; for(const p of parts) o=o&&o[p]; return Array.isArray(o)?o[idx]:''; },
+      write: (key, idx, val) => {
+        const parts=key.split('.'); const d=DB[yr()]; if(!d) return;
+        const n=(d.months||[]).length; let o=d;
+        for(let i=0;i<parts.length-1;i++){ if(!o[parts[i]]) o[parts[i]]={}; o=o[parts[i]]; }
+        const last=parts[parts.length-1]; const ex=o[last];
+        if(!Array.isArray(ex)||ex.length<n){ o[last]=Array.from({length:n},(_,i)=>Array.isArray(ex)&&ex[i]!==undefined?ex[i]:''); }
+        o[last][idx]=val;
+        if(parts.length===3 && typeof enqueueCell==='function') enqueueCell(yr(), `fiscal_${parts[0]}_${parts[1]}`, parts[2], idx, val);
+        try{ localStorage.setItem('neo_db_'+yr(), JSON.stringify(d)); }catch(e){}
+      },
+      format: (v)=> (v!==''&&v!=null&&Number(v)!==0) ? Number(v).toLocaleString() : '─',
+      onChange: ()=>{ if(typeof scheduleAutoSave==='function') scheduleAutoSave('商品別売上編集'); },
+      render: ()=>{ render(); },
+    });
   }
 
   function renderChart(d, li){
@@ -11189,7 +11232,7 @@ function showSaveIndicator(msg, isError = false) {
 }
 
 async function loadDB() {
-  const REQUIRED_PL_KEYS = ['rev','labor','outsource','adv','gaichu','other',
+  const REQUIRED_PL_KEYS = ['rev','revFee','revTraining','revEvent','labor','outsource','adv','gaichu','other',
     'reward','recruit','travel','comm','entertain','rent','supplies',
     'cogs','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
 
@@ -11639,7 +11682,7 @@ window.addEventListener('load', async () => {
     }
   } catch(e) { console.warn('version sync failed:', e); }
   // PLデータ単位チェック（旧万円データ→千円マイグレーション + 10倍超過データ→÷10修正）
-  const PL_KEYS = ['rev','labor','outsource','adv','gaichu','other',
+  const PL_KEYS = ['rev','revFee','revTraining','revEvent','labor','outsource','adv','gaichu','other',
                    'reward','recruit','travel','comm','entertain','rent','supplies',
                    'cogs','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
   for (const yr of ['2024','2025','2026']) {
