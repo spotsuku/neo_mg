@@ -2489,10 +2489,13 @@ window.PRODUCTS = (function(){
   const axisFmt = (v) => (typeof fmtAxisJPY === 'function') ? fmtAxisJPY(v) : Number(v).toLocaleString();
 
   // 基本3 + カスタム売上項目（年度の reportData.productDefs）
+  // 基本3項目のラベルは reportData.productLabels[key] で上書き可能（キーは固定のまま改名）
   function defs(){
     const d=db();
+    const ov = (d && d.reportData && d.reportData.productLabels) || {};
     const cust = (d && d.reportData && Array.isArray(d.reportData.productDefs)) ? d.reportData.productDefs : [];
-    return BASE_DEFS.concat(cust.map(c=>({ key:c.key, label:c.label, color:c.color||'#888', custom:true })));
+    const base = BASE_DEFS.map(b=>({ key:b.key, label: ov[b.key]||b.label, color:b.color }));
+    return base.concat(cust.map(c=>({ key:c.key, label:c.label, color:c.color||'#888', custom:true })));
   }
   function persist(d, year){
     const y = year || yr();
@@ -2526,6 +2529,28 @@ window.PRODUCTS = (function(){
     d.reportData.productDefs=d.reportData.productDefs.filter(x=>x.key!==key);
     if(d.pl){ if(d.pl.budget) delete d.pl.budget[key]; if(d.pl.actual) delete d.pl.actual[key]; }
     if(d.reportData.salesTargets) delete d.reportData.salesTargets[key];
+    persist(d, ty);
+    refreshViews();
+  }
+  // 売上項目の改名。カスタムは productDefs[].label を更新、基本3は productLabels[key] に上書きを保存（キーは不変＝入力値は保持）
+  function rename(key, yearOverride){
+    const ty = yearOverride || yr();
+    const d = (typeof DB!=='undefined') ? DB[ty] : null;
+    if(!d){ alert('データが読み込まれていません'); return; }
+    if(!d.reportData) d.reportData={};
+    const base = BASE_DEFS.find(b=>b.key===key);
+    const cust = Array.isArray(d.reportData.productDefs) ? d.reportData.productDefs.find(x=>x.key===key) : null;
+    const ov = d.reportData.productLabels || {};
+    const cur = cust ? cust.label : (ov[key] || (base ? base.label : key));
+    const name=(prompt('売上項目の新しい名称を入力してください', cur)||'').trim();
+    if(!name || name===cur) return;
+    if(cust){
+      cust.label = name;
+    } else if(base){
+      if(!d.reportData.productLabels) d.reportData.productLabels={};
+      if(name===base.label){ delete d.reportData.productLabels[key]; } // 既定に戻したら上書きを除去
+      else { d.reportData.productLabels[key]=name; }
+    } else { return; }
     persist(d, ty);
     refreshViews();
   }
@@ -2589,9 +2614,10 @@ window.PRODUCTS = (function(){
       const t = Number(tgt[def.key]) || budYr; // 目標未設定なら年間予算をフォールバック
       totals.actCum+=actCum; totals.budCum+=budCum; totals.budYr+=budYr; totals.tgt+=t;
       const delBtn = def.custom ? `<span onclick="window.PRODUCTS.remove('${def.key}')" title="この売上項目を削除" style="cursor:pointer;color:var(--tc-red);font-size:11px;opacity:.6;float:right">✕</span>` : '';
+      const renBtn = `<span onclick="window.PRODUCTS.rename('${def.key}')" title="名称を変更" style="cursor:pointer;color:var(--text3);font-size:11px;opacity:.7;float:right;margin-left:6px">✎</span>`;
       cardsHtml += `
       <div class="card" style="margin-bottom:0;border-top:3px solid ${def.color}">
-        <div style="font-size:13px;font-weight:700;margin-bottom:8px">${def.label}${delBtn}</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">${def.label}${delBtn}${renBtn}</div>
         <div style="font-size:10px;color:var(--text3)">累積実績（${monthsDone>0?monthsDone+'ヶ月':'—'}）</div>
         <div style="font-size:22px;font-weight:800;color:${def.color};line-height:1.1">${fmtK(actCum)}<span style="font-size:11px;color:var(--text3);font-weight:600"> 千円</span></div>
         <div style="margin-top:12px">
@@ -2647,7 +2673,9 @@ window.PRODUCTS = (function(){
     h+=`<th>合計</th></tr></thead><tbody>`;
     D.forEach((def,di)=>{
       const bA=bAll[di], aA=aAll[di];
-      h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2);font-weight:700;border-top:2px solid ${def.color}">${def.label} <span style="font-size:9px;color:var(--text3);font-weight:400">予算</span></td>`;
+      const _ren=`<span onclick="event.stopPropagation();window.PRODUCTS.rename('${def.key}')" title="名称を変更" style="cursor:pointer;color:var(--text3);font-size:10px;opacity:.7;margin-left:4px">✎</span>`;
+      const _del=def.custom?`<span onclick="event.stopPropagation();window.PRODUCTS.remove('${def.key}')" title="削除" style="cursor:pointer;color:var(--tc-red);font-size:10px;opacity:.6;margin-left:3px">✕</span>`:'';
+      h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2);font-weight:700;border-top:2px solid ${def.color}">${def.label}${_ren}${_del} <span style="font-size:9px;color:var(--text3);font-weight:400">予算</span></td>`;
       bA.forEach((v,i)=>{ h+=`<td class="budget" tabindex="0" data-cell-key="pl.budget.${def.key}" data-cell-idx="${i}" style="text-align:right;color:var(--text3)">${v?fmtK(v):'─'}</td>`; });
       h+=`<td style="text-align:right;font-weight:700;color:var(--text3)">${fmtK(bA.reduce((s,v)=>s+v,0))}</td></tr>`;
       h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2)"><span style="font-size:9px;color:var(--text);font-weight:700">実績</span></td>`;
@@ -2727,6 +2755,7 @@ window.PRODUCTS = (function(){
     setTarget,
     add,
     remove,
+    rename,
     render,
   };
 })();
@@ -5190,10 +5219,11 @@ function renderPLView(d) {
 
   // ── 売上の商品別内訳（PL・売上計上ベース。商品別売上ページと同一データ）──
   // 基本3キー + カスタム(reportData.productDefs)。売上合計(rev)とは別に保持し突合表示。
+  const _plLabelOv = (d.reportData && d.reportData.productLabels) || {};
   const _prodBase = [
-    { key:'revFee',      label:'NEO会費' },
-    { key:'revTraining', label:'研修' },
-    { key:'revEvent',    label:'イベント・その他' },
+    { key:'revFee',      label:_plLabelOv.revFee      || 'NEO会費' },
+    { key:'revTraining', label:_plLabelOv.revTraining || '研修' },
+    { key:'revEvent',    label:_plLabelOv.revEvent    || 'イベント・その他' },
   ];
   const _prodCustom = (d.reportData && Array.isArray(d.reportData.productDefs)) ? d.reportData.productDefs : [];
   const _prodDefs = _prodBase.concat(_prodCustom.map(c => ({ key:c.key, label:c.label, custom:true })));
@@ -5206,8 +5236,9 @@ function renderPLView(d) {
     // ── 売上 商品別内訳（編集可・突合）──
     ..._prodDefs.map((p, idx) => {
       const br = idx === _prodDefs.length - 1 ? '└' : '├';
+      const edit = ` <span onclick="event.stopPropagation(); window.PRODUCTS && window.PRODUCTS.rename('${p.key}', currentYear)" title="名称を変更" style="cursor:pointer;color:var(--text3);opacity:.7">✎</span>`;
       const del = p.custom ? ` <span onclick="event.stopPropagation(); window.PRODUCTS && window.PRODUCTS.remove('${p.key}', currentYear)" title="この売上項目を削除" style="cursor:pointer;color:var(--tc-red);opacity:.6">✕</span>` : '';
-      return { key: p.key, label: `${br} ${p.label}${del}`, b: d.pl.budget[p.key]||[], a: d.pl.actual[p.key]||[], indent: true, isRev: true };
+      return { key: p.key, label: `${br} ${p.label}${edit}${del}`, b: d.pl.budget[p.key]||[], a: d.pl.actual[p.key]||[], indent: true, isRev: true };
     }),
     { key: '_prodTotal',   label: '　商品計（売上合計と突合）', b: _prodSumB, a: _prodSumA, isTot: true, isRev: true, noEdit: true, indent: true },
     // ── 原価セクション ──
