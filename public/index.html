@@ -2494,30 +2494,40 @@ window.PRODUCTS = (function(){
     const cust = (d && d.reportData && Array.isArray(d.reportData.productDefs)) ? d.reportData.productDefs : [];
     return BASE_DEFS.concat(cust.map(c=>({ key:c.key, label:c.label, color:c.color||'#888', custom:true })));
   }
-  function persist(d){
-    try{ localStorage.setItem('neo_db_'+yr(), JSON.stringify(d)); }catch(e){}
+  function persist(d, year){
+    const y = year || yr();
+    try{ localStorage.setItem('neo_db_'+y, JSON.stringify(d)); }catch(e){}
     if(typeof scheduleAutoSave==='function') scheduleAutoSave('商品別売上編集');
   }
-  function add(){
-    const d=db(); if(!d){ alert('データが読み込まれていません'); return; }
+  // 変更後の再描画（商品別売上ページ + 月次財務PLの両方）
+  function refreshViews(){
+    try{ render(); }catch(e){}
+    if(typeof renderPLView==='function' && typeof currentYear!=='undefined' && DB[currentYear]){ try{ renderPLView(DB[currentYear]); }catch(e){} }
+  }
+  function add(yearOverride){
+    const ty = yearOverride || yr();
+    const d = (typeof DB!=='undefined') ? DB[ty] : null;
+    if(!d){ alert('データが読み込まれていません'); return; }
     const name=(prompt('追加する売上項目の名称を入力してください（例：物販・スポンサー収入）')||'').trim();
     if(!name) return;
     if(!d.reportData) d.reportData={};
     if(!Array.isArray(d.reportData.productDefs)) d.reportData.productDefs=[];
     const key='revC'+Date.now().toString(36);
     d.reportData.productDefs.push({ key, label:name, color:PALETTE[d.reportData.productDefs.length%PALETTE.length] });
-    persist(d);
-    render();
+    persist(d, ty);
+    refreshViews();
   }
-  function remove(key){
-    const d=db(); if(!d || !d.reportData || !Array.isArray(d.reportData.productDefs)) return;
+  function remove(key, yearOverride){
+    const ty = yearOverride || yr();
+    const d = (typeof DB!=='undefined') ? DB[ty] : null;
+    if(!d || !d.reportData || !Array.isArray(d.reportData.productDefs)) return;
     const def=d.reportData.productDefs.find(x=>x.key===key); if(!def) return;
     if(!confirm(`売上項目「${def.label}」と入力済みの予算/実績データを削除します。よろしいですか？`)) return;
     d.reportData.productDefs=d.reportData.productDefs.filter(x=>x.key!==key);
     if(d.pl){ if(d.pl.budget) delete d.pl.budget[key]; if(d.pl.actual) delete d.pl.actual[key]; }
     if(d.reportData.salesTargets) delete d.reportData.salesTargets[key];
-    persist(d);
-    render();
+    persist(d, ty);
+    refreshViews();
   }
 
   function arr(d, kind, def){
@@ -5178,9 +5188,28 @@ function renderPLView(d) {
   const opexAllB   = Array.from({length:_N},(_,i)=>opexFixedB[i]+opexVarB[i]);
   const opexAllA   = Array.from({length:_N},(_,i)=>opexFixedA[i]+opexVarA[i]);
 
+  // ── 売上の商品別内訳（PL・売上計上ベース。商品別売上ページと同一データ）──
+  // 基本3キー + カスタム(reportData.productDefs)。売上合計(rev)とは別に保持し突合表示。
+  const _prodBase = [
+    { key:'revFee',      label:'NEO会費' },
+    { key:'revTraining', label:'研修' },
+    { key:'revEvent',    label:'イベント・その他' },
+  ];
+  const _prodCustom = (d.reportData && Array.isArray(d.reportData.productDefs)) ? d.reportData.productDefs : [];
+  const _prodDefs = _prodBase.concat(_prodCustom.map(c => ({ key:c.key, label:c.label, custom:true })));
+  const _prodSumB = Array.from({length:_N},(_,i)=>_prodDefs.reduce((s,p)=>s+(Number((d.pl.budget[p.key]||[])[i])||0),0));
+  const _prodSumA = Array.from({length:_N},(_,i)=>_prodDefs.reduce((s,p)=>s+(Number((d.pl.actual[p.key]||[])[i])||0),0));
+
   // Table
   const rows = [
     { key: 'rev',          label: '売上合計',           b: d.pl.budget.rev,                    a: d.pl.actual.rev },
+    // ── 売上 商品別内訳（編集可・突合）──
+    ..._prodDefs.map((p, idx) => {
+      const br = idx === _prodDefs.length - 1 ? '└' : '├';
+      const del = p.custom ? ` <span onclick="event.stopPropagation(); window.PRODUCTS && window.PRODUCTS.remove('${p.key}', currentYear)" title="この売上項目を削除" style="cursor:pointer;color:var(--tc-red);opacity:.6">✕</span>` : '';
+      return { key: p.key, label: `${br} ${p.label}${del}`, b: d.pl.budget[p.key]||[], a: d.pl.actual[p.key]||[], indent: true, isRev: true };
+    }),
+    { key: '_prodTotal',   label: '　商品計（売上合計と突合）', b: _prodSumB, a: _prodSumA, isTot: true, isRev: true, noEdit: true, indent: true },
     // ── 原価セクション ──
     { key: '_cogsTotal',   label: 'NEOプログラム原価',  b: cogsB, a: cogsA, isTot: true, isOut: true },
     { key: 'cogsHomeroom', label: '├ ホームルーム',     b: getCogs('budget','cogsHomeroom'),   a: getCogs('actual','cogsHomeroom'),   indent: true, isOut: true },
@@ -5210,14 +5239,15 @@ function renderPLView(d) {
     }) : []),
   ];
 
-  let html = `<table class="dt" style="min-width:${80 + d.months.length * 80}px;border-collapse:separate;border-spacing:0"><thead><tr>
+  let html = `<div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:10px;color:var(--text3)">売上内訳を編集・追加できます</span><button class="btn btn-g" style="font-size:10px;padding:3px 10px" onclick="window.PRODUCTS && window.PRODUCTS.add(currentYear)">＋ 売上項目を追加</button></div>`;
+  html += `<table class="dt" style="min-width:${80 + d.months.length * 80}px;border-collapse:separate;border-spacing:0"><thead><tr>
     <th class="l" style="min-width:130px;position:sticky;left:0;top:0;z-index:5;background:var(--bg2)">科目</th>
     <th class="l" style="width:40px;position:sticky;left:130px;top:0;z-index:5;background:var(--bg2)">区分</th>`;
   d.months.forEach(m => { html += `<th style="position:sticky;top:0;z-index:3;background:var(--bg2)">${MONTH_LABELS[m]}</th>`; });
   html += '<th style="position:sticky;top:0;z-index:3;background:var(--bg2)">合計</th></tr></thead><tbody>';
 
   rows.forEach(row => {
-    const isRev = row.key === 'rev';
+    const isRev = row.key === 'rev' || row.isRev === true;
      // sticky helpers for label col
      const _sb  = `position:sticky;left:0;z-index:1;background:var(--bg2)`;
      const _sb2 = `position:sticky;left:130px;z-index:1;background:var(--bg2)`;
