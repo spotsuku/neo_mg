@@ -432,6 +432,9 @@ input.cells-edit-input {
 #sec-payroll input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
 #sec-workforce input[type="number"],
 #sec-payroll input[type="number"]{ -moz-appearance:textfield; appearance:textfield }
+#sec-products input[type="number"]::-webkit-outer-spin-button,
+#sec-products input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
+#sec-products input[type="number"]{ -moz-appearance:textfield; appearance:textfield }
 
 /* 人件費タブ: スプレッドシート風セル */
 #sec-payroll .wf-pl-table th,#sec-payroll .wf-pl-table td{padding:4px 6px;font-size:10px}
@@ -823,6 +826,7 @@ input.cells-edit-input {
       <div class="tabs">
         <button class="tab active" data-ent="neo solo" data-tab="weekly" onclick="sw('weekly',this)">📊 サマリー</button>
         <button class="tab" data-ent="neo solo" data-tab="pl-cf" onclick="sw('pl-cf',this)">📈 月次財務</button>
+        <button class="tab" data-ent="neo solo" data-tab="products" onclick="sw('products',this)">🛍️ 商品別売上</button>
         <button class="tab" data-ent="neo solo" data-tab="import" onclick="sw('import',this)">🔗 MF連携</button>
         <button class="tab" data-ent="neo solo" data-tab="sim" onclick="sw('sim',this)">🔮 シミュレーション</button>
         <button class="tab" data-ent="neo solo" data-tab="workforce" onclick="sw('workforce',this)">⚙️ 工数管理</button>
@@ -1224,6 +1228,32 @@ input.cells-edit-input {
       <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none">シミュレーションから「予算に反映」した際の変更ログ</span>
     </div>
     <div id="budget-history-list" style="font-size:11px;color:var(--text3)">変更履歴はまだありません</div>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────
+     商品別 売上進捗
+────────────────────────────────────── -->
+<div class="sec" id="sec-products">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;gap:8px;flex-wrap:wrap">
+    <div>
+      <div style="font-size:14px;font-weight:700">🛍️ 商品別 売上進捗</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">会費 / 研修 / イベント・その他 の売上を、年間目標と月次予算の両面で進捗管理（千円）</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:11px;color:var(--text3)">年度</span>
+      <select id="prod-year-sel" onchange="window.PRODUCTS && window.PRODUCTS.setYear(this.value)"
+        style="padding:5px 8px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-family:inherit"></select>
+    </div>
+  </div>
+  <div id="prod-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px"></div>
+  <div class="card" style="margin-top:14px">
+    <div class="ct">📈 商品別 累積売上の推移</div>
+    <div style="position:relative;height:300px"><canvas id="prod-chart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="ct">📋 月次 予算 / 実績（千円）</div>
+    <div id="prod-monthly" style="overflow-x:auto"></div>
   </div>
 </div>
 
@@ -2359,14 +2389,38 @@ const MONTH_LABELS = {
   '2604':'4月','2605':'5月','2606':'6月','2607':'7月','2608':'8月','2609':'9月','2610':'10月','2611':'11月','2612':'12月','2701':'1月','2702':'2月','2703':'3月'
 };
 
+// ── 販管費 正準12項目（月次財務・シミュレーション・工数管理で統一）──
+// MF会計取込は従来5キー(labor/outsource/adv/gaichu/other)を対象に逆算するため、
+// 新7キー(reward/recruit/travel/comm/entertain/rent/supplies)は手入力・既定0。
+const PL_OPEX_DEFS = [
+  { key:'labor',     label:'人件費(社保込み)',   group:'fixed' },
+  { key:'outsource', label:'業務委託費',         group:'fixed' },
+  { key:'reward',    label:'支払い報酬',         group:'fixed' },
+  { key:'gaichu',    label:'外注費',             group:'var'   },
+  { key:'recruit',   label:'採用研修費',         group:'var'   },
+  { key:'adv',       label:'広告販促費',         group:'var'   },
+  { key:'travel',    label:'旅費交通費',         group:'var'   },
+  { key:'comm',      label:'通信費',             group:'fixed' },
+  { key:'entertain', label:'会議・交際費',       group:'var'   },
+  { key:'rent',      label:'賃料(本社のみ)',     group:'fixed' },
+  { key:'supplies',  label:'消耗品・減価償却費', group:'fixed' },
+  { key:'other',     label:'その他',             group:'fixed' },
+];
+const PL_OPEX_KEYS     = PL_OPEX_DEFS.map(d => d.key);
+const PL_OPEX_NEW_KEYS = ['reward','recruit','travel','comm','entertain','rent','supplies'];
+// 指定月の販管費合計（budget/actual のキー別配列オブジェクトを渡す）
+function sumPLOpex(src, i) {
+  return PL_OPEX_KEYS.reduce((t, k) => t + (Number((src && src[k] || [])[i]) || 0), 0);
+}
+
 // DB (will be loaded from storage)
 // 空のPL/CF構造を生成（年度追加時に再利用）
 function makeEmptyYearStruct(months) {
   return {
     months,
     pl: {
-      budget: { rev:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[] },
-      actual: { rev:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[] }
+      budget: { rev:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[],reward:[],recruit:[],travel:[],comm:[],entertain:[],rent:[],supplies:[] },
+      actual: { rev:[],cogs:[],cogsHomeroom:[],cogsHyogikai:[],cogsOenKaigi:[],cogsBigEvent:[],cogsOther:[],labor:[],outsource:[],adv:[],gaichu:[],other:[],reward:[],recruit:[],travel:[],comm:[],entertain:[],rent:[],supplies:[] }
     },
     cf: {
       budget: { open:[],cfIn:[],cfInMembership:[],cfInTraining:[],cfInOther:[],salaryPay:[],devOutPay:[],bizComPay:[],incentivePay:[],expertPay:[],rentPay:[],expensePay:[],telPay:[],entertainPay:[],taxPay:[],toolsPay:[],suppliesPay:[],adSportsPay:[],eventCostPay:[],recruitPay:[],annualFeePay:[],salesOtherPay:[],investPay:[],loanIn:[],loanOut:[],capitalIn:[],warrantPay:[],finOtherPay:[],funding:[] },
@@ -2410,7 +2464,178 @@ function sw(id, el) {
   if (id === 'expense' && window.EXPENSE) setTimeout(() => window.EXPENSE.init(), 30);
   if (id === 'hd' && window.HD) setTimeout(() => window.HD.init(), 30);
   if (id === 'gsummary' && window.GSUMMARY) setTimeout(() => window.GSUMMARY.render(), 30);
+  if (id === 'products' && window.PRODUCTS) setTimeout(() => window.PRODUCTS.open(), 30);
 }
+
+// ── 商品別 売上進捗 (window.PRODUCTS) ──
+// 商品 = 会費(cfInFee + 後方互換 cfInMembership) / 研修(cfInTraining) / イベント・その他(cfInEvent)。
+// 進捗 = 年間目標(reportData.salesTargets) と 月次予算(cf.budget) の両建て。
+// DB[year].cf を読み取り専用で流用し、既存KPI/CF表示は一切変更しない。
+window.PRODUCTS = (function(){
+  const DEFS = [
+    { key:'cfInFee',      label:'NEO会費',          legacy:'cfInMembership', color:'#378ADD' },
+    { key:'cfInTraining', label:'研修',             color:'#3BB273' },
+    { key:'cfInEvent',    label:'イベント・その他',  color:'#EF9F27' },
+  ];
+  let _year = null, _chart = null;
+
+  const fmtK = (v) => Math.round(Number(v)||0).toLocaleString();
+  const yr   = () => _year || (typeof currentYear !== 'undefined' ? currentYear : '2025');
+  const db   = () => (typeof DB !== 'undefined' && DB[yr()]) || null;
+  const axisFmt = (v) => (typeof fmtAxisJPY === 'function') ? fmtAxisJPY(v) : Number(v).toLocaleString();
+
+  function arr(d, kind, def){
+    const N = (d.months||[]).length;
+    const base = (d.cf && d.cf[kind] && d.cf[kind][def.key]) || [];
+    const out = Array.from({length:N}, (_,i)=> Number((base||[])[i])||0);
+    if (def.legacy){
+      const leg = (d.cf && d.cf[kind] && d.cf[kind][def.legacy]) || [];
+      for (let i=0;i<N;i++) out[i] += Number(leg[i])||0;
+    }
+    return out;
+  }
+  function lastIdx(d){
+    const N=(d.months||[]).length; let idx=-1;
+    for (let i=0;i<N;i++){ let tot=0; DEFS.forEach(def=> tot += arr(d,'actual',def)[i]); if (tot>0) idx=i; }
+    return idx;
+  }
+  function targets(d){
+    if (!d.reportData) d.reportData={};
+    if (!d.reportData.salesTargets) d.reportData.salesTargets={};
+    return d.reportData.salesTargets;
+  }
+  function setTarget(key,val){
+    const d=db(); if(!d) return;
+    targets(d)[key]=Math.max(0, Math.round(Number(val)||0));
+    try{ localStorage.setItem('neo_db_'+yr(), JSON.stringify(d)); }catch(e){}
+    if (typeof scheduleAutoSave==='function') scheduleAutoSave('商品目標編集');
+    render();
+  }
+  const cum = (a, end) => a.slice(0, end+1).reduce((s,v)=>s+v,0);
+  function bar(pct, color){
+    const w = Math.max(0, Math.min(100, pct));
+    return `<div style="height:7px;border-radius:4px;background:var(--bg3);overflow:hidden;margin-top:4px"><div style="height:100%;width:${w}%;background:${color};border-radius:4px"></div></div>`;
+  }
+  function pctTxt(num, den){
+    if (!den) return '<span style="color:var(--text3)">—</span>';
+    const p = Math.round(num/den*100);
+    const c = p>=100?'var(--tc-green)':p>=70?'var(--tc-amber)':'var(--tc-red)';
+    return `<span style="color:${c};font-weight:700">${p}%</span>`;
+  }
+
+  function render(){
+    const d=db(); if(!d) return;
+    const li = lastIdx(d);
+    const sel=document.getElementById('prod-year-sel');
+    if (sel){
+      const years = (typeof ALL_MONTHS!=='undefined') ? Object.keys(ALL_MONTHS) : ['2024','2025','2026'];
+      sel.innerHTML = years.map(y=>`<option value="${y}" ${y===yr()?'selected':''}>${y}年度</option>`).join('');
+    }
+    const monthsDone = li+1;
+    const tgt=targets(d);
+    let cardsHtml='';
+    const totals={actCum:0, budCum:0, budYr:0, tgt:0};
+    DEFS.forEach(def=>{
+      const aA=arr(d,'actual',def), bA=arr(d,'budget',def);
+      const actCum=cum(aA,li), budCum=cum(bA,li), budYr=bA.reduce((s,v)=>s+v,0);
+      const t = Number(tgt[def.key]) || budYr; // 目標未設定なら年間予算をフォールバック
+      totals.actCum+=actCum; totals.budCum+=budCum; totals.budYr+=budYr; totals.tgt+=t;
+      cardsHtml += `
+      <div class="card" style="margin-bottom:0;border-top:3px solid ${def.color}">
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">${def.label}</div>
+        <div style="font-size:10px;color:var(--text3)">累積実績（${monthsDone>0?monthsDone+'ヶ月':'—'}）</div>
+        <div style="font-size:22px;font-weight:800;color:${def.color};line-height:1.1">${fmtK(actCum)}<span style="font-size:11px;color:var(--text3);font-weight:600"> 千円</span></div>
+        <div style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;font-size:11px"><span>🎯 年間目標比</span>${pctTxt(actCum,t)}</div>
+          ${bar(t?actCum/t*100:0, def.color)}
+          <div style="display:flex;align-items:center;gap:5px;margin-top:6px">
+            <span style="font-size:10px;color:var(--text3)">年間目標</span>
+            <input type="number" value="${Number(tgt[def.key])?Math.round(tgt[def.key]):''}" placeholder="${fmtK(budYr)}"
+              onchange="window.PRODUCTS.setTarget('${def.key}', this.value)"
+              style="width:100px;padding:3px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:11px;text-align:right;font-family:inherit">
+            <span style="font-size:10px;color:var(--text3)">千円</span>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;font-size:11px"><span>📊 月次予算比（累積）</span>${pctTxt(actCum,budCum)}</div>
+          ${bar(budCum?actCum/budCum*100:0, def.color)}
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">累積予算 ${fmtK(budCum)} / 年間予算 ${fmtK(budYr)} 千円</div>
+        </div>
+      </div>`;
+    });
+    cardsHtml += `
+      <div class="card" style="margin-bottom:0;border-top:3px solid var(--text2);background:var(--bg2)">
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">合計</div>
+        <div style="font-size:10px;color:var(--text3)">累積実績</div>
+        <div style="font-size:22px;font-weight:800;line-height:1.1">${fmtK(totals.actCum)}<span style="font-size:11px;color:var(--text3);font-weight:600"> 千円</span></div>
+        <div style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;font-size:11px"><span>🎯 年間目標比</span>${pctTxt(totals.actCum,totals.tgt)}</div>
+          ${bar(totals.tgt?totals.actCum/totals.tgt*100:0,'var(--text2)')}
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">年間目標計 ${fmtK(totals.tgt)} 千円</div>
+        </div>
+        <div style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;font-size:11px"><span>📊 月次予算比（累積）</span>${pctTxt(totals.actCum,totals.budCum)}</div>
+          ${bar(totals.budCum?totals.actCum/totals.budCum*100:0,'var(--text2)')}
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">累積予算 ${fmtK(totals.budCum)} / 年間予算 ${fmtK(totals.budYr)} 千円</div>
+        </div>
+      </div>`;
+    const cardsEl=document.getElementById('prod-cards'); if(cardsEl) cardsEl.innerHTML=cardsHtml;
+    renderMonthly(d, li);
+    renderChart(d, li);
+  }
+
+  function renderMonthly(d, li){
+    const el=document.getElementById('prod-monthly'); if(!el) return;
+    const N=(d.months||[]).length;
+    const mlab=(m)=>(typeof MONTH_LABELS!=='undefined' && MONTH_LABELS[m])||m;
+    let h=`<table class="dt" style="min-width:${130+N*60}px;border-collapse:separate;border-spacing:0;font-size:11px"><thead><tr><th class="l" style="position:sticky;left:0;background:var(--bg2);min-width:130px">商品 / 区分</th>`;
+    (d.months||[]).forEach((m,i)=>{ h+=`<th style="${i===li?'color:var(--tc-blue)':''}">${mlab(m)}</th>`; });
+    h+=`<th>合計</th></tr></thead><tbody>`;
+    DEFS.forEach(def=>{
+      const aA=arr(d,'actual',def), bA=arr(d,'budget',def);
+      h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2);font-weight:700;border-top:2px solid ${def.color}">${def.label} <span style="font-size:9px;color:var(--text3);font-weight:400">予算</span></td>`;
+      bA.forEach(v=>{ h+=`<td style="text-align:right;color:var(--text3)">${v?fmtK(v):'─'}</td>`; });
+      h+=`<td style="text-align:right;font-weight:700;color:var(--text3)">${fmtK(bA.reduce((s,v)=>s+v,0))}</td></tr>`;
+      h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2)"><span style="font-size:9px;color:var(--text);font-weight:700">実績</span></td>`;
+      aA.forEach((v,i)=>{ const dv=v-bA[i]; const col=i>li?'color:var(--text3)':dv>=0?'color:var(--tc-green)':'color:var(--tc-red)'; h+=`<td style="text-align:right;${col}">${(i<=li&&v)?fmtK(v):'─'}</td>`; });
+      h+=`<td style="text-align:right;font-weight:700">${fmtK(aA.slice(0,li+1).reduce((s,v)=>s+v,0))}</td></tr>`;
+    });
+    h+=`</tbody></table>`;
+    el.innerHTML=h;
+  }
+
+  function renderChart(d, li){
+    if (typeof Chart==='undefined') return;
+    const cv=document.getElementById('prod-chart'); if(!cv) return;
+    const mlab=(m)=>(typeof MONTH_LABELS!=='undefined' && MONTH_LABELS[m])||m;
+    const labels=(d.months||[]).map(mlab);
+    const ds = DEFS.map(def=>{
+      const aA=arr(d,'actual',def); let c=0;
+      const data=aA.map((v,i)=>{ c+=v; return i<=li ? c : null; });
+      return { label:def.label, data, borderColor:def.color, backgroundColor:def.color+'22', tension:.3, pointRadius:2, fill:false, spanGaps:false };
+    });
+    let cb=0; const budTot=(d.months||[]).map((_,i)=>{ let s=0; DEFS.forEach(def=> s+=arr(d,'budget',def)[i]); cb+=s; return cb; });
+    const rs=getComputedStyle(document.documentElement);
+    const tc=(rs.getPropertyValue('--text3')||'#888').trim();
+    const gc='rgba(120,120,120,0.12)';
+    ds.push({ label:'予算累計', data:budTot, borderColor:tc, borderDash:[5,4], tension:.2, pointRadius:0, fill:false });
+    if (_chart) { try{ _chart.destroy(); }catch(e){} }
+    _chart=new Chart(cv,{ type:'line', data:{labels,datasets:ds},
+      options:{ responsive:true, maintainAspectRatio:false,
+        interaction:{ mode:'index', intersect:false },
+        plugins:{ legend:{ labels:{ color:tc, font:{size:11}, boxWidth:12 } },
+          tooltip:{ callbacks:{ label:ctx=> ctx.parsed.y==null?null:` ${ctx.dataset.label}：${Math.round(ctx.parsed.y).toLocaleString()}千円` } } },
+        scales:{ x:{ ticks:{color:tc,font:{size:10}},grid:{color:gc} },
+          y:{ beginAtZero:true, ticks:{color:tc,font:{size:10},callback:axisFmt},grid:{color:gc} } } } });
+  }
+
+  return {
+    open(){ _year = (typeof currentYear!=='undefined') ? currentYear : _year; render(); },
+    setYear(y){ _year=y; render(); },
+    setTarget,
+    render,
+  };
+})();
 
 // ── 対象（エンティティ）切替：ページ全体を HD連結 / HD単独 / 子会社(NEO福岡) で切替える ──
 let currentEntity = 'group';
@@ -2541,12 +2766,12 @@ function updateWeeklyKPIs() {
   const cumAdv      = plK(pl.actual.adv,      lastActualIdx);
   const cumGaichu   = plK(pl.actual.gaichu||[], lastActualIdx);
   const cumOther    = plK(pl.actual.other,    lastActualIdx);
-  const cumOpex = cumLabor + cumOutsource + cumAdv + cumGaichu + cumOther;
+  const cumOpex = PL_OPEX_KEYS.reduce((t,k) => t + plK(pl.actual[k]||[], lastActualIdx), 0);
   const cumOp = cumRev - cumOpex;
 
   // budget（千円→万円に÷10）
   const budRev  = pl.budget.rev.reduce((s,v) => s+(Number(v)||0), 0);
-  const budOpex = ['labor','outsource','adv','gaichu','other'].reduce((t, k) =>
+  const budOpex = PL_OPEX_KEYS.reduce((t, k) =>
     t + (pl.budget[k]||[]).slice(0, lastActualIdx + 1).reduce((s, v) => s + (Number(v) || 0), 0), 0);
   const opexRate = budOpex > 0 ? Math.round(cumOpex / budOpex * 100) : null;
 
@@ -2886,7 +3111,7 @@ function renderExecDashboard(ctx){
   // PL 個別科目の累計超過 (>20%)
   if (ctx.hasActual && typeof DB !== 'undefined' && typeof currentYear !== 'undefined'){
     const d = DB[currentYear];
-    const labels = { labor:'人件費', outsource:'業務委託', adv:'広告販促', gaichu:'外注費', other:'その他' };
+    const labels = Object.fromEntries(PL_OPEX_DEFS.map(o => [o.key, o.label]));
     for (const k of Object.keys(labels)){
       const aArr = d?.pl?.actual?.[k] || [];
       const bArr = d?.pl?.budget?.[k] || [];
@@ -2998,8 +3223,8 @@ function initWeeklyCharts(d, lastIdx) {
     return Math.round(vals.reduce((a,b)=>a+b,0) / vals.length);
   };
 
-  const labels = ['人件費', '業務委託', '外注費', '広告', 'その他'];
-  const costKeys = ['labor','outsource','gaichu','adv','other'];
+  const labels = PL_OPEX_DEFS.map(o => o.label);
+  const costKeys = PL_OPEX_KEYS;
   const latestData  = costKeys.map(k => getAt(d.pl.actual[k], latestIdx));
   const compareData = costKeys.map(k => getAt(d.pl.actual[k], compareIdx));
   const avgData     = costKeys.map(k => getAvg(d.pl.actual[k]));
@@ -3251,13 +3476,9 @@ function renderAnnualPL(d) {
   const pB = d.pl?.budget || {};
 
   const revA  = sR(pA.rev);  const revB  = sR(pB.rev);
-  const laborA = sR(pA.labor);    const laborB = sR(pB.labor);
-  const outA   = sR(pA.outsource); const outB  = sR(pB.outsource);
-  const advA   = sR(pA.adv);       const advB   = sR(pB.adv);
-  const gaichuA= sR(pA.gaichu);    const gaichuB= sR(pB.gaichu);
-  const otherA = sR(pA.other);     const otherB = sR(pB.other);
-  const opexA  = laborA+outA+advA+gaichuA+otherA;
-  const opexB  = laborB+outB+advB+gaichuB+otherB;
+  const opexDetail = PL_OPEX_DEFS.map(o => ({ label:`　${o.label}`, a:sR(pA[o.key]), b:sR(pB[o.key]), isOut:true }));
+  const opexA  = opexDetail.reduce((t,r)=>t+r.a, 0);
+  const opexB  = opexDetail.reduce((t,r)=>t+r.b, 0);
 
   const cogsAnn = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
   const cogsAA = cogsAnn.reduce((t,k)=>t+sR(pA[k]),0);
@@ -3270,11 +3491,7 @@ function renderAnnualPL(d) {
     { label:'原価',          a:cogsAA, b:cogsAB, isOut:true, isTot:true },
     { label:'粗利',          a:gpAA,   b:gpAB,   isRev:true, isTot:true, isPL:true },
     { label:'販管費合計',    a:opexA,  b:opexB,  isOut:true, isTot:true },
-    { label:'　人件費',      a:laborA, b:laborB, isOut:true  },
-    { label:'　業務委託費',  a:outA,   b:outB,   isOut:true  },
-    { label:'　広告販促費',  a:advA,   b:advB,   isOut:true  },
-    { label:'　外注費',      a:gaichuA,b:gaichuB,isOut:true  },
-    { label:'　その他',      a:otherA, b:otherB, isOut:true  },
+    ...opexDetail,
     { label:'営業利益',      a:opA,    b:opB,    isRev:true, isTot:true, isPL:true },
   ];
   document.getElementById('annual-pl-table').innerHTML = buildAnnualTable(rows, '千円');
@@ -4694,8 +4911,8 @@ function renderPLView(d) {
     const cogsKeysSum = ['cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
     const cogsA = cogsKeysSum.reduce((t,k) => t + sumA(d.pl.actual[k]||[]), 0);
     const cogsB = cogsKeysSum.reduce((t,k) => t + sumB(d.pl.budget[k]||[]), 0);
-    const opexA = ['labor','outsource','adv','gaichu','other'].reduce((t,k) => t + sumA(d.pl.actual[k]||[]), 0);
-    const opexB = ['labor','outsource','adv','gaichu','other'].reduce((t,k) => t + sumB(d.pl.budget[k]||[]), 0);
+    const opexA = PL_OPEX_KEYS.reduce((t,k) => t + sumA(d.pl.actual[k]||[]), 0);
+    const opexB = PL_OPEX_KEYS.reduce((t,k) => t + sumB(d.pl.budget[k]||[]), 0);
     const opA   = revA - cogsA - opexA;
     const opB   = revB - cogsB - opexB;
     const rateRev  = revB  > 0 ? Math.round(revA  / revB  * 100) : 0;
@@ -4766,9 +4983,9 @@ function renderPLView(d) {
   const gpB = revB.map((r, i) => r - cogsB[i]);
   const gpA = revA.map((r, i) => r !== null ? r - (cogsA[i] || 0) : null);
   // 販管費
-  const opexB = d.pl.budget.rev.map((_, i) => (Number(d.pl.budget.labor[i]) || 0) + (Number(d.pl.budget.outsource[i]) || 0) + (Number(d.pl.budget.adv[i]) || 0) + (Number(d.pl.budget.gaichu||[])[i] || 0) + (Number(d.pl.budget.other[i]) || 0));
+  const opexB = d.pl.budget.rev.map((_, i) => sumPLOpex(d.pl.budget, i));
   const opexA = d.pl.actual.rev.map((_, i) => {
-    const v = (Number(d.pl.actual.labor[i]) || 0) + (Number(d.pl.actual.outsource[i]) || 0) + (Number(d.pl.actual.adv[i]) || 0) + (Number((d.pl.actual.gaichu||[])[i]) || 0) + (Number(d.pl.actual.other[i]) || 0);
+    const v = sumPLOpex(d.pl.actual, i);
     return v > 0 ? v : null;
   });
   // 営業利益 = 粗利 - 販管費
@@ -4864,14 +5081,12 @@ function renderPLView(d) {
   const fixedOpen = plOpexOpen('pl-fixed');
   const varOpen   = plOpexOpen('pl-var');
 
-  // 販管費を 固定費 / 変動費 に分類
-  // 固定費: labor (人件費) / outsource (業務委託費) / other (その他費用：賃料等)
-  // 変動費: adv  (広告販促費) / gaichu (外注費)
+  // 販管費を 固定費 / 変動費 に分類（正準12項目 PL_OPEX_DEFS から導出）
   const _N = d.months.length;
   const sumArr12 = (arr) => Array.from({length:_N}, (_, i) =>
     (Number((arr||[])[i]) || 0));
-  const fixedKeys = ['labor', 'outsource', 'other'];
-  const varKeys   = ['adv', 'gaichu'];
+  const fixedKeys = PL_OPEX_DEFS.filter(o => o.group === 'fixed').map(o => o.key);
+  const varKeys   = PL_OPEX_DEFS.filter(o => o.group === 'var').map(o => o.key);
   const opexFixedB = Array.from({length:_N},(_,i)=>fixedKeys.reduce((t,k)=>t+(Number((d.pl.budget[k]||[])[i])||0),0));
   const opexFixedA = Array.from({length:_N},(_,i)=>fixedKeys.reduce((t,k)=>t+(Number((d.pl.actual[k]||[])[i])||0),0));
   const opexVarB   = Array.from({length:_N},(_,i)=>varKeys.reduce((t,k)=>t+(Number((d.pl.budget[k]||[])[i])||0),0));
@@ -4896,18 +5111,19 @@ function renderPLView(d) {
     // 固定費小計（トグル）
     { key: '_opexFixed',   label: `${fixedOpen?'▼':'▶'} 固定費合計`, b: opexFixedB, a: opexFixedA, isTot: true, isOut: true, noEdit: true,
       toggleId: 'pl-fixed' },
-    ...(fixedOpen ? [
-      { key: 'labor',     label: '　├ 人件費',     b: d.pl.budget.labor,     a: d.pl.actual.labor,     indent: true, isOut: true, group: 'pl-fixed' },
-      { key: 'outsource', label: '　├ 業務委託費', b: d.pl.budget.outsource, a: d.pl.actual.outsource, indent: true, isOut: true, group: 'pl-fixed' },
-      { key: 'other',     label: '　└ その他費用', b: d.pl.budget.other,     a: d.pl.actual.other,     indent: true, isOut: true, group: 'pl-fixed' },
-    ] : []),
+    ...(fixedOpen ? fixedKeys.map((k, idx) => {
+      const def = PL_OPEX_DEFS.find(o => o.key === k);
+      const br  = idx === fixedKeys.length - 1 ? '└' : '├';
+      return { key: k, label: `　${br} ${def.label}`, b: d.pl.budget[k]||[], a: d.pl.actual[k]||[], indent: true, isOut: true, group: 'pl-fixed' };
+    }) : []),
     // 変動費小計（トグル）
     { key: '_opexVar',     label: `${varOpen?'▼':'▶'} 変動費合計`, b: opexVarB, a: opexVarA, isTot: true, isOut: true, noEdit: true,
       toggleId: 'pl-var' },
-    ...(varOpen ? [
-      { key: 'adv',       label: '　├ 広告販促費', b: d.pl.budget.adv,         a: d.pl.actual.adv,         indent: true, isOut: true, group: 'pl-var' },
-      { key: 'gaichu',    label: '　└ 外注費',     b: d.pl.budget.gaichu||[],  a: d.pl.actual.gaichu||[],  indent: true, isOut: true, group: 'pl-var' },
-    ] : []),
+    ...(varOpen ? varKeys.map((k, idx) => {
+      const def = PL_OPEX_DEFS.find(o => o.key === k);
+      const br  = idx === varKeys.length - 1 ? '└' : '├';
+      return { key: k, label: `　${br} ${def.label}`, b: d.pl.budget[k]||[], a: d.pl.actual[k]||[], indent: true, isOut: true, group: 'pl-var' };
+    }) : []),
   ];
 
   let html = `<table class="dt" style="min-width:${80 + d.months.length * 80}px;border-collapse:separate;border-spacing:0"><thead><tr>
@@ -4960,7 +5176,7 @@ function renderPLView(d) {
   html += `<tr class="tot"><td class="l" style="position:sticky;left:0;z-index:1;background:var(--bg3)">営業損益</td><td class="l" style="font-size:9px;position:sticky;left:130px;z-index:1;background:var(--bg3)">予算</td>`;
   let bOpSum = 0;
   d.months.forEach((_, i) => {
-    const bOp = gpB[i] - ((Number(d.pl.budget.labor[i])||0)+(Number(d.pl.budget.outsource[i])||0)+(Number(d.pl.budget.adv[i])||0)+(Number((d.pl.budget.gaichu||[])[i])||0)+(Number(d.pl.budget.other[i])||0));
+    const bOp = gpB[i] - sumPLOpex(d.pl.budget, i);
     bOpSum += bOp;
     html += `<td class="budget ${bOp >= 0 ? 'diff-pos' : 'diff-neg'}">${bOp >= 0 ? '' : '▲'}${Math.abs(Math.round(bOp)).toLocaleString()}</td>`;
   });
@@ -4970,7 +5186,7 @@ function renderPLView(d) {
   let aOpSum = 0;
   d.months.forEach((_, i) => {
     const gp = gpA[i];
-    const ae = (Number(d.pl.actual.labor[i])||0)+(Number(d.pl.actual.outsource[i])||0)+(Number(d.pl.actual.adv[i])||0)+(Number((d.pl.actual.gaichu||[])[i])||0)+(Number(d.pl.actual.other[i])||0);
+    const ae = sumPLOpex(d.pl.actual, i);
     if (gp === null && !ae) { html += `<td>─</td>`; return; }
     const aOp = (gp||0) - ae; aOpSum += aOp;
     html += `<td class="actual ${aOp >= 0 ? 'diff-pos' : 'diff-neg'}">${aOp >= 0 ? '' : '▲'}${Math.abs(Math.round(aOp)).toLocaleString()}</td>`;
@@ -7857,6 +8073,7 @@ async function applyImportedToProd() {
 
   // 反映対象月を確認
   const plKeys  = ['rev','labor','outsource','adv','gaichu','other',
+                   'reward','recruit','travel','comm','entertain','rent','supplies',
                    'cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
   const cfKeys  = ['open','cfIn','cfClose','cfInFee','cfInTraining','cfInEvent','cfInOther',
                    'salaryPay','devOutPay','bizComPay','incentivePay','expertPay','rentPay',
@@ -8167,14 +8384,10 @@ async function loadImportedList() {
     if (tab === 'pl') {
       return [
         { label:'売上',     kind:'pair', get:(i)=>({a:plA('rev',i),       b:plB('rev',i)}) },
-        { label:'人件費',   kind:'pair', isOut:true, get:(i)=>({a:plA('labor',i),     b:plB('labor',i)}) },
-        { label:'業務委託', kind:'pair', isOut:true, get:(i)=>({a:plA('outsource',i), b:plB('outsource',i)}) },
-        { label:'広告',     kind:'pair', isOut:true, get:(i)=>({a:plA('adv',i),       b:plB('adv',i)}) },
-        { label:'外注費',   kind:'pair', isOut:true, get:(i)=>({a:plA('gaichu',i),    b:plB('gaichu',i)}) },
-        { label:'その他',   kind:'pair', isOut:true, get:(i)=>({a:plA('other',i),     b:plB('other',i)}) },
+        ...PL_OPEX_DEFS.map(o => ({ label:o.label, kind:'pair', isOut:true, get:(i)=>({a:plA(o.key,i), b:plB(o.key,i)}) })),
         { label:'営業利益', kind:'calc', get:(i)=>{
             const ra=plA('rev',i);
-            const opexA=['labor','outsource','adv','gaichu','other'].reduce((t,k)=>t+(plA(k,i)||0),0);
+            const opexA=PL_OPEX_KEYS.reduce((t,k)=>t+(plA(k,i)||0),0);
             return ra !== null ? ra - opexA : null;
           }
         },
@@ -8358,13 +8571,19 @@ const PL_ROWS_BASE = [
   { key: 'cogsOther',      label: 'その他原価',           color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
   // ── 粗利（自動計算）──
   { key: '_grossProfit',   label: '粗利',                 color: '#3B9', isCalc: true },
-  // ── 販管費 ──
-  { key: 'labor',          label: '人件費（社保込）',     color: '#E24B4A', isCost: true },
+  // ── 販管費（正準12項目：月次財務・工数管理と統一）──
+  { key: 'labor',          label: '人件費(社保込み)',     color: '#E24B4A', isCost: true },
   { key: 'outsource',      label: '業務委託費',           color: '#D85A30', isCost: true },
-  { key: 'adv',            label: '広告販促費',           color: '#EF9F27', isCost: true },
-  { key: 'rent',           label: '賃料',                 color: '#888780', isCost: true },
+  { key: 'reward',         label: '支払い報酬',           color: '#D85A30', isCost: true },
   { key: 'gaichu',         label: '外注費',               color: '#D85A30', isCost: true },
-  { key: 'other',          label: 'その他費用',           color: '#B4B2A9', isCost: true },
+  { key: 'recruit',        label: '採用研修費',           color: '#C56A3A', isCost: true },
+  { key: 'adv',            label: '広告販促費',           color: '#EF9F27', isCost: true },
+  { key: 'travel',         label: '旅費交通費',           color: '#A9A89F', isCost: true },
+  { key: 'comm',           label: '通信費',               color: '#A9A89F', isCost: true },
+  { key: 'entertain',      label: '会議・交際費',         color: '#A9A89F', isCost: true },
+  { key: 'rent',           label: '賃料(本社のみ)',       color: '#888780', isCost: true },
+  { key: 'supplies',       label: '消耗品・減価償却費',   color: '#888780', isCost: true },
+  { key: 'other',          label: 'その他',               color: '#B4B2A9', isCost: true },
 ];
 
 // ── ユーザーが追加した行（年度別・永続保存）──
@@ -8375,7 +8594,7 @@ function getCustomRows(year) {
 
 // 親行として選択できる行の定義
 const PARENT_OPTIONS_REV  = ['fee','training','event'];  // 売上の親候補
-const PARENT_OPTIONS_COST = ['_cogsHead','labor','outsource','adv','rent','gaichu','other']; // 費用の親候補
+const PARENT_OPTIONS_COST = ['_cogsHead','labor','outsource','reward','gaichu','recruit','adv','travel','comm','entertain','rent','supplies','other']; // 費用の親候補
 
 // ── 親行の実効値を計算（子行がある場合は子行の合計、なければ直接入力） ──
 function getEffectiveSimVal(key, idx) {
@@ -8393,6 +8612,17 @@ function getEffectiveSimVal(key, idx) {
 // 指定キーに子行があるか
 function hasChildren(key) {
   return getPLRows().some(r => r.parentKey === key);
+}
+
+// 販管費のトップレベルキー（正準12 + 独立カスタム費用行。原価・計算行は除外）
+function getSimOpexKeys() {
+  return getPLRows()
+    .filter(r => r.isCost && !r.parentKey && !r.isCogs && !r.isSection && !r.isCalc && r.key !== '_cogsHead')
+    .map(r => r.key);
+}
+// 指定月の販管費合計（子行は親の実効値に内包）
+function simOpexTotalAt(idx) {
+  return getSimOpexKeys().reduce((s, k) => s + getEffectiveSimVal(k, idx), 0);
 }
 
 // 全行（固定 + カスタム）を parentKey に従って正しい位置に挿入して返す
@@ -10079,17 +10309,11 @@ async function commitBudget() {
       d.pl.budget[key][idx] = Math.round(getEffectiveSimVal(key, i));
     });
 
-    // PL販管費（子行がある親行は子行の合計を使用）
-    const _getpl = (k) => Math.round(hasChildren(k) ? getEffectiveSimVal(k,i) : getSimVal('pl',k,i));
-    d.pl.budget.labor[idx]     = _getpl('labor');
-    d.pl.budget.outsource[idx] = _getpl('outsource');
-    d.pl.budget.adv[idx]       = _getpl('adv');
-    if (!d.pl.budget.gaichu) d.pl.budget.gaichu = [];
-    d.pl.budget.gaichu[idx]    = _getpl('gaichu');
-    d.pl.budget.other[idx]     = Math.round(
-      (hasChildren('rent') ? getEffectiveSimVal('rent',i) : getSimVal('pl','rent',i)) +
-      (hasChildren('other') ? getEffectiveSimVal('other',i) : getSimVal('pl','other',i))
-    );
+    // PL販管費（正準12項目を1:1で反映。子行がある親行は子行の合計を使用）
+    PL_OPEX_KEYS.forEach(k => {
+      if (!d.pl.budget[k]) d.pl.budget[k] = [];
+      d.pl.budget[k][idx] = Math.round(hasChildren(k) ? getEffectiveSimVal(k,i) : getSimVal('pl',k,i));
+    });
 
     // CF入金（千円のままDB書き込み）
     if (!d.cf.budget.cfIn) d.cf.budget.cfIn = [];
@@ -10142,7 +10366,7 @@ async function commitBudget() {
     snapshot: {
       rev:  months.map((_,i) => getSimVal('pl','fee',i)+getSimVal('pl','training',i)+getSimVal('pl','event',i)),
       cogs: cogsTot,
-      cost: months.map((_,i) => getSimVal('pl','labor',i)+getSimVal('pl','outsource',i)+getSimVal('pl','adv',i)+getSimVal('pl','rent',i)+getSimVal('pl','other',i))
+      cost: months.map((_,i) => simOpexTotalAt(i))
     }
   };
 
@@ -10806,7 +11030,7 @@ async function callAI(prompt, maxTokens = 1200) {
 async function genAI(type) {
   const d = DB[currentYear];
   const cumRev = (d.pl.actual.rev || []).reduce((s, v) => s + (Number(v) || 0), 0);
-  const cumOpex = [...(d.pl.actual.labor||[]),...(d.pl.actual.outsource||[]),...(d.pl.actual.adv||[]),...(d.pl.actual.other||[])].reduce((s, v) => s + (Number(v) || 0), 0) / 4;
+  const cumOpex = PL_OPEX_KEYS.reduce((s, k) => s + (d.pl.actual[k]||[]).reduce((a, v) => a + (Number(v) || 0), 0), 0);
   // 工数管理・経費申請のリアルタイム指標を取り込む (Phase 5.3)
   let prodLine = '', staffLine = '', expenseLine = '';
   if (window.WF && typeof window.WF.totalRealizedRev === 'function'){
@@ -10835,7 +11059,7 @@ async function genAI(type) {
       const months = getSimMonths();
       const labels = getSimLabels();
       const revArr = months.map((_, i) => getSimVal('pl','fee',i)+getSimVal('pl','training',i)+getSimVal('pl','event',i));
-      const costArr = months.map((_, i) => getSimVal('pl','labor',i)+getSimVal('pl','outsource',i)+getSimVal('pl','adv',i)+getSimVal('pl','rent',i)+getSimVal('pl','other',i));
+      const costArr = months.map((_, i) => simOpexTotalAt(i));
       const profArr = revArr.map((r,i) => r - costArr[i]);
       const annualRev = revArr.reduce((a,b)=>a+b,0);
       const annualProfit = profArr.reduce((a,b)=>a+b,0);
@@ -10966,6 +11190,7 @@ function showSaveIndicator(msg, isError = false) {
 
 async function loadDB() {
   const REQUIRED_PL_KEYS = ['rev','labor','outsource','adv','gaichu','other',
+    'reward','recruit','travel','comm','entertain','rent','supplies',
     'cogs','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
 
   // DBオブジェクトの整合性を補完（空配列を12要素に拡張など）
@@ -11237,7 +11462,7 @@ function previewVersion(id) {
   for (const [yr, d] of Object.entries(ver.DB || {})) {
     const revA  = (d.pl?.actual?.rev||[]).reduce((a,x)=>a+(Number(x)||0),0);
     const revB  = (d.pl?.budget?.rev||[]).reduce((a,x)=>a+(Number(x)||0),0);
-    const opexA = ['labor','outsource','adv','gaichu','other'].reduce((t,k)=>
+    const opexA = PL_OPEX_KEYS.reduce((t,k)=>
       t+(d.pl?.actual?.[k]||[]).reduce((a,x)=>a+(Number(x)||0),0),0);
     const opA   = revA - opexA;
     const cfClose = d.cf?.actual?.cfClose || [];
@@ -11415,6 +11640,7 @@ window.addEventListener('load', async () => {
   } catch(e) { console.warn('version sync failed:', e); }
   // PLデータ単位チェック（旧万円データ→千円マイグレーション + 10倍超過データ→÷10修正）
   const PL_KEYS = ['rev','labor','outsource','adv','gaichu','other',
+                   'reward','recruit','travel','comm','entertain','rent','supplies',
                    'cogs','cogsHomeroom','cogsHyogikai','cogsOenKaigi','cogsBigEvent','cogsOther'];
   for (const yr of ['2024','2025','2026']) {
     const plb = DB[yr]?.pl?.budget?.rev || [];
@@ -11475,7 +11701,7 @@ window.addEventListener('load', async () => {
       const yBtns = document.querySelectorAll('.year-toggle .yt');
       if (yBtns[yIdx]) setYear(savedYear, yBtns[yIdx]);
     }
-    const tabOrder = ['weekly','pl-cf','import','sim','workforce','payroll','expense','report','pdf','hd','gsummary'];
+    const tabOrder = ['weekly','pl-cf','products','import','sim','workforce','payroll','expense','report','pdf','hd','gsummary'];
     const savedTab = localStorage.getItem('neo_active_tab');
     const tIdx = tabOrder.indexOf(savedTab);
     if (tIdx > 0) { // 0='weekly' はデフォルトなのでスキップ
@@ -12254,7 +12480,7 @@ function mfRenderPreview() {
     const esc2 = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     // 科目分類 → 区分ラベル（符号を意識せず直感的に読めるよう、区分文字列で表現）
     const PL_REV   = new Set(['rev','rev_other']);
-    const PL_EXP   = new Set(['cogs','labor','outsource','adv','gaichu','other']);
+    const PL_EXP   = new Set(['cogs','labor','outsource','adv','gaichu','other','reward','recruit','travel','comm','entertain','rent','supplies']);
     const BS_ASSET = new Set(['cash','receivable','other_ca','fixed']);
     const BS_LIAB  = new Set(['payable','borrowing','other_cl']);
     const BS_EQ    = new Set(['capital','retained']);
@@ -13363,19 +13589,20 @@ document.addEventListener('DOMContentLoaded', function() {
     '事業開発': [],
   };
 
+  // 販管費 正準リスト（月次財務・シミュレーション・工数管理で統一）
   const DEFAULT_SGA_ITEMS = [
-    {name:'経営戦略 国本',                   amount:2400000},
-    {name:'コミュニティ設計 加藤',           amount:2400000},
-    {name:'財務・法務 太田',                 amount:2400000},
-    {name:'広報 野呂',                       amount:1200000},
-    {name:'デザイナー 久保木',               amount:1200000},
-    {name:'バックオフィス 和泉、池内',       amount:1680000},
-    {name:'旅費交通費',                      amount:2400000},
-    {name:'通信費',                          amount:2400000},
-    {name:'会議費',                          amount:2400000},
-    {name:'家賃',                            amount:2400000},
-    {name:'専門家',                          amount:2400000},
-    {name:'その他',                          amount:2400000},
+    {name:'人件費(社保込み)',      amount:0},
+    {name:'業務委託費',            amount:0},
+    {name:'支払い報酬',            amount:0},
+    {name:'外注費',                amount:0},
+    {name:'採用研修費',            amount:0},
+    {name:'広告販促費',            amount:0},
+    {name:'旅費交通費',            amount:0},
+    {name:'通信費',                amount:0},
+    {name:'会議・交際費',          amount:0},
+    {name:'賃料(本社のみ)',        amount:0},
+    {name:'消耗品・減価償却費',    amount:0},
+    {name:'その他',                amount:0},
   ];
 
   // 役割ウェイト (合計100% / 事業内の売上配分)
