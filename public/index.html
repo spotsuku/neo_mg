@@ -1240,7 +1240,8 @@ input.cells-edit-input {
       <div style="font-size:14px;font-weight:700">🛍️ 商品別 売上進捗</div>
       <div style="font-size:10px;color:var(--text3);margin-top:2px">会費 / 研修 / イベント・その他 の売上（PL・売上計上ベース）を、年間目標と月次予算の両面で進捗管理（千円）。セルは直接編集できます。</div>
     </div>
-    <div style="display:flex;align-items:center;gap:6px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="btn btn-p" onclick="window.PRODUCTS && window.PRODUCTS.add()" style="font-size:11px;padding:5px 12px">＋ 売上項目を追加</button>
       <span style="font-size:11px;color:var(--text3)">年度</span>
       <select id="prod-year-sel" onchange="window.PRODUCTS && window.PRODUCTS.setYear(this.value)"
         style="padding:5px 8px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-family:inherit"></select>
@@ -2473,17 +2474,51 @@ function sw(id, el) {
 // DB[year].cf を読み取り専用で流用し、既存KPI/CF表示は一切変更しない。
 window.PRODUCTS = (function(){
   // 商品 = PLの商品別売上(売上計上ベース)。月次財務PLの売上合計(rev)とは別キーで保持し、突合表示する。
-  const DEFS = [
+  // 基本3項目は固定キー、追加分は reportData.productDefs (年度ごと) にカスタム保存。
+  const BASE_DEFS = [
     { key:'revFee',      label:'NEO会費',          color:'#378ADD' },
     { key:'revTraining', label:'研修',             color:'#3BB273' },
     { key:'revEvent',    label:'イベント・その他',  color:'#EF9F27' },
   ];
+  const PALETTE = ['#9B59B6','#16A085','#E67E22','#2980B9','#C0392B','#27AE60','#8E44AD','#D35400','#2C82C9'];
   let _year = null, _chart = null;
 
   const fmtK = (v) => Math.round(Number(v)||0).toLocaleString();
   const yr   = () => _year || (typeof currentYear !== 'undefined' ? currentYear : '2025');
   const db   = () => (typeof DB !== 'undefined' && DB[yr()]) || null;
   const axisFmt = (v) => (typeof fmtAxisJPY === 'function') ? fmtAxisJPY(v) : Number(v).toLocaleString();
+
+  // 基本3 + カスタム売上項目（年度の reportData.productDefs）
+  function defs(){
+    const d=db();
+    const cust = (d && d.reportData && Array.isArray(d.reportData.productDefs)) ? d.reportData.productDefs : [];
+    return BASE_DEFS.concat(cust.map(c=>({ key:c.key, label:c.label, color:c.color||'#888', custom:true })));
+  }
+  function persist(d){
+    try{ localStorage.setItem('neo_db_'+yr(), JSON.stringify(d)); }catch(e){}
+    if(typeof scheduleAutoSave==='function') scheduleAutoSave('商品別売上編集');
+  }
+  function add(){
+    const d=db(); if(!d){ alert('データが読み込まれていません'); return; }
+    const name=(prompt('追加する売上項目の名称を入力してください（例：物販・スポンサー収入）')||'').trim();
+    if(!name) return;
+    if(!d.reportData) d.reportData={};
+    if(!Array.isArray(d.reportData.productDefs)) d.reportData.productDefs=[];
+    const key='revC'+Date.now().toString(36);
+    d.reportData.productDefs.push({ key, label:name, color:PALETTE[d.reportData.productDefs.length%PALETTE.length] });
+    persist(d);
+    render();
+  }
+  function remove(key){
+    const d=db(); if(!d || !d.reportData || !Array.isArray(d.reportData.productDefs)) return;
+    const def=d.reportData.productDefs.find(x=>x.key===key); if(!def) return;
+    if(!confirm(`売上項目「${def.label}」と入力済みの予算/実績データを削除します。よろしいですか？`)) return;
+    d.reportData.productDefs=d.reportData.productDefs.filter(x=>x.key!==key);
+    if(d.pl){ if(d.pl.budget) delete d.pl.budget[key]; if(d.pl.actual) delete d.pl.actual[key]; }
+    if(d.reportData.salesTargets) delete d.reportData.salesTargets[key];
+    persist(d);
+    render();
+  }
 
   function arr(d, kind, def){
     const N = (d.months||[]).length;
@@ -2498,7 +2533,8 @@ window.PRODUCTS = (function(){
   }
   function lastIdx(d){
     const N=(d.months||[]).length; let idx=-1;
-    for (let i=0;i<N;i++){ let tot=0; DEFS.forEach(def=> tot += arr(d,'actual',def)[i]); if (tot>0) idx=i; }
+    const D=defs();
+    for (let i=0;i<N;i++){ let tot=0; D.forEach(def=> tot += arr(d,'actual',def)[i]); if (tot>0) idx=i; }
     return idx;
   }
   function targets(d){
@@ -2537,14 +2573,15 @@ window.PRODUCTS = (function(){
     const tgt=targets(d);
     let cardsHtml='';
     const totals={actCum:0, budCum:0, budYr:0, tgt:0};
-    DEFS.forEach(def=>{
+    defs().forEach(def=>{
       const aA=arr(d,'actual',def), bA=arr(d,'budget',def);
       const actCum=cum(aA,li), budCum=cum(bA,li), budYr=bA.reduce((s,v)=>s+v,0);
       const t = Number(tgt[def.key]) || budYr; // 目標未設定なら年間予算をフォールバック
       totals.actCum+=actCum; totals.budCum+=budCum; totals.budYr+=budYr; totals.tgt+=t;
+      const delBtn = def.custom ? `<span onclick="window.PRODUCTS.remove('${def.key}')" title="この売上項目を削除" style="cursor:pointer;color:var(--tc-red);font-size:11px;opacity:.6;float:right">✕</span>` : '';
       cardsHtml += `
       <div class="card" style="margin-bottom:0;border-top:3px solid ${def.color}">
-        <div style="font-size:13px;font-weight:700;margin-bottom:8px">${def.label}</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">${def.label}${delBtn}</div>
         <div style="font-size:10px;color:var(--text3)">累積実績（${monthsDone>0?monthsDone+'ヶ月':'—'}）</div>
         <div style="font-size:22px;font-weight:800;color:${def.color};line-height:1.1">${fmtK(actCum)}<span style="font-size:11px;color:var(--text3);font-weight:600"> 千円</span></div>
         <div style="margin-top:12px">
@@ -2590,14 +2627,15 @@ window.PRODUCTS = (function(){
     const el=document.getElementById('prod-monthly'); if(!el) return;
     const N=(d.months||[]).length;
     const mlab=(m)=>(typeof MONTH_LABELS!=='undefined' && MONTH_LABELS[m])||m;
-    const bAll=DEFS.map(def=>arr(d,'budget',def));
-    const aAll=DEFS.map(def=>arr(d,'actual',def));
+    const D=defs();
+    const bAll=D.map(def=>arr(d,'budget',def));
+    const aAll=D.map(def=>arr(d,'actual',def));
     const sumAt=(arrs,i)=>arrs.reduce((s,a)=>s+(a[i]||0),0);
     const revB=revArr(d,'budget'), revA=revArr(d,'actual');
     let h=`<table id="prod-pl-table" class="dt" style="min-width:${140+N*58}px;border-collapse:separate;border-spacing:0;font-size:11px"><thead><tr><th class="l" style="position:sticky;left:0;background:var(--bg2);min-width:140px">商品 / 区分</th>`;
     (d.months||[]).forEach((m,i)=>{ h+=`<th style="${i===li?'color:var(--tc-blue)':''}">${mlab(m)}</th>`; });
     h+=`<th>合計</th></tr></thead><tbody>`;
-    DEFS.forEach((def,di)=>{
+    D.forEach((def,di)=>{
       const bA=bAll[di], aA=aAll[di];
       h+=`<tr><td class="l" style="position:sticky;left:0;background:var(--bg2);font-weight:700;border-top:2px solid ${def.color}">${def.label} <span style="font-size:9px;color:var(--text3);font-weight:400">予算</span></td>`;
       bA.forEach((v,i)=>{ h+=`<td class="budget" tabindex="0" data-cell-key="pl.budget.${def.key}" data-cell-idx="${i}" style="text-align:right;color:var(--text3)">${v?fmtK(v):'─'}</td>`; });
@@ -2652,12 +2690,13 @@ window.PRODUCTS = (function(){
     const cv=document.getElementById('prod-chart'); if(!cv) return;
     const mlab=(m)=>(typeof MONTH_LABELS!=='undefined' && MONTH_LABELS[m])||m;
     const labels=(d.months||[]).map(mlab);
-    const ds = DEFS.map(def=>{
+    const D=defs();
+    const ds = D.map(def=>{
       const aA=arr(d,'actual',def); let c=0;
       const data=aA.map((v,i)=>{ c+=v; return i<=li ? c : null; });
       return { label:def.label, data, borderColor:def.color, backgroundColor:def.color+'22', tension:.3, pointRadius:2, fill:false, spanGaps:false };
     });
-    let cb=0; const budTot=(d.months||[]).map((_,i)=>{ let s=0; DEFS.forEach(def=> s+=arr(d,'budget',def)[i]); cb+=s; return cb; });
+    let cb=0; const budTot=(d.months||[]).map((_,i)=>{ let s=0; D.forEach(def=> s+=arr(d,'budget',def)[i]); cb+=s; return cb; });
     const rs=getComputedStyle(document.documentElement);
     const tc=(rs.getPropertyValue('--text3')||'#888').trim();
     const gc='rgba(120,120,120,0.12)';
@@ -2676,6 +2715,8 @@ window.PRODUCTS = (function(){
     open(){ _year = (typeof currentYear!=='undefined') ? currentYear : _year; render(); },
     setYear(y){ _year=y; render(); },
     setTarget,
+    add,
+    remove,
     render,
   };
 })();
