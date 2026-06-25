@@ -17894,7 +17894,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function tcSafe(){ try{ return tc; }catch(e){ return '#8e8e93'; } }
   function gcSafe(){ try{ return gc; }catch(e){ return 'rgba(60,60,67,0.10)'; } }
-  function axisFmt(v){ return (typeof fmtAxisJPY === 'function') ? fmtAxisJPY(v) : Math.round(v).toLocaleString(); }
+  function axisFmt(v){
+    // ローカルフォーマッタ: グローバル fmtAxisJPY は toFixed(0) のため
+    // 1.2千万・1.4千万 などが「1千万」に丸まり同じラベルが連続する問題を回避する。
+    // 入力単位: 千円
+    const a = Math.abs(Number(v) || 0);
+    const s = (Number(v) || 0) < 0 ? '▲' : '';
+    if (a === 0) return '0';
+    if (a >= 100000) return s + (a/100000).toFixed(1) + '億';
+    if (a >= 10000)  return s + (a/10000).toFixed(1) + '千万';
+    if (a >= 1000)   return s + (a/1000).toFixed(1) + '百万';
+    return s + Math.round(a).toLocaleString() + '千円';
+  }
   function fmtK(v){ return Math.round((Number(v)||0)/1000).toLocaleString(); }
 
   function annualOf(yr){
@@ -18039,7 +18050,46 @@ document.addEventListener('DOMContentLoaded', function() {
   function escapeAttr(s){
     return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
-  function num(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
+  function escapeText(s){
+    return String(s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  }
+  function num(v){
+    if (typeof v === 'string') v = v.replace(/[,，\s]/g, '');
+    const n = Number(v); return Number.isFinite(n) ? n : 0;
+  }
+  function fmtComma(v){
+    const n = num(v);
+    return n === 0 ? '' : Math.round(n).toLocaleString();
+  }
+
+  // 業務内容の選択肢（プリセット）。データに含まれる値も実行時に追加される。
+  const DESC_PRESET = [
+    '給与', '給与（出張日当含む）', '給与+経費精算', '給与+経費精算（出張日当含む）',
+    '業務委託費', '業務委託費（インターン）', '業務委託費（撮影）',
+    '事務代行', 'コンサルティング費', 'アドバイザリーフィー',
+    '顧問料', '顧問料（1ヶ月5.5万円&タイムチャージ）', '顧問費用',
+    '開発業務', 'システム開発費', 'サイト保守管理',
+    'インスタ運用費用', 'NEO福岡業務委託', 'NEO福岡立ち上げ支援',
+    'コモンズ', '会場利用費用', '営業支援業務', 'SOCIO活動費用',
+    'スポンサー費用', 'スポンサー協賛', '記事掲載', '動画作成費',
+    'CFO業務', '記帳代行等', '給与計算業務', '株価算定等', '司法書士業務', '採用コンサル',
+    'クラウドサイン月額利用料', 'LINEAPIシステム利用料', 'e-FAX', 'システム利用料', '月会費', '月会費(自動引落）',
+    'ラグジュアリーカード', 'AMEX', 'クレジットカード', 'セゾンプラチナビジネスAMEX',
+    '後楽園オフィス兼社宅賃料', '後楽園社宅賃料', '札幌マンション（エヴァンスコート）家賃', '自動引落（5日前後）', '自動引落（5日）', '自動引落',
+    '住民税', '源泉所得税', '社会保険料', '年金＆健康保険料', '貸付金返済', '貸付金返済(自動引落)', '借入金返済',
+    'スタッフ経費精算', 'MF経費精算分', '郵便・領収書整理事務（経費精算）', '郵送費', '旅費交通費',
+    '出資金分配金', '出資金の分配金', '企業紹介手数料', 'サブスク・協賛金分配金',
+    'その他'
+  ];
+
+  function buildDescOptions(currentValue){
+    const set = new Set(DESC_PRESET);
+    Object.values(DATA).forEach(yrData => {
+      (yrData?.details || []).forEach(x => { if (x.desc) set.add(x.desc); });
+    });
+    if (currentValue) set.add(currentValue);
+    return Array.from(set);
+  }
 
   function saveLocal(){
     try { localStorage.setItem('neo_expense_history_v1', JSON.stringify(DATA)); } catch(e){}
@@ -18092,11 +18142,11 @@ document.addEventListener('DOMContentLoaded', function() {
     h += '#ed-vendors-wrap .ed-tbl .ed-del-col{width:34px;text-align:center}';
     h += '#ed-vendors-wrap .ed-tbl .stk-col{position:sticky;left:0;background:var(--bg);z-index:2}';
     h += '#ed-vendors-wrap .ed-tbl thead .stk-col{z-index:4}';
-    h += '#ed-vendors-wrap input.ed-cell{box-sizing:border-box;width:100%;height:100%;min-height:26px;padding:4px 6px;border:1px solid transparent;background:transparent;color:var(--text);font-size:10px;font-family:inherit;outline:none}';
-    h += '#ed-vendors-wrap input.ed-cell:focus{border-color:var(--blue);background:#fff;box-shadow:inset 0 0 0 1px var(--blue)}';
+    h += '#ed-vendors-wrap input.ed-cell,#ed-vendors-wrap select.ed-cell{box-sizing:border-box;width:100%;height:100%;min-height:26px;padding:4px 6px;border:1px solid transparent;background:transparent;color:var(--text);font-size:10px;font-family:inherit;outline:none}';
+    h += '#ed-vendors-wrap input.ed-cell:focus,#ed-vendors-wrap select.ed-cell:focus{border-color:var(--blue);background:#fff;box-shadow:inset 0 0 0 1px var(--blue)}';
     h += '#ed-vendors-wrap input.ed-cell.ed-num{text-align:right;font-variant-numeric:tabular-nums}';
+    h += '#ed-vendors-wrap select.ed-cell{appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--text3) 50%),linear-gradient(135deg,var(--text3) 50%,transparent 50%);background-position:calc(100% - 11px) 11px,calc(100% - 6px) 11px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:18px}';
     h += '#ed-vendors-wrap input.ed-cell::-webkit-outer-spin-button,#ed-vendors-wrap input.ed-cell::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}';
-    h += '#ed-vendors-wrap input.ed-cell{appearance:textfield;-moz-appearance:textfield}';
     h += '#ed-vendors-wrap .ed-del-btn{background:none;border:none;color:#e87070;cursor:pointer;font-size:13px;padding:2px 6px;border-radius:3px}';
     h += '#ed-vendors-wrap .ed-del-btn:hover{background:rgba(232,112,112,0.15)}';
     h += '#ed-vendors-wrap .ed-row-total{background:var(--bg2)!important;font-weight:700;color:var(--text)}';
@@ -18118,14 +18168,22 @@ document.addEventListener('DOMContentLoaded', function() {
       while (months.length < 12) months.push(0);
       const ann = months.reduce((s, v) => s + num(v), 0);
       x.annual = ann; // 同期
+      // 業務内容の選択肢を組み立て（プリセット＋既存データ＋現値）
+      const descOpts = buildDescOptions(x.desc);
       h += '<tr data-idx="'+idx+'">';
       h += '  <td class="ed-num-col stk-col">'+(idx+1)+'</td>';
       h += '  <td class="ed-vendor-col stk-col" style="left:34px"><input class="ed-cell ed-vendor" data-idx="'+idx+'" value="'+escapeAttr(x.vendor||'')+'" placeholder="取引先名"/></td>';
-      h += '  <td class="ed-desc-col"><input class="ed-cell ed-desc" data-idx="'+idx+'" value="'+escapeAttr(x.desc||'')+'" placeholder="業務内容"/></td>';
+      h += '  <td class="ed-desc-col"><select class="ed-cell ed-desc" data-idx="'+idx+'">';
+      h += '<option value="__NEW__">＋ 新規追加…</option>';
+      h += '<option value=""'+(!x.desc?' selected':'')+'>（未選択）</option>';
+      descOpts.forEach(opt => {
+        const sel = opt === (x.desc || '') ? ' selected' : '';
+        h += '<option value="'+escapeAttr(opt)+'"'+sel+'>'+escapeText(opt)+'</option>';
+      });
+      h += '</select></td>';
       for (let m = 0; m < 12; m++) {
         const v = num(months[m]);
-        const dispV = v === 0 ? '' : Math.round(v);
-        h += '  <td class="ed-mon-col"><input type="number" class="ed-cell ed-num ed-m" data-idx="'+idx+'" data-m="'+m+'" value="'+dispV+'" step="1" /></td>';
+        h += '  <td class="ed-mon-col"><input type="text" inputmode="numeric" class="ed-cell ed-num ed-m" data-idx="'+idx+'" data-m="'+m+'" value="'+fmtComma(v)+'" /></td>';
       }
       h += '  <td class="ed-ann-col" data-idx="'+idx+'">'+fmtK(ann)+'</td>';
       h += '  <td class="ed-del-col"><button class="ed-del-btn" data-idx="'+idx+'" title="この行を削除">×</button></td>';
@@ -18148,10 +18206,10 @@ document.addEventListener('DOMContentLoaded', function() {
     h += '</tbody></table></div>';
     wrap.innerHTML = h;
 
-    // イベントバインド
-    wrap.querySelectorAll('input.ed-cell').forEach(el => {
+    // イベントバインド (input/select 両方を対象)
+    wrap.querySelectorAll('.ed-cell').forEach(el => {
       el.addEventListener('change', onEditCell);
-      el.addEventListener('blur', onEditCell);
+      if (el.tagName === 'INPUT') el.addEventListener('blur', onEditCell);
     });
     wrap.querySelectorAll('.ed-del-btn').forEach(el => {
       el.addEventListener('click', onDeleteRow);
@@ -18170,16 +18228,27 @@ document.addEventListener('DOMContentLoaded', function() {
     if (el.classList.contains('ed-vendor')) {
       row.vendor = el.value;
     } else if (el.classList.contains('ed-desc')) {
+      if (el.value === '__NEW__') {
+        const newDesc = prompt('業務内容を入力してください（新規追加）:', row.desc || '');
+        if (newDesc && newDesc.trim()) {
+          row.desc = newDesc.trim();
+          saveLocal();
+          renderEditableDetails(); // 新規選択肢を追加して再描画
+        } else {
+          el.value = row.desc || ''; // 選択リセット
+        }
+        return;
+      }
       row.desc = el.value;
     } else if (el.classList.contains('ed-m')) {
       const m = Number(el.dataset.m);
-      row.months[m] = num(el.value);
+      row.months[m] = num(el.value); // num() がカンマ・全角カンマ・空白を除去
       row.annual = row.months.reduce((s, v) => s + num(v), 0);
+      // セル自身もカンマ整形に戻す
+      el.value = fmtComma(row.months[m]);
       const annEl = document.querySelector('#ed-vendors-wrap .ed-ann-col[data-idx="'+idx+'"]');
       if (annEl) annEl.textContent = fmtK(row.annual);
-      // 合計行も更新（重い場合は省略可だが件数が数十程度なので即時で十分）
       updateFooterTotals();
-      // 上の操作バー（年間合計）も更新
       updateHeaderTotal();
     }
     saveLocal();
