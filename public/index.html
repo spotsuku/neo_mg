@@ -2177,6 +2177,7 @@ input.cells-edit-input {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px">
       <span class="ct" style="margin:0;padding:0;border:none">📈 月次トレンド — <span id="ed-month-year">2026年</span>（千円）</span>
       <div class="pa-toggle" style="margin:0">
+        <button class="pa-btn" id="ed-yr-2023" onclick="EXPDETAIL.setYear('2023',this)">2023年</button>
         <button class="pa-btn" id="ed-yr-2024" onclick="EXPDETAIL.setYear('2024',this)">2024年</button>
         <button class="pa-btn" id="ed-yr-2025" onclick="EXPDETAIL.setYear('2025',this)">2025年</button>
         <button class="pa-btn active" id="ed-yr-2026" onclick="EXPDETAIL.setYear('2026',this)">2026年</button>
@@ -2191,9 +2192,12 @@ input.cells-edit-input {
     <div class="scroll-x" id="ed-matrix-wrap" style="font-size:11px"></div>
   </div>
 
-  <!-- TOP取引先 -->
+  <!-- 明細（全件編集可） -->
   <div class="card">
-    <div class="ct">取引先別 年間 TOP 15 — <span id="ed-vendor-year">2026年</span>（千円）</div>
+    <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span>📝 明細（全件編集可）— <span id="ed-vendor-year">2026年</span></span>
+      <span style="font-size:10px;color:var(--text3);font-weight:400">セルクリックで編集。月別12列＋業務内容を入力すると年間合計が自動計算されます。編集はブラウザ(localStorage)に即時保存。</span>
+    </div>
     <div id="ed-vendors-wrap" style="font-size:11px"></div>
   </div>
 </div>
@@ -18032,31 +18036,224 @@ document.addEventListener('DOMContentLoaded', function() {
     wrap.innerHTML = h;
   }
 
-  function renderVendors(){
+  function escapeAttr(s){
+    return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function num(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
+
+  function saveLocal(){
+    try { localStorage.setItem('neo_expense_history_v1', JSON.stringify(DATA)); } catch(e){}
+  }
+  function loadLocal(){
+    try {
+      const s = localStorage.getItem('neo_expense_history_v1');
+      if (!s) return;
+      const obj = JSON.parse(s);
+      // localStorageが空オブジェクトでも上書き避けるため、各年で details/cats が存在する場合のみ採用
+      Object.keys(obj || {}).forEach(yr => {
+        if (!DATA[yr]) DATA[yr] = { cats: {}, details: [] };
+        if (obj[yr].details && Array.isArray(obj[yr].details)) DATA[yr].details = obj[yr].details;
+        if (obj[yr].cats && typeof obj[yr].cats === 'object') DATA[yr].cats = obj[yr].cats;
+      });
+    } catch(e){}
+  }
+
+  // 明細（全件編集可）
+  function renderEditableDetails(){
     const wrap = document.getElementById('ed-vendors-wrap');
     if (!wrap) return;
-    const d = DATA[_year] || {};
-    if (!d.details || d.details.length === 0){
-      wrap.innerHTML = '<div style="color:var(--text3);padding:12px;font-size:11px">明細データがありません</div>';
-      return;
-    }
-    const top = d.details.filter(x => (Number(x.annual)||0) > 0).slice().sort((a,b) => (b.annual||0) - (a.annual||0)).slice(0, 15);
-    if (top.length === 0){
-      wrap.innerHTML = '<div style="color:var(--text3);padding:12px;font-size:11px">年間合計が0より大きい取引先がありません</div>';
-      return;
-    }
-    let h = '<table class="dt" style="width:100%"><thead><tr><th class="l" style="width:30px">#</th><th class="l">取引先</th><th class="l">業務内容</th><th>年間（千円）</th><th>月平均</th></tr></thead><tbody>';
-    top.forEach((x, i) => {
-      const ann = Math.round((Number(x.annual)||0)/1000);
-      const mavg = Math.round((Number(x.annual)||0)/12/1000);
-      h += '<tr><td class="l" style="color:var(--text3)">'+(i+1)+'</td>'+
-           '<td class="l" style="font-weight:600">'+escapeHtml(x.vendor)+'</td>'+
-           '<td class="l" style="color:var(--text2);font-size:10px">'+escapeHtml(x.desc||'')+'</td>'+
-           '<td style="font-weight:600">'+ann.toLocaleString()+'</td>'+
-           '<td style="color:var(--text3)">'+mavg.toLocaleString()+'</td></tr>';
+    if (!DATA[_year]) DATA[_year] = { cats: {}, details: [] };
+    if (!Array.isArray(DATA[_year].details)) DATA[_year].details = [];
+    const list = DATA[_year].details;
+    const annTotal = list.reduce((s, x) => s + num(x.annual), 0);
+
+    let h = '';
+    // 操作バー
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">';
+    h += '  <div style="font-size:11px;color:var(--text3)">'+list.length+' 件 ・ 年間合計 <strong style="color:var(--text)">'+fmtK(annTotal)+'</strong> 千円</div>';
+    h += '  <div style="display:flex;gap:6px;flex-wrap:wrap">';
+    h += '    <button class="btn btn-p" style="font-size:11px;padding:5px 12px" onclick="EXPDETAIL.addRow()">+ 新規行</button>';
+    h += '    <button class="btn"      style="font-size:11px;padding:5px 12px" onclick="EXPDETAIL.exportJSON()">⬇ JSONエクスポート</button>';
+    h += '    <button class="btn"      style="font-size:11px;padding:5px 12px" onclick="EXPDETAIL.resetYear()" title="この年度の明細を初回ロード時の状態に戻す（編集を破棄）">↺ リセット</button>';
+    h += '  </div>';
+    h += '</div>';
+
+    // テーブル
+    h += '<style>';
+    h += '#ed-vendors-wrap .ed-tbl{border-collapse:separate;border-spacing:0;min-width:1700px;font-size:10px;width:100%}';
+    h += '#ed-vendors-wrap .ed-tbl th,#ed-vendors-wrap .ed-tbl td{padding:0;border-bottom:1px solid var(--border);border-right:1px solid var(--border)}';
+    h += '#ed-vendors-wrap .ed-tbl thead th{background:var(--bg2);font-weight:700;color:var(--text2);font-size:10px;padding:5px 6px;position:sticky;top:0;z-index:3}';
+    h += '#ed-vendors-wrap .ed-tbl tbody td{background:var(--bg);height:26px;vertical-align:middle}';
+    h += '#ed-vendors-wrap .ed-tbl .ed-num-col{width:34px;text-align:center;color:var(--text3);padding:0 6px}';
+    h += '#ed-vendors-wrap .ed-tbl .ed-vendor-col{min-width:190px;max-width:230px}';
+    h += '#ed-vendors-wrap .ed-tbl .ed-desc-col{min-width:200px;max-width:280px}';
+    h += '#ed-vendors-wrap .ed-tbl .ed-mon-col{min-width:78px;width:78px}';
+    h += '#ed-vendors-wrap .ed-tbl .ed-ann-col{min-width:82px;background:rgba(0,122,255,0.06);text-align:right;font-weight:700;padding:0 6px;color:var(--text)}';
+    h += '#ed-vendors-wrap .ed-tbl .ed-del-col{width:34px;text-align:center}';
+    h += '#ed-vendors-wrap .ed-tbl .stk-col{position:sticky;left:0;background:var(--bg);z-index:2}';
+    h += '#ed-vendors-wrap .ed-tbl thead .stk-col{z-index:4}';
+    h += '#ed-vendors-wrap input.ed-cell{box-sizing:border-box;width:100%;height:100%;min-height:26px;padding:4px 6px;border:1px solid transparent;background:transparent;color:var(--text);font-size:10px;font-family:inherit;outline:none}';
+    h += '#ed-vendors-wrap input.ed-cell:focus{border-color:var(--blue);background:#fff;box-shadow:inset 0 0 0 1px var(--blue)}';
+    h += '#ed-vendors-wrap input.ed-cell.ed-num{text-align:right;font-variant-numeric:tabular-nums}';
+    h += '#ed-vendors-wrap input.ed-cell::-webkit-outer-spin-button,#ed-vendors-wrap input.ed-cell::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}';
+    h += '#ed-vendors-wrap input.ed-cell{appearance:textfield;-moz-appearance:textfield}';
+    h += '#ed-vendors-wrap .ed-del-btn{background:none;border:none;color:#e87070;cursor:pointer;font-size:13px;padding:2px 6px;border-radius:3px}';
+    h += '#ed-vendors-wrap .ed-del-btn:hover{background:rgba(232,112,112,0.15)}';
+    h += '#ed-vendors-wrap .ed-row-total{background:var(--bg2)!important;font-weight:700;color:var(--text)}';
+    h += '</style>';
+
+    h += '<div class="scroll-x" style="max-height:75vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r)">';
+    h += '<table class="ed-tbl">';
+    h += '<thead><tr>';
+    h += '<th class="ed-num-col stk-col">#</th>';
+    h += '<th class="l ed-vendor-col stk-col" style="left:34px">取引先</th>';
+    h += '<th class="l ed-desc-col">業務内容</th>';
+    for (let m = 1; m <= 12; m++) h += '<th class="ed-mon-col">'+m+'月</th>';
+    h += '<th class="ed-ann-col">年間</th>';
+    h += '<th class="ed-del-col">×</th>';
+    h += '</tr></thead><tbody>';
+
+    list.forEach((x, idx) => {
+      const months = Array.isArray(x.months) ? x.months : Array(12).fill(0);
+      while (months.length < 12) months.push(0);
+      const ann = months.reduce((s, v) => s + num(v), 0);
+      x.annual = ann; // 同期
+      h += '<tr data-idx="'+idx+'">';
+      h += '  <td class="ed-num-col stk-col">'+(idx+1)+'</td>';
+      h += '  <td class="ed-vendor-col stk-col" style="left:34px"><input class="ed-cell ed-vendor" data-idx="'+idx+'" value="'+escapeAttr(x.vendor||'')+'" placeholder="取引先名"/></td>';
+      h += '  <td class="ed-desc-col"><input class="ed-cell ed-desc" data-idx="'+idx+'" value="'+escapeAttr(x.desc||'')+'" placeholder="業務内容"/></td>';
+      for (let m = 0; m < 12; m++) {
+        const v = num(months[m]);
+        const dispV = v === 0 ? '' : Math.round(v);
+        h += '  <td class="ed-mon-col"><input type="number" class="ed-cell ed-num ed-m" data-idx="'+idx+'" data-m="'+m+'" value="'+dispV+'" step="1" /></td>';
+      }
+      h += '  <td class="ed-ann-col" data-idx="'+idx+'">'+fmtK(ann)+'</td>';
+      h += '  <td class="ed-del-col"><button class="ed-del-btn" data-idx="'+idx+'" title="この行を削除">×</button></td>';
+      h += '</tr>';
     });
-    h += '</tbody></table>';
+
+    // 合計行
+    const totals = Array(12).fill(0);
+    list.forEach(x => (Array.isArray(x.months) ? x.months : []).forEach((v, i) => totals[i] += num(v)));
+    const grand = totals.reduce((s,v)=>s+v,0);
+    h += '<tr class="ed-row-total">';
+    h += '  <td class="ed-num-col stk-col" style="background:var(--bg2)!important">Σ</td>';
+    h += '  <td class="ed-vendor-col stk-col" style="left:34px;background:var(--bg2)!important;padding:5px 8px">合計</td>';
+    h += '  <td class="ed-desc-col" style="padding:5px 8px;color:var(--text3)">— 円単位 / 表示は千円換算 —</td>';
+    totals.forEach(v => { h += '<td class="ed-mon-col" style="text-align:right;padding:5px 6px">'+fmtK(v)+'</td>'; });
+    h += '  <td class="ed-ann-col" style="background:rgba(0,122,255,0.12)!important">'+fmtK(grand)+'</td>';
+    h += '  <td class="ed-del-col"></td>';
+    h += '</tr>';
+
+    h += '</tbody></table></div>';
     wrap.innerHTML = h;
+
+    // イベントバインド
+    wrap.querySelectorAll('input.ed-cell').forEach(el => {
+      el.addEventListener('change', onEditCell);
+      el.addEventListener('blur', onEditCell);
+    });
+    wrap.querySelectorAll('.ed-del-btn').forEach(el => {
+      el.addEventListener('click', onDeleteRow);
+    });
+  }
+
+  function onEditCell(e){
+    const el = e.target;
+    const idx = Number(el.dataset.idx);
+    const d = DATA[_year];
+    if (!d || !d.details || !d.details[idx]) return;
+    const row = d.details[idx];
+    if (!Array.isArray(row.months)) row.months = Array(12).fill(0);
+    while (row.months.length < 12) row.months.push(0);
+
+    if (el.classList.contains('ed-vendor')) {
+      row.vendor = el.value;
+    } else if (el.classList.contains('ed-desc')) {
+      row.desc = el.value;
+    } else if (el.classList.contains('ed-m')) {
+      const m = Number(el.dataset.m);
+      row.months[m] = num(el.value);
+      row.annual = row.months.reduce((s, v) => s + num(v), 0);
+      const annEl = document.querySelector('#ed-vendors-wrap .ed-ann-col[data-idx="'+idx+'"]');
+      if (annEl) annEl.textContent = fmtK(row.annual);
+      // 合計行も更新（重い場合は省略可だが件数が数十程度なので即時で十分）
+      updateFooterTotals();
+      // 上の操作バー（年間合計）も更新
+      updateHeaderTotal();
+    }
+    saveLocal();
+  }
+
+  function updateHeaderTotal(){
+    const list = DATA[_year]?.details || [];
+    const total = list.reduce((s, x) => s + num(x.annual), 0);
+    const bar = document.querySelector('#ed-vendors-wrap > div:first-child > div:first-child strong');
+    if (bar) bar.textContent = fmtK(total);
+  }
+
+  function updateFooterTotals(){
+    const list = DATA[_year]?.details || [];
+    const totals = Array(12).fill(0);
+    list.forEach(x => (Array.isArray(x.months) ? x.months : []).forEach((v, i) => totals[i] += num(v)));
+    const grand = totals.reduce((s,v)=>s+v,0);
+    const cells = document.querySelectorAll('#ed-vendors-wrap tr.ed-row-total td.ed-mon-col');
+    cells.forEach((c, i) => c.textContent = fmtK(totals[i]));
+    const ann = document.querySelector('#ed-vendors-wrap tr.ed-row-total td.ed-ann-col');
+    if (ann) ann.textContent = fmtK(grand);
+  }
+
+  function onDeleteRow(e){
+    const idx = Number(e.currentTarget.dataset.idx);
+    const d = DATA[_year];
+    if (!d || !d.details || !d.details[idx]) return;
+    const name = d.details[idx].vendor || '(無題)';
+    if (!confirm('「'+name+'」の行を削除しますか？')) return;
+    d.details.splice(idx, 1);
+    saveLocal();
+    renderEditableDetails();
+  }
+
+  function addRow(){
+    if (!DATA[_year]) DATA[_year] = { cats:{}, details:[] };
+    if (!Array.isArray(DATA[_year].details)) DATA[_year].details = [];
+    DATA[_year].details.push({ vendor:'', desc:'', annual:0, months: Array(12).fill(0) });
+    saveLocal();
+    renderEditableDetails();
+    // 新規行にフォーカス
+    setTimeout(() => {
+      const inputs = document.querySelectorAll('#ed-vendors-wrap input.ed-vendor');
+      const last = inputs[inputs.length - 1];
+      if (last) { last.focus(); last.scrollIntoView({block:'center', behavior:'smooth'}); }
+    }, 50);
+  }
+
+  function exportJSON(){
+    try {
+      const blob = new Blob([JSON.stringify(DATA, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'expense_history.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch(e) { alert('エクスポートに失敗しました: '+ e.message); }
+  }
+
+  function resetYear(){
+    if (!confirm(_year+'年の明細編集を破棄して、初期データに戻しますか？\n（他年度には影響しません）')) return;
+    try {
+      const s = localStorage.getItem('neo_expense_history_v1');
+      if (s) {
+        const obj = JSON.parse(s);
+        if (obj && obj[_year]) {
+          delete obj[_year];
+          localStorage.setItem('neo_expense_history_v1', JSON.stringify(obj));
+        }
+      }
+    } catch(e){}
+    // ページリロードで初期データ再ロード
+    location.reload();
   }
 
   function render(){
@@ -18067,14 +18264,17 @@ document.addEventListener('DOMContentLoaded', function() {
     renderYearlyChart();
     renderMonthlyChart();
     renderMatrix();
-    renderVendors();
+    renderEditableDetails();
   }
 
   function open(){
     setYear(_year);
   }
 
-  window.EXPDETAIL = { open, setYear, render, DATA };
+  // モジュール初期化時に localStorage の編集差分を反映
+  loadLocal();
+
+  window.EXPDETAIL = { open, setYear, render, addRow, exportJSON, resetYear, DATA };
 })();
 </script>
 
