@@ -17960,7 +17960,7 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         scales: {
           x: { stacked: true, ticks: { color: tcSafe(), font: { size: 11 } }, grid: { color: gcSafe() } },
-          y: { stacked: true, ticks: { color: tcSafe(), font: { size: 10 }, callback: v => axisFmt(v*1000) }, grid: { color: gcSafe() } }
+          y: { stacked: true, ticks: { color: tcSafe(), font: { size: 10 }, callback: v => axisFmt(v) }, grid: { color: gcSafe() } }
         }
       }
     });
@@ -17993,7 +17993,7 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         scales: {
           x: { stacked: true, ticks: { color: tcSafe(), font: { size: 10 } }, grid: { color: gcSafe() } },
-          y: { stacked: true, ticks: { color: tcSafe(), font: { size: 10 }, callback: v => axisFmt(v*1000) }, grid: { color: gcSafe() } }
+          y: { stacked: true, ticks: { color: tcSafe(), font: { size: 10 }, callback: v => axisFmt(v) }, grid: { color: gcSafe() } }
         }
       }
     });
