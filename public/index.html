@@ -18205,13 +18205,16 @@ document.addEventListener('DOMContentLoaded', function() {
     h += '#ed-vendors-wrap .ed-tbl thead th{background:var(--bg2);font-weight:700;color:var(--text2);font-size:10px;padding:5px 6px;position:sticky;top:0;z-index:3}';
     h += '#ed-vendors-wrap .ed-tbl tbody td{background:var(--bg);height:26px;vertical-align:middle}';
     h += '#ed-vendors-wrap .ed-tbl .ed-num-col{width:34px;text-align:center;color:var(--text3);padding:0 6px}';
-    h += '#ed-vendors-wrap .ed-tbl .ed-vendor-col{min-width:190px;max-width:230px}';
-    h += '#ed-vendors-wrap .ed-tbl .ed-desc-col{min-width:200px;max-width:280px}';
+    h += '#ed-vendors-wrap .ed-tbl .ed-vendor-col{width:160px;min-width:160px;max-width:160px}';
+    h += '#ed-vendors-wrap .ed-tbl .ed-desc-col{width:130px;min-width:130px;max-width:130px}';
     h += '#ed-vendors-wrap .ed-tbl .ed-mon-col{min-width:78px;width:78px}';
     h += '#ed-vendors-wrap .ed-tbl .ed-ann-col{min-width:82px;background:rgba(0,122,255,0.06);text-align:right;font-weight:700;padding:0 6px;color:var(--text)}';
     h += '#ed-vendors-wrap .ed-tbl .ed-del-col{width:34px;text-align:center}';
     h += '#ed-vendors-wrap .ed-tbl .stk-col{position:sticky;left:0;background:var(--bg);z-index:2}';
-    h += '#ed-vendors-wrap .ed-tbl thead .stk-col{z-index:4}';
+    h += '#ed-vendors-wrap .ed-tbl .stk-col-2{position:sticky;left:34px;background:var(--bg);z-index:2}';
+    h += '#ed-vendors-wrap .ed-tbl .stk-col-3{position:sticky;left:194px;background:var(--bg);z-index:2;border-right:2px solid var(--border2)}';
+    h += '#ed-vendors-wrap .ed-tbl thead .stk-col,#ed-vendors-wrap .ed-tbl thead .stk-col-2,#ed-vendors-wrap .ed-tbl thead .stk-col-3{z-index:4}';
+    h += '#ed-vendors-wrap .ed-tbl select.ed-desc{width:100%;max-width:130px;text-overflow:ellipsis;overflow:hidden}';
     h += '#ed-vendors-wrap input.ed-cell,#ed-vendors-wrap select.ed-cell{box-sizing:border-box;width:100%;height:100%;min-height:26px;padding:4px 6px;border:1px solid transparent;background:transparent;color:var(--text);font-size:10px;font-family:inherit;outline:none}';
     h += '#ed-vendors-wrap input.ed-cell:focus,#ed-vendors-wrap select.ed-cell:focus{border-color:var(--blue);background:#fff;box-shadow:inset 0 0 0 1px var(--blue)}';
     h += '#ed-vendors-wrap input.ed-cell.ed-num{text-align:right;font-variant-numeric:tabular-nums}';
@@ -18226,8 +18229,8 @@ document.addEventListener('DOMContentLoaded', function() {
     h += '<table class="ed-tbl">';
     h += '<thead><tr>';
     h += '<th class="ed-num-col stk-col">#</th>';
-    h += '<th class="l ed-vendor-col stk-col" style="left:34px">取引先</th>';
-    h += '<th class="l ed-desc-col">業務内容</th>';
+    h += '<th class="l ed-vendor-col stk-col-2">取引先</th>';
+    h += '<th class="l ed-desc-col stk-col-3">業務内容</th>';
     M_LABELS.forEach(lbl => { h += '<th class="ed-mon-col">'+lbl+'</th>'; });
     h += '<th class="ed-ann-col">年度合計</th>';
     h += '<th class="ed-del-col">×</th>';
@@ -18242,8 +18245,8 @@ document.addEventListener('DOMContentLoaded', function() {
       const descOpts = buildDescOptions(x.desc);
       h += '<tr data-idx="'+idx+'">';
       h += '  <td class="ed-num-col stk-col">'+(idx+1)+'</td>';
-      h += '  <td class="ed-vendor-col stk-col" style="left:34px"><input class="ed-cell ed-vendor" data-idx="'+idx+'" value="'+escapeAttr(x.vendor||'')+'" placeholder="取引先名"/></td>';
-      h += '  <td class="ed-desc-col"><select class="ed-cell ed-desc" data-idx="'+idx+'">';
+      h += '  <td class="ed-vendor-col stk-col-2"><input class="ed-cell ed-vendor" data-idx="'+idx+'" value="'+escapeAttr(x.vendor||'')+'" placeholder="取引先名"/></td>';
+      h += '  <td class="ed-desc-col stk-col-3"><select class="ed-cell ed-desc" data-idx="'+idx+'">';
       h += '<option value="__NEW__">＋ 新規追加…</option>';
       h += '<option value=""'+(!x.desc?' selected':'')+'>（未選択）</option>';
       descOpts.forEach(opt => {
@@ -18266,8 +18269,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const grand = totals.reduce((s,v)=>s+v,0);
     h += '<tr class="ed-row-total">';
     h += '  <td class="ed-num-col stk-col" style="background:var(--bg2)!important">Σ</td>';
-    h += '  <td class="ed-vendor-col stk-col" style="left:34px;background:var(--bg2)!important;padding:5px 8px">合計</td>';
-    h += '  <td class="ed-desc-col" style="padding:5px 8px;color:var(--text3)">— 円単位 / 表示は千円換算 —</td>';
+    h += '  <td class="ed-vendor-col stk-col-2" style="background:var(--bg2)!important;padding:5px 8px">合計</td>';
+    h += '  <td class="ed-desc-col stk-col-3" style="background:var(--bg2)!important;padding:5px 6px;color:var(--text3);font-size:9px">円単位/千円表示</td>';
     totals.forEach(v => { h += '<td class="ed-mon-col" style="text-align:right;padding:5px 6px">'+fmtK(v)+'</td>'; });
     h += '  <td class="ed-ann-col" style="background:rgba(0,122,255,0.12)!important">'+fmtK(grand)+'</td>';
     h += '  <td class="ed-del-col"></td>';
