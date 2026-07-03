@@ -2176,11 +2176,7 @@ input.cells-edit-input {
   <div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px">
       <span class="ct" style="margin:0;padding:0;border:none">📈 月次トレンド — <span id="ed-month-year">2025年度</span>（4-3月・千円）</span>
-      <div class="pa-toggle" style="margin:0">
-        <button class="pa-btn" id="ed-yr-2024" onclick="EXPDETAIL.setYear('2024',this)">2024年度</button>
-        <button class="pa-btn active" id="ed-yr-2025" onclick="EXPDETAIL.setYear('2025',this)">2025年度</button>
-        <button class="pa-btn" id="ed-yr-2026" onclick="EXPDETAIL.setYear('2026',this)">2026年度</button>
-      </div>
+      <span style="font-size:10px;color:var(--text3)">※ 対象年度はヘッダーの年度切替と連動します</span>
     </div>
     <div class="ch" style="height:260px"><canvas id="ed-monthly-chart"></canvas></div>
   </div>
@@ -2907,6 +2903,11 @@ function setYear(y, el) {
   loadImportedList();
   const gsSec = document.getElementById('sec-gsummary');
   if (gsSec && gsSec.classList.contains('on') && window.GSUMMARY) window.GSUMMARY.render();
+  // 経費明細タブが開いていれば同じ会計年度で再描画
+  const edSec = document.getElementById('sec-expense-detail');
+  if (edSec && edSec.classList.contains('on') && window.EXPDETAIL) {
+    try { window.EXPDETAIL.setYear(y); } catch(e){}
+  }
 }
 
 function setPaView(v, el) {
@@ -17984,13 +17985,18 @@ document.addEventListener('DOMContentLoaded', function() {
     return sum;
   }
 
-  function setYear(yr, el){
-    if (!TOGGLE_YEARS.includes(yr)) return;
-    _year = yr;
-    document.querySelectorAll('#sec-expense-detail .pa-toggle .pa-btn').forEach(b => b.classList.remove('active'));
-    if (el) el.classList.add('active');
-    else { const b = document.getElementById('ed-yr-'+yr); if (b) b.classList.add('active'); }
+  function setYear(yr){
+    if (!TOGGLE_YEARS.includes(String(yr))) return;
+    _year = String(yr);
     render();
+  }
+  function syncFromGlobalYear(){
+    // ヘッダーのグローバル currentYear と同期
+    try {
+      if (typeof currentYear !== 'undefined' && TOGGLE_YEARS.includes(currentYear)) {
+        _year = currentYear;
+      }
+    } catch(e){}
   }
 
   function renderKPI(){
@@ -18193,6 +18199,7 @@ document.addEventListener('DOMContentLoaded', function() {
     h += '  <div style="font-size:11px;color:var(--text3)">'+list.length+' 件 ・ 年間合計 <strong style="color:var(--text)">'+fmtK(annTotal)+'</strong> 千円</div>';
     h += '  <div style="display:flex;gap:6px;flex-wrap:wrap">';
     h += '    <button class="btn btn-p" style="font-size:11px;padding:5px 12px" onclick="EXPDETAIL.addRow()">+ 新規行</button>';
+    h += '    <button class="btn"      style="font-size:11px;padding:5px 12px;background:var(--bg-green);color:var(--tc-green);border-color:var(--tc-green)" onclick="EXPDETAIL.syncToCF()" title="この年度のカテゴリ集計を月次財務CFの実績列に流し込みます（既存の実績値は上書き・Supabase保存）">📤 CF実績に反映</button>';
     h += '    <button class="btn"      style="font-size:11px;padding:5px 12px" onclick="EXPDETAIL.exportJSON()">⬇ JSONエクスポート</button>';
     h += '    <button class="btn"      style="font-size:11px;padding:5px 12px" onclick="EXPDETAIL.resetYear()" title="この年度の明細を初回ロード時の状態に戻す（編集を破棄）">↺ リセット</button>';
     h += '  </div>';
@@ -18449,14 +18456,99 @@ document.addEventListener('DOMContentLoaded', function() {
     renderEditableDetails();
   }
 
+  // ── 経費明細カテゴリ → 月次財務CF実績キーのマッピング ──
+  // 経費明細は円単位、DB.cf.actual は千円単位で保持されている点に注意。
+  const CAT_TO_CF_KEY = {
+    '原価':         'cogsOtherPay',   // 原価その他 (詳細内訳無し)
+    '人件費':       'salaryPay',
+    '開発費':       'devOutPay',
+    '業務委託費':   'bizComPay',
+    '外注費':       'bizComPay',      // 業務委託費 に合算
+    '専門家報酬':   'expertPay',
+    '家賃':         'rentPay',
+    '経費':         'expensePay',
+    '通信費':       'telPay',
+    '交際/会議費':  'entertainPay',
+    '租税公課':     'taxPay',
+    'システム利用料': 'toolsPay',
+    '消耗品':       'suppliesPay',
+    '広告費':       'adSportsPay',
+    '採用研修':     'recruitPay',
+    '年会費':       'annualFeePay',
+    'その他':       'salesOtherPay',
+    '融資返済':     'loanOut',
+  };
+
+  async function syncToCF(){
+    const fy = _year;
+    if (typeof DB === 'undefined') { alert('DB が見つかりません'); return; }
+    // 経費明細のFYカテゴリ集計を取得
+    const cats = getFYCats(fy);
+    // CFキーごとに集計 (many-to-one を合算)
+    const cfSums = {};
+    Object.entries(CAT_TO_CF_KEY).forEach(([cat, cfKey]) => {
+      if (!cfSums[cfKey]) cfSums[cfKey] = Array(12).fill(0);
+      const arr = cats[cat] || Array(12).fill(0);
+      arr.forEach((v, i) => cfSums[cfKey][i] += Number(v)||0);
+    });
+    // 円 → 千円
+    Object.keys(cfSums).forEach(k => {
+      cfSums[k] = cfSums[k].map(v => Math.round(v / 1000));
+    });
+    // プレビュー統計
+    const keyCount = Object.keys(cfSums).length;
+    const total = Object.values(cfSums).reduce((s, arr) => s + arr.reduce((s2, v) => s2 + v, 0), 0);
+    const detailLines = Object.entries(CAT_TO_CF_KEY)
+      .map(([cat, key]) => {
+        const catSum = (cats[cat] || []).reduce((s, v) => s + (Number(v)||0), 0) / 1000;
+        return catSum > 0 ? `  ${cat} → ${key}: ${Math.round(catSum).toLocaleString()} 千円` : null;
+      })
+      .filter(Boolean)
+      .join('\n');
+    const msg = `${fy}年度 の経費明細を月次財務CFの「実績」に反映します。\n\n`
+              + `対象CFキー: ${keyCount}項目 / 年度合計: ${total.toLocaleString()} 千円\n\n`
+              + `【カテゴリ→CFキー マッピング (非ゼロのみ)】\n${detailLines || '  (該当データなし)'}\n\n`
+              + `※ DB[${fy}].cf.actual の該当12ヶ月セルを丸ごと上書きします\n`
+              + `※ 保存後は月次財務タブのCF実績に即座に反映されます\n\n`
+              + `続けますか？`;
+    if (!confirm(msg)) return;
+
+    // DB構造を確保
+    if (!DB[fy]) { alert('DB['+fy+'] が未初期化です。まずヘッダーで '+fy+'年度 を選んで月次財務タブを開いてください。'); return; }
+    if (!DB[fy].cf) DB[fy].cf = { budget: {}, actual: {} };
+    if (!DB[fy].cf.actual) DB[fy].cf.actual = {};
+
+    // 書き込み
+    Object.entries(cfSums).forEach(([key, arr]) => {
+      DB[fy].cf.actual[key] = arr.slice();
+    });
+
+    // 保存 (Supabase + localStorage)
+    try {
+      if (typeof saveDB === 'function') await saveDB();
+    } catch(e) {
+      alert('保存中にエラーが発生しました: ' + (e.message||e));
+      return;
+    }
+
+    // 月次財務が表示中なら再描画
+    try { if (typeof renderPLCF === 'function') renderPLCF(); } catch(e){}
+    try { if (typeof updateWeeklyKPIs === 'function') updateWeeklyKPIs(); } catch(e){}
+    try { if (typeof renderCashFlowForecast === 'function') renderCashFlowForecast(); } catch(e){}
+
+    alert('✅ '+fy+'年度 の経費明細を月次財務CF実績に反映しました。\n'
+        + keyCount + '項目 × 12ヶ月 = ' + (keyCount*12) + 'セルを更新し、Supabaseに保存しました。');
+  }
+
   function open(){
-    setYear(_year);
+    syncFromGlobalYear();
+    render();
   }
 
   // モジュール初期化時に localStorage の編集差分を反映
   loadLocal();
 
-  window.EXPDETAIL = { open, setYear, render, addRow, exportJSON, resetYear, DATA };
+  window.EXPDETAIL = { open, setYear, render, addRow, exportJSON, resetYear, syncToCF, DATA };
 })();
 </script>
 
