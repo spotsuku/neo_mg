@@ -1175,7 +1175,7 @@ input.cells-edit-input {
     </div>
     <div class="card">
       <div class="ct">CF詳細テーブル（千円）</div>
-      <div class="scroll-x" id="cf-table-wrap" style="max-height:70vh;overflow:auto"></div>
+      <div class="scroll-x" id="cf-table-wrap" style="overflow-x:auto;overflow-y:visible"></div>
     </div>
   </div>
 
@@ -6201,6 +6201,13 @@ function renderCFView(d) {
       isSub:true, colGroup:'cf-sec-revenue', noEdit:true,
     },
 
+    // ── 支出合計（原価+販管費+投資+財務出金）──
+    { label:'── 支出合計', section:true, sectionStyle:'outflow' },
+    { label:'支出合計（原価+販管費+投資+財務出金）',
+      bArr: Array.from({length:N},(_,i) => bCogsTot[i] + bTotalOutDetail[i]),
+      aArr: Array.from({length:N},(_,i) => aCogsTot[i] + aTotalOutDetail[i]),
+      isTot:true, isOut:true, noDiff:false },
+
     // ── 販管費合計 ──
     { label:'── 販管費合計', section:true, colId:'cf-sec-opex' },
     // 合計行は折りたたんでも常に表示（colGroup を付けない）
@@ -6245,17 +6252,20 @@ function renderCFView(d) {
   ];
 
   const minW = 100 + d.months.length * 82;
+  // 月ヘッダーはページスクロール時にも固定（topnav の下、~56px）+ ソフト影で境界を強調
+  const stickyBase = 'position:sticky;top:56px;z-index:3;background:var(--bg2);box-shadow:0 2px 0 rgba(60,60,67,0.08),0 3px 6px rgba(16,24,40,0.04)';
   let html = `<table class="dt" style="min-width:${minW}px;width:100%;border-collapse:separate;border-spacing:0">
     <thead><tr>
-      <th class="l" style="min-width:130px;position:sticky;top:0;z-index:3;background:var(--bg2)">科目</th>
-      <th class="l" style="min-width:36px;position:sticky;top:0;z-index:3;background:var(--bg2)">区分</th>
-      ${months.map(m=>`<th style="min-width:72px;position:sticky;top:0;z-index:3;background:var(--bg2)">${m}</th>`).join('')}
-      <th style="background:rgba(55,138,221,0.15);border-left:2px solid rgba(55,138,221,0.3);position:sticky;top:0;z-index:3">合計</th>
+      <th class="l" style="min-width:130px;${stickyBase}">科目</th>
+      <th class="l" style="min-width:36px;${stickyBase}">区分</th>
+      ${months.map(m=>`<th style="min-width:72px;${stickyBase}">${m}</th>`).join('')}
+      <th style="position:sticky;top:56px;z-index:3;background:rgba(10,132,255,0.15);border-left:2px solid rgba(10,132,255,0.3);box-shadow:0 2px 0 rgba(60,60,67,0.08),0 3px 6px rgba(16,24,40,0.04)">合計</th>
     </tr></thead><tbody>`;
 
   rows.forEach(row => {
     if (row.section) {
-      const secBg  = row.sectionStyle === 'revenue' ? 'background:rgba(55,138,221,0.12)' :
+      const secBg  = row.sectionStyle === 'revenue' ? 'background:rgba(10,132,255,0.14);color:var(--tc-blue)!important' :
+                     row.sectionStyle === 'outflow' ? 'background:rgba(255,59,48,0.12);color:var(--tc-red)!important' :
                      row.sectionStyle === 'sub'     ? 'background:var(--bg2)' :
                                                       'background:var(--bg3)';
       const indent = row.sectionStyle === 'sub' ? 'padding-left:20px' : 'padding:4px 8px';
@@ -6307,7 +6317,11 @@ function renderCFView(d) {
         html += `<td class="budget" style="${colorCls}">${dispVal}</td>`;
       }
     });
-    html += `<td class="budget" style="background:rgba(55,138,221,0.12);font-weight:700;border-left:2px solid rgba(55,138,221,0.3)">${row.noSum ? '─' : (bSum?bSum.toLocaleString():'─')}</td></tr>`;
+    // 年間合計セルは isOut かつ isTot の行を赤系、それ以外を青系で色分け（収入=青 / 支出=赤）
+    const budgetTotBg = isOut && isTot
+      ? 'background:rgba(255,59,48,0.12);border-left:2px solid rgba(255,59,48,0.30);color:var(--tc-red)'
+      : 'background:rgba(10,132,255,0.12);border-left:2px solid rgba(10,132,255,0.30)';
+    html += `<td class="budget" style="${budgetTotBg};font-weight:700">${row.noSum ? '─' : (bSum?bSum.toLocaleString():'─')}</td></tr>`;
 
     // 実績行
     const aSum = (row.aArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
@@ -6324,7 +6338,11 @@ function renderCFView(d) {
         html += `<td class="actual" style="${colorCls}">${dispVal}</td>`;
       }
     });
-    html += `<td class="actual" style="background:rgba(39,174,96,0.10);font-weight:700;border-left:2px solid rgba(39,174,96,0.25)">${row.noSum ? '─' : (aSum?aSum.toLocaleString():'─')}</td></tr>`;
+    // 実績の年間合計セルも同様に色分け（収入=緑 / 支出=薄赤）
+    const actualTotBg = isOut && isTot
+      ? 'background:rgba(255,59,48,0.16);border-left:2px solid rgba(255,59,48,0.35);color:var(--tc-red)'
+      : 'background:rgba(52,199,89,0.14);border-left:2px solid rgba(52,199,89,0.30)';
+    html += `<td class="actual" style="${actualTotBg};font-weight:700">${row.noSum ? '─' : (aSum?aSum.toLocaleString():'─')}</td></tr>`;
 
     // 差異行（noDiff でないもの）
     if (!row.noDiff && !row.noSum) {
@@ -18479,6 +18497,27 @@ document.addEventListener('DOMContentLoaded', function() {
     '年会費':       'annualFeePay',
     'その他':       'salesOtherPay',
     '融資返済':     'loanOut',
+  };
+  // CFキー → 月次財務CF詳細テーブルでの表示ラベル (目視確認用)
+  const CF_KEY_LABEL = {
+    cogsOtherPay:  '原価 › その他原価',
+    salaryPay:     '販管費 › 人件費・税金',
+    devOutPay:     '販管費 › 開発外注',
+    bizComPay:     '販管費 › 業務委託＋経費',
+    expertPay:     '販管費 › 専門家外注',
+    rentPay:       '販管費 › 家賃',
+    expensePay:    '販管費 › 経費精算（旅費・ツール）',
+    telPay:        '販管費 › 通信費',
+    entertainPay:  '販管費 › 交際/会議費',
+    taxPay:        '販管費 › 租税公課',
+    toolsPay:      '販管費 › ツール費用',
+    suppliesPay:   '販管費 › 消耗品',
+    adSportsPay:   '販管費 › 広告費・スポーツ協賛',
+    eventCostPay:  '販管費 › 外注費 イベント運営費',
+    recruitPay:    '販管費 › 採用研修',
+    annualFeePay:  '販管費 › 年会費',
+    salesOtherPay: '販管費 › その他',
+    loanOut:       '財務収支 › 借入返済',
   };
 
   async function syncToCF(){
