@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { messages, max_tokens = 1200 } = req.body;
+    const { messages, max_tokens = 1200, system } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'messages は配列で指定してください' });
@@ -31,6 +31,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens,
+        ...(system ? { system } : {}),
         messages,
       }),
     });
