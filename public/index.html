@@ -2388,7 +2388,10 @@ input.cells-edit-input {
     </div>
 
     <div class="cp-card">
-      <h2 class="cp-h2">株主名簿（取得株価・持株数・比率）</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <h2 class="cp-h2" style="margin:0">株主名簿（取得株価・持株数・比率）</h2>
+        <button class="cp-add-btn" onclick="window.CAPPOLICY && window.CAPPOLICY.openAddModal()" style="background:var(--cp-ink);color:#fff;border:0;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">＋ 株主を追加</button>
+      </div>
       <div class="cp-controls"><span class="cp-seg" id="cp-tblSeg"></span></div>
       <div class="cp-editnote" id="cp-editnote" style="display:none"><span style="color:var(--cp-fund)">「売却株数」</span>＝セカンダリー売却、<span style="color:#2f6f8f">「追加出資株数」</span>＝新規出資株価での追加引受。株主ごとに編集でき、シミュレーションに即時反映されます（Enterまたはフォーカスアウトで確定）</div>
       <div class="cp-tblwrap"><table id="cp-tbl"><thead id="cp-thead"></thead><tbody></tbody></table></div>
@@ -2398,6 +2401,37 @@ input.cells-edit-input {
 </div>
 
 </div><!-- /wrap -->
+
+<!-- 資本政策: 株主追加モーダル (wrap 外配置=どこからでも開閉可) -->
+<div id="cp-add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:300;align-items:center;justify-content:center;font-family:'Hiragino Kaku Gothic ProN','Noto Sans JP','Yu Gothic',Meiryo,sans-serif">
+  <div style="background:#fff;border-radius:12px;padding:22px 24px;width:92%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 12px 32px rgba(0,0,0,0.24);color:#12233d">
+    <div style="font-size:16px;font-weight:800;margin-bottom:14px">株主を追加</div>
+    <div style="display:grid;gap:11px">
+      <div><label style="font-size:11px;color:#3d5470;font-weight:700;display:block;margin-bottom:3px">株主名（必須）</label><input id="cp-add-name" type="text" placeholder="例: 山田 太郎（○○株式会社）" style="width:100%;padding:8px 10px;border:1px solid #e2e0d8;border-radius:6px;font-family:inherit;font-size:13px"></div>
+      <div><label style="font-size:11px;color:#3d5470;font-weight:700;display:block;margin-bottom:3px">区分（必須）</label>
+        <select id="cp-add-cat" style="width:100%;padding:8px 10px;border:1px solid #e2e0d8;border-radius:6px;font-family:inherit;font-size:13px;background:#fff">
+          <option value="経営株主">経営株主</option>
+          <option value="NEO共創株主" selected>NEO共創株主</option>
+          <option value="シード株主">シード株主</option>
+          <option value="SO保有者">SO保有者</option>
+        </select>
+      </div>
+      <div><label style="font-size:11px;color:#3d5470;font-weight:700;display:block;margin-bottom:3px">取得ラウンド／株価の説明</label><input id="cp-add-acq" type="text" placeholder="例: プレA ¥36,500" style="width:100%;padding:8px 10px;border:1px solid #e2e0d8;border-radius:6px;font-family:inherit;font-size:13px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+        <div><label style="font-size:11px;color:#3d5470;font-weight:700;display:block;margin-bottom:3px">プレA時点の顕在株数</label><input id="cp-add-k" type="number" step="0.01" min="0" value="0" style="width:100%;padding:8px 10px;border:1px solid #e2e0d8;border-radius:6px;font-family:inherit;font-size:13px;text-align:right"></div>
+        <div><label style="font-size:11px;color:#3d5470;font-weight:700;display:block;margin-bottom:3px">SO数（新株予約権）</label><input id="cp-add-s" type="number" step="0.01" min="0" value="0" style="width:100%;padding:8px 10px;border:1px solid #e2e0d8;border-radius:6px;font-family:inherit;font-size:13px;text-align:right"></div>
+      </div>
+      <div><label style="font-size:11px;color:#3d5470;font-weight:700;display:block;margin-bottom:3px">累計出資額（円）</label><input id="cp-add-inv" type="number" step="1000000" min="0" value="0" style="width:100%;padding:8px 10px;border:1px solid #e2e0d8;border-radius:6px;font-family:inherit;font-size:13px;text-align:right"></div>
+      <div style="font-size:10.5px;color:#3d5470;line-height:1.7;background:#f7f6f2;padding:8px 10px;border-radius:6px">
+        追加した株主は「プレA後（現在）」時点の株数として登録され、シリーズA後タブで売却株数・追加出資株数を編集できます。ローカルブラウザに保存されます（Supabaseには保存しません）。
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+      <button onclick="window.CAPPOLICY && window.CAPPOLICY.closeAddModal()" style="padding:8px 16px;border:1px solid #e2e0d8;background:#fff;color:#12233d;border-radius:6px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">キャンセル</button>
+      <button onclick="window.CAPPOLICY && window.CAPPOLICY.submitAdd()" style="padding:8px 16px;border:0;background:#12233d;color:#fff;border-radius:6px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer">追加</button>
+    </div>
+  </div>
+</div>
 
 <!-- バージョン管理オーバーレイ -->
 <div class="version-overlay" id="ver-overlay" onclick="closeVersionPanel()"></div>
@@ -18734,7 +18768,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const D = {"rows": [{"n": "三木智弘（代表取締役）", "c": "経営株主", "a": "譲受@¥10,000（設立直後）／SO行使@¥100（2022/7・12,000株）", "k": [0, 5000, 5000, 17000.0, 9000.0, 9000.0], "s": [0, 12000, 12000, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "㈱MIKI 三木資産管理会社", "c": "経営株主", "a": "譲渡取得（三木氏より9,000株）", "k": [0, 0, 0, 0.0, 9000.0, 9000.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "国本昂大（取締役会長）", "c": "経営株主", "a": "シード¥20,000／譲渡¥5,000／J-KISS¥29,200", "k": [0, 0, 1500, 1500.0, 3714.0, 3714.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 50000000.0, "sold": 0}, {"n": "千本倖生（取締役名誉会長）", "c": "経営株主", "a": "シード¥20,000／J-KISS¥29,200", "k": [0, 0, 250, 250.0, 764.0, 764.0], "s": [0, 0, 0, 250.0, 650.0, 650.0], "inv": 20000000.0, "sold": 0}, {"n": "岡田喜則（取締役）", "c": "経営株主", "a": "シード¥20,000／譲渡¥4,000", "k": [0, 0, 50, 50.0, 350.0, 350.0], "s": [0, 0, 0, 0.0, 700.0, 700.0], "inv": 0.0, "sold": 0}, {"n": "株式会社90s Management", "c": "経営株主", "a": "シード ¥20,000", "k": [0, 0, 500, 500.0, 500.0, 500.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 10000000.0, "sold": 0}, {"n": "三木浩江（執行役員）", "c": "経営株主", "a": "SOのみ", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 0, 0, 300.0, 350.0, 350.0], "inv": 0.0, "sold": 0}, {"n": "株式会社サフィルヴァ（設立発起・退出済）", "c": "創業期株主（退出済）", "a": "設立 ¥10,000 → 2021/6 全株譲渡", "k": [60, 0, 0, 0, 0, 0], "s": [0, 200, 200, 0, 0, 0], "inv": 0, "sold": 0}, {"n": "高橋健太（元取締役・退出済）", "c": "創業期株主（退出済）", "a": "譲受（2021/6）→ 退出（個人投資家4名へ譲渡と推定）", "k": [0, 500, 500, 0, 0, 0], "s": [0, 1000, 1000, 0, 0, 0], "inv": 0, "sold": 0}, {"n": "田中祐太（banker・退出済）", "c": "創業期株主（退出済）", "a": "シード ¥20,000 → 辻本郷へ譲渡（推定）", "k": [0, 0, 1000, 0, 0, 0], "s": [0, 0, 0, 0, 0, 0], "inv": 0, "sold": 0}, {"n": "三菱UFJ信託銀行", "c": "NEO共創株主", "a": "シード ¥20,000", "k": [0, 0, 1350, 1350.0, 1350.0, 1350.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 27000000.0, "sold": 0}, {"n": "矢頭徹（ライジングゼファー福岡）", "c": "NEO共創株主", "a": "J-KISS ¥29,200", "k": [0, 0, 0, 513.7, 1027.4, 1027.4], "s": [0, 0, 0, 0.0, 0.0, 0.6], "inv": 30000000.0, "sold": 0}, {"n": "藤木貴子 Caris&Co（佐賀バルーナーズ）", "c": "NEO共創株主", "a": "J-KISS ¥29,200", "k": [0, 0, 0, 1027.4, 1027.4, 1027.4], "s": [0, 0, 0, 0.0, 0.0, 0.6], "inv": 30000000.0, "sold": 0}, {"n": "株式会社Wiz（鹿児島レブナイズ）", "c": "NEO共創株主", "a": "設立発起（40株→分割後3,000株）", "k": [40, 3000, 3000, 3000.0, 1000.0, 1000.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "荒井邦彦（株式会社ストライク）", "c": "NEO共創株主", "a": "プレA J-KISS ¥29,200", "k": [0, 0, 0, 0.0, 513.7, 513.7], "s": [0, 0, 0, 0.0, 0.0, 0.3], "inv": 15000000.0, "sold": 0}, {"n": "澁谷陽史（ORENDA WORLD）", "c": "NEO共創株主", "a": "プレA ¥36,500", "k": [0, 0, 0, 0.0, 547.95, 547.95], "s": [0, 0, 0, 0.0, 0.0, 0.05], "inv": 20000000.0, "sold": 0}, {"n": "髙城いづみ（株式会社タカギ）", "c": "NEO共創株主", "a": "プレA ¥36,500", "k": [0, 0, 0, 0.0, 410.96, 410.96], "s": [0, 0, 0, 0.0, 0.0, 0.04], "inv": 15000000.0, "sold": 0}, {"n": "新規株主（残り1,500万円）", "c": "NEO共創株主", "a": "プレA ¥36,500", "k": [0, 0, 0, 0.0, 410.96, 410.96], "s": [0, 0, 0, 0.0, 0.0, 0.04], "inv": 15000000.0, "sold": 0}, {"n": "大木貴之", "c": "シード株主", "a": "譲受（2021/6）→100分割で1,500株", "k": [0, 1500, 1500, 1500.0, 500.0, 500.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 400000.0, "sold": 0}, {"n": "石川昌義", "c": "シード株主", "a": "シード ¥20,000", "k": [0, 0, 250, 250.0, 250.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 5000000.0, "sold": 250.0}, {"n": "辻本郷税理士事務所", "c": "シード株主", "a": "譲受（田中祐太氏分と推定）", "k": [0, 0, 0, 1000.0, 1000.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 1000.0}, {"n": "INCLUSIVE株式会社", "c": "シード株主", "a": "シード ¥20,000", "k": [0, 0, 1000, 1000.0, 1000.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 20000000.0, "sold": 1000.0}, {"n": "岡本祥治（未来ワークス代表）", "c": "シード株主", "a": "シード ¥20,000", "k": [0, 0, 250, 250.0, 250.0, 250.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 5000000.0, "sold": 0}, {"n": "石川聡彦（アイデミー代表）", "c": "シード株主", "a": "譲受 ¥20,000（高橋氏分と推定）", "k": [0, 0, 0, 50.0, 50.0, 50.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 1000000.0, "sold": 0}, {"n": "田浦航", "c": "シード株主", "a": "シード ¥20,000", "k": [0, 0, 500, 500.0, 500.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 10000000.0, "sold": 500.0}, {"n": "田中裕基", "c": "シード株主", "a": "譲受 ¥20,000", "k": [0, 0, 0, 0.0, 200.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 4000000.0, "sold": 200.0}, {"n": "佐良土雄亮（SBAパートナーズ）", "c": "シード株主", "a": "譲受 ¥20,000（プレAで売却済）", "k": [0, 0, 0, 150.0, 0.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "野尻雅之", "c": "シード株主", "a": "譲受 ¥20,000", "k": [0, 0, 0, 250.0, 250.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 5000000.0, "sold": 250.0}, {"n": "平野龍一", "c": "シード株主", "a": "譲受 ¥20,000（プレAで売却済）", "k": [0, 0, 0, 50.0, 0.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "シリーズA投資家（新規）", "c": "シリーズA投資家", "a": "シリーズA ¥80,000（新株3,500＋買取3,200）", "k": [0, 0, 0, 0.0, 0.0, 6700.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 280000000.0, "sold": 0}, {"n": "中川勝弘", "c": "SO保有者", "a": "SO（シード期発行150株）", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 0, 150, 150.0, 150.0, 150.0], "inv": 0.0, "sold": 0}, {"n": "神初忠宏", "c": "SO保有者", "a": "SO（シード期発行100株）", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 0, 100, 100.0, 100.0, 100.0], "inv": 0.0, "sold": 0}, {"n": "山崎俊（株式会社Wiz代表）", "c": "SO保有者", "a": "SO（2021/6発行200株）", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 200, 200, 200.0, 200.0, 200.0], "inv": 0.0, "sold": 0}, {"n": "株式会社北海道イエロースターズ", "c": "SO保有者", "a": "SO 200株", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 0, 0, 200.0, 200.0, 200.0], "inv": 0.0, "sold": 0}], "kpi": {"seriesA": 80000, "new_shares": 3500, "new_money": 280000000, "sec_shares": 3200, "sec_money": 64000000, "pre_money": 2689308493, "post_money": 2969308493, "a_stake": 0.1805}};
+  const D = {"rows": [{"n": "三木智弘（代表取締役）", "c": "経営株主", "a": "譲受@¥10,000（設立直後）／SO行使@¥100（2022/7・12,000株）", "k": [0, 5000, 5000, 17000.0, 9000.0, 9000.0], "s": [0, 12000, 12000, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "㈱MIKI 三木資産管理会社", "c": "経営株主", "a": "譲渡取得（三木氏より9,000株）", "k": [0, 0, 0, 0.0, 9000.0, 9000.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "国本昂大（取締役会長）", "c": "経営株主", "a": "シード¥20,000／譲渡¥5,000／J-KISS¥29,200", "k": [0, 0, 1500, 1500.0, 3714.0, 3714.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 50000000.0, "sold": 0}, {"n": "千本倖生（取締役名誉会長）", "c": "経営株主", "a": "シード¥20,000／J-KISS¥29,200", "k": [0, 0, 250, 250.0, 764.0, 764.0], "s": [0, 0, 0, 250.0, 650.0, 650.0], "inv": 20000000.0, "sold": 0}, {"n": "岡田喜則（取締役）", "c": "経営株主", "a": "シード¥20,000／譲渡¥4,000", "k": [0, 0, 50, 50.0, 350.0, 350.0], "s": [0, 0, 0, 0.0, 700.0, 700.0], "inv": 0.0, "sold": 0}, {"n": "株式会社90s Management", "c": "経営株主", "a": "シード ¥20,000", "k": [0, 0, 500, 500.0, 500.0, 500.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 10000000.0, "sold": 0}, {"n": "三木浩江（執行役員）", "c": "経営株主", "a": "SOのみ", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 0, 0, 300.0, 350.0, 350.0], "inv": 0.0, "sold": 0}, {"n": "株式会社サフィルヴァ（設立発起・退出済）", "c": "創業期株主（退出済）", "a": "設立 ¥10,000 → 2021/6 全株譲渡", "k": [60, 0, 0, 0, 0, 0], "s": [0, 200, 200, 0, 0, 0], "inv": 0, "sold": 0}, {"n": "高橋健太（元取締役・退出済）", "c": "創業期株主（退出済）", "a": "譲受（2021/6）→ 退出（個人投資家4名へ譲渡と推定）", "k": [0, 500, 500, 0, 0, 0], "s": [0, 1000, 1000, 0, 0, 0], "inv": 0, "sold": 0}, {"n": "田中祐太（banker・退出済）", "c": "創業期株主（退出済）", "a": "シード ¥20,000 → 辻本郷へ譲渡（推定）", "k": [0, 0, 1000, 0, 0, 0], "s": [0, 0, 0, 0, 0, 0], "inv": 0, "sold": 0}, {"n": "三菱UFJ信託銀行", "c": "NEO共創株主", "a": "シード ¥20,000", "k": [0, 0, 1350, 1350.0, 1350.0, 1350.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 27000000.0, "sold": 0}, {"n": "矢頭徹（ライジングゼファー福岡）", "c": "NEO共創株主", "a": "J-KISS ¥29,200", "k": [0, 0, 0, 513.7, 1027.4, 1027.4], "s": [0, 0, 0, 0.0, 0.0, 0.6], "inv": 30000000.0, "sold": 0}, {"n": "藤木貴子 Caris&Co（佐賀バルーナーズ）", "c": "NEO共創株主", "a": "J-KISS ¥29,200", "k": [0, 0, 0, 1027.4, 1027.4, 1027.4], "s": [0, 0, 0, 0.0, 0.0, 0.6], "inv": 30000000.0, "sold": 0}, {"n": "株式会社Wiz（鹿児島レブナイズ）", "c": "NEO共創株主", "a": "設立発起（40株→分割後3,000株）", "k": [40, 3000, 3000, 3000.0, 1000.0, 1000.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "荒井邦彦（株式会社ストライク）", "c": "NEO共創株主", "a": "プレA J-KISS ¥29,200", "k": [0, 0, 0, 0.0, 513.7, 513.7], "s": [0, 0, 0, 0.0, 0.0, 0.3], "inv": 15000000.0, "sold": 0}, {"n": "澁谷陽史（ORENDA WORLD）", "c": "NEO共創株主", "a": "プレA ¥36,500", "k": [0, 0, 0, 0.0, 547.95, 547.95], "s": [0, 0, 0, 0.0, 0.0, 0.05], "inv": 20000000.0, "sold": 0}, {"n": "髙城いづみ（株式会社タカギ）", "c": "NEO共創株主", "a": "プレA ¥36,500", "k": [0, 0, 0, 0.0, 410.96, 410.96], "s": [0, 0, 0, 0.0, 0.0, 0.04], "inv": 15000000.0, "sold": 0}, {"n": "大木貴之", "c": "シード株主", "a": "譲受（2021/6）→100分割で1,500株", "k": [0, 1500, 1500, 1500.0, 500.0, 500.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 400000.0, "sold": 0}, {"n": "石川昌義", "c": "シード株主", "a": "シード ¥20,000", "k": [0, 0, 250, 250.0, 250.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 5000000.0, "sold": 250.0}, {"n": "辻本郷税理士事務所", "c": "シード株主", "a": "譲受（田中祐太氏分と推定）", "k": [0, 0, 0, 1000.0, 1000.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 1000.0}, {"n": "INCLUSIVE株式会社", "c": "シード株主", "a": "シード ¥20,000", "k": [0, 0, 1000, 1000.0, 1000.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 20000000.0, "sold": 1000.0}, {"n": "岡本祥治（未来ワークス代表）", "c": "シード株主", "a": "シード ¥20,000", "k": [0, 0, 250, 250.0, 250.0, 250.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 5000000.0, "sold": 0}, {"n": "石川聡彦（アイデミー代表）", "c": "シード株主", "a": "譲受 ¥20,000（高橋氏分と推定）", "k": [0, 0, 0, 50.0, 50.0, 50.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 1000000.0, "sold": 0}, {"n": "田浦航", "c": "シード株主", "a": "シード ¥20,000", "k": [0, 0, 500, 500.0, 500.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 10000000.0, "sold": 500.0}, {"n": "田中裕基", "c": "シード株主", "a": "譲受 ¥20,000", "k": [0, 0, 0, 0.0, 200.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 4000000.0, "sold": 200.0}, {"n": "佐良土雄亮（SBAパートナーズ）", "c": "シード株主", "a": "譲受 ¥20,000（プレAで売却済）", "k": [0, 0, 0, 150.0, 0.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "野尻雅之", "c": "シード株主", "a": "譲受 ¥20,000", "k": [0, 0, 0, 250.0, 250.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 5000000.0, "sold": 250.0}, {"n": "平野龍一", "c": "シード株主", "a": "譲受 ¥20,000（プレAで売却済）", "k": [0, 0, 0, 50.0, 0.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "シリーズA投資家（新規）", "c": "シリーズA投資家", "a": "シリーズA ¥80,000（新株3,500＋買取3,200）", "k": [0, 0, 0, 0.0, 0.0, 6700.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 280000000.0, "sold": 0}, {"n": "中川勝弘", "c": "SO保有者", "a": "SO（シード期発行150株）", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 0, 150, 150.0, 150.0, 150.0], "inv": 0.0, "sold": 0}, {"n": "神初忠宏", "c": "SO保有者", "a": "SO（シード期発行100株）", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 0, 100, 100.0, 100.0, 100.0], "inv": 0.0, "sold": 0}, {"n": "山崎俊（株式会社Wiz代表）", "c": "SO保有者", "a": "SO（2021/6発行200株）", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 200, 200, 200.0, 200.0, 200.0], "inv": 0.0, "sold": 0}, {"n": "株式会社北海道イエロースターズ", "c": "SO保有者", "a": "SO 200株", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 0, 0, 200.0, 200.0, 200.0], "inv": 0.0, "sold": 0}], "kpi": {"seriesA": 80000, "new_shares": 3500, "new_money": 280000000, "sec_shares": 3200, "sec_money": 64000000, "pre_money": 2689308493, "post_money": 2969308493, "a_stake": 0.1805}};
   const STAGES = [
     {label:'設立', sub:'2020/12 100株 @¥10,000', price:100},
     {label:'創業体制', sub:'2021/6 譲渡・SO・100分割 @¥100', price:100},
@@ -18762,9 +18796,21 @@ document.addEventListener('DOMContentLoaded', function() {
   let pieChart = null, barChart = null, priceChart = null, simPie = null;
   let initialized = false;
 
+  // ── カスタム株主 (localStorage 永続化) ──
+  // ユーザーが追加した株主は D.rows に非破壊マージし、_custom:true で識別。
+  const CUSTOM_KEY = 'neo_cp_custom_rows_v1';
+  let customRows = [];
+  function loadCustom(){
+    try { const s = localStorage.getItem(CUSTOM_KEY); if (s) customRows = JSON.parse(s) || []; } catch(e){ customRows = []; }
+  }
+  function saveCustom(){
+    try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(customRows)); } catch(e){}
+  }
+  function allBaseRows(){ return D.rows.concat(customRows); }
+
   function rebuild(){
     newShares = invest / newPrice; totalSell = 0; totalAdd = 0;
-    ROWS = D.rows.filter(r => r.c !== 'シリーズA投資家').map(r => {
+    ROWS = allBaseRows().filter(r => r.c !== 'シリーズA投資家').map(r => {
       const sell = Math.min(sells[r.n]||0, r.k[CURRENT]);
       const add = Math.max(adds[r.n]||0, 0);
       totalSell += sell; totalAdd += add;
@@ -18773,11 +18819,16 @@ document.addEventListener('DOMContentLoaded', function() {
       return {...r, k, s, sell, add};
     });
     fundShares = totalSell + newShares;
-    const idx = ROWS.findIndex(r => r.c === 'SO保有者');
+    let idx = ROWS.findIndex(r => r.c === 'SO保有者');
+    if (idx < 0) idx = ROWS.length;
     ROWS.splice(idx, 0, {n:'NEO1000ファンド（新規出資＋セカンダリー）', c:FUND_CAT,
       a:'新規出資（株価は変動）＋既存株主からの買取（変動）',
       k:[0,0,0,0,0,fundShares], s:[0,0,0,0,0,0], inv:invest, sell:0, add:0});
-    postK = BASE_K + newShares + totalAdd; postFD = postK + BASE_SO;
+    // カスタム株主の顕在株・SO も BASE_K/BASE_SO に加算する（実装数と合計を整合）
+    const customKAtCurrent = customRows.reduce((t, r) => t + (Number(r.k?.[CURRENT])||0), 0);
+    const customSAtCurrent = customRows.reduce((t, r) => t + (Number(r.s?.[CURRENT])||0), 0);
+    postK = BASE_K + customKAtCurrent + newShares + totalAdd;
+    postFD = postK + BASE_SO + customSAtCurrent;
   }
   const valOf = (r, i, basis) => basis === 'k' ? r.k[i] : r.k[i] + r.s[i];
   const aggregate = (i, basis) => {
@@ -18918,7 +18969,8 @@ document.addEventListener('DOMContentLoaded', function() {
           ? '<td>' + (canSell ? '<input class="cp-sellinput' + ((sells[r.n]||0) > 0 ? ' cp-active' : '') + '" type="number" min="0" max="' + r.k[CURRENT] + '" step="50" value="' + (sells[r.n]||0) + '" data-name="' + nameEsc + '" data-max="' + r.k[CURRENT] + '" data-kind="sell">' : '—') + '</td>'
             + '<td>' + (canSell ? '<input class="cp-sellinput cp-addinput' + ((adds[r.n]||0) > 0 ? ' cp-active-add' : '') + '" type="number" min="0" step="50" value="' + (adds[r.n]||0) + '" data-name="' + nameEsc + '" data-kind="add">' : '—') + '</td>'
           : '';
-        html += '<tr' + (r.c === FUND_CAT ? ' class="cp-fund"' : '') + '><td>' + (soldOut ? '<span class="cp-sold">' + nameEsc + '（全株売却）</span>' : nameEsc) + '</td>'
+        const delBtn = r._custom ? ' <button class="cp-del-btn" data-name="' + nameEsc + '" title="この株主を削除" style="background:none;border:0;color:#c1442e;cursor:pointer;font-size:14px;padding:0 4px;margin-left:4px">✕</button>' : '';
+        html += '<tr' + (r.c === FUND_CAT ? ' class="cp-fund"' : '') + '><td>' + (soldOut ? '<span class="cp-sold">' + nameEsc + '（全株売却）</span>' : nameEsc) + delBtn + '</td>'
           + '<td><span class="cp-tag" style="background:' + COLORS[cat] + '">' + escapeHtml(cat) + '</span></td>'
           + '<td class="cp-acq">' + escapeHtml(r.a) + '</td>' + sellCell
           + '<td>' + num(k) + '</td><td>' + num(f) + '</td>'
@@ -18945,6 +18997,51 @@ document.addEventListener('DOMContentLoaded', function() {
       });
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
     });
+    document.querySelectorAll('#sec-capital-policy .cp-del-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const name = e.target.dataset.name;
+        if (confirm('株主「' + name + '」を削除しますか？（この操作は取り消せません）')) {
+          customRows = customRows.filter(r => r.n !== name);
+          delete sells[name]; delete adds[name];
+          saveCustom(); recalcAll();
+        }
+      });
+    });
+  }
+
+  // ── 株主追加モーダル制御 ──
+  function openAddModal(){
+    const m = document.getElementById('cp-add-modal');
+    if (!m) return;
+    m.querySelector('#cp-add-name').value = '';
+    m.querySelector('#cp-add-cat').value = 'NEO共創株主';
+    m.querySelector('#cp-add-acq').value = '';
+    m.querySelector('#cp-add-k').value = '0';
+    m.querySelector('#cp-add-s').value = '0';
+    m.querySelector('#cp-add-inv').value = '0';
+    m.style.display = 'flex';
+    setTimeout(() => m.querySelector('#cp-add-name').focus(), 30);
+  }
+  function closeAddModal(){
+    const m = document.getElementById('cp-add-modal');
+    if (m) m.style.display = 'none';
+  }
+  function submitAdd(){
+    const m = document.getElementById('cp-add-modal');
+    if (!m) return;
+    const name = (m.querySelector('#cp-add-name').value || '').trim();
+    const cat = m.querySelector('#cp-add-cat').value;
+    const acq = (m.querySelector('#cp-add-acq').value || '').trim() || '（追加株主）';
+    const kNow = Math.max(0, Number(m.querySelector('#cp-add-k').value) || 0);
+    const sNow = Math.max(0, Number(m.querySelector('#cp-add-s').value) || 0);
+    const inv = Math.max(0, Number(m.querySelector('#cp-add-inv').value) || 0);
+    if (!name) { alert('株主名を入力してください'); return; }
+    if (allBaseRows().some(r => r.n === name)) { alert('同名の株主が既に存在します: ' + name); return; }
+    // CURRENT と LAST は同じ株数からスタート (LAST は sell/add で後から変動)
+    const kArr = [0, 0, 0, 0, kNow, kNow];
+    const sArr = [0, 0, 0, 0, sNow, sNow];
+    customRows.push({ n: name, c: cat, a: acq, k: kArr, s: sArr, inv, sold: 0, _custom: true });
+    saveCustom(); closeAddModal(); recalcAll();
   }
 
   function recalcAll(){
@@ -18952,6 +19049,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function open(){
+    loadCustom();
     if (!initialized) {
       renderKPIs();
       seg('cp-stageSeg', STAGES.map(s => s.label), stage, v => { stage = v; updatePie(); });
@@ -18976,7 +19074,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  window.CAPPOLICY = { open, DATA: D, STAGES };
+  window.CAPPOLICY = { open, openAddModal, closeAddModal, submitAdd, DATA: D, STAGES };
 })();
     </script>
 
