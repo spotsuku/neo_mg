@@ -13,53 +13,54 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  /* iOS-inspired light palette (systemGroupedBackground / systemBackground) */
-  --bg:#ffffff;--bg2:#f9f9fb;--bg3:#f2f2f7;--bg4:#e5e5ea;
-  --text:#1c1c1e;--text2:#48484a;--text3:#8e8e93;
+  color-scheme: light;
+  /* iOS風ライトモードパレット */
+  --bg:#ffffff;--bg2:#f5f5f7;--bg3:#fbfbfd;--bg4:#ececf0;
+  --text:#1c1c1e;--text2:#3a3a3c;--text3:#8e8e93;
   --border:rgba(60,60,67,0.10);--border2:rgba(60,60,67,0.18);
-  /* iOS system colors */
   --green:#34c759;--red:#ff3b30;--amber:#ff9500;--blue:#007aff;
-  --bg-green:#e3f7e8;--bg-red:#ffe5e3;--bg-amber:#fff2e0;--bg-blue:#e3f0ff;
-  --tc-green:#1e8e3e;--tc-red:#d70015;--tc-amber:#c97600;--tc-blue:#0064d2;
-  /* Larger, iOS-like radii */
-  --r:10px;--rl:16px;
-  /* Subtle iOS card shadow tokens */
-  --shadow-sm:0 1px 2px rgba(15,23,42,0.04),0 1px 1px rgba(15,23,42,0.02);
+  --bg-green:#e2f7e8;--bg-red:#ffe5e3;--bg-amber:#fff1dd;--bg-blue:#e1efff;
+  --tc-green:#1f8a3e;--tc-red:#d92e26;--tc-amber:#c46b00;--tc-blue:#0062cc;
+  --accent:#007aff;
+  --r:10px;--rl:16px;--rxl:20px;
+  --shadow-sm:0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.06);
+  --shadow:0 4px 14px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.04);
   --shadow-md:0 4px 12px rgba(15,23,42,0.06),0 1px 2px rgba(15,23,42,0.03);
-  --chart-blue:#007aff;--chart-green:#34c759;--chart-red:#ff3b30;--chart-amber:#ff9500;--chart-gray:#8e8e93;
+  --shadow-lg:0 12px 32px rgba(16,24,40,0.10), 0 4px 12px rgba(16,24,40,0.06);
+  --chart-blue:#0a84ff;--chart-green:#34c759;--chart-red:#ff3b30;--chart-amber:#ff9500;--chart-gray:#8e8e93;
 }
-/* Force light mode (iOS-style brightness) regardless of system preference */
 body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;background:var(--bg3);color:var(--text);font-size:13px;min-height:100vh;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;letter-spacing:-0.01em}
 .wrap{max-width:1280px;margin:0 auto;padding:0 1.25rem 3rem}
 
-/* ── TOP NAV (iOS frosted glass) ── */
-.topnav{display:flex;align-items:flex-start;justify-content:space-between;padding:.875rem 1rem;border-bottom:1px solid var(--border);margin:0 -1.25rem 1rem;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:100;background:rgba(242,242,247,0.78);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px)}
-.logo{font-size:17px;font-weight:700;letter-spacing:-.4px}
+/* ── TOP NAV ── (iOS frosted glass) */
+.topnav{display:flex;align-items:flex-start;justify-content:space-between;padding:.875rem 1rem;border-bottom:1px solid var(--border);margin-bottom:1rem;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:100;background:rgba(251,251,253,0.78);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-radius:0 0 var(--rl) var(--rl)}
+.logo{font-size:17px;font-weight:700;letter-spacing:-.5px}
 .company-sel{background:transparent;border:none;color:var(--text);font-size:1.1rem;font-weight:700;cursor:pointer;max-width:280px;appearance:none;-webkit-appearance:none;outline:none}
-.logo-sub{font-size:11px;color:var(--text3);margin-top:2px;letter-spacing:.01em}
+.logo-sub{font-size:11px;color:var(--text3);margin-top:2px;font-weight:500}
 .nav-title{display:flex;flex-direction:column;flex-shrink:0}
 .nav-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
 
-/* YEAR TOGGLE — iOS segmented control */
-.year-toggle{display:inline-flex;background:rgba(120,120,128,0.12);border-radius:9px;padding:2px;gap:0}
-.yt{padding:4px 12px;font-size:11px;cursor:pointer;background:transparent;border:none;color:var(--text);font-family:inherit;font-weight:600;border-radius:7px;transition:background .2s,color .2s,box-shadow .2s}
-.yt.active{background:#ffffff;color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,0.08),0 0 0 0.5px rgba(0,0,0,0.04)}
+/* YEAR TOGGLE (iOS segmented control) */
+.year-toggle{display:flex;background:var(--bg4);border-radius:var(--r);overflow:hidden;padding:2px;gap:2px}
+.yt{padding:5px 12px;font-size:11px;cursor:pointer;background:transparent;border:none;color:var(--text2);font-family:inherit;font-weight:600;transition:all .2s ease;border-radius:7px}
+.yt.active{background:var(--bg);color:var(--text);box-shadow:var(--shadow-sm)}
 
-/* TABS — iOS segmented / pill style */
-.tabs{display:flex;gap:4px;flex-wrap:wrap;background:rgba(120,120,128,0.10);padding:3px;border-radius:11px}
-.tab{padding:5px 13px;border-radius:8px;font-size:12px;cursor:pointer;border:none;background:transparent;color:var(--text2);font-family:inherit;font-weight:600;transition:background .2s,color .2s,box-shadow .2s;white-space:nowrap}
-.tab:hover{color:var(--text)}
-.tab.active{background:#ffffff;color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,0.08),0 0 0 0.5px rgba(0,0,0,0.04)}
+/* TABS (iOS pill-shape) */
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tab{padding:6px 13px;border-radius:999px;font-size:12px;cursor:pointer;border:1px solid transparent;background:var(--bg4);color:var(--text2);font-family:inherit;font-weight:600;transition:all .2s ease;white-space:nowrap;letter-spacing:-0.01em}
+.tab:hover{background:var(--bg2);color:var(--text)}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 1px 3px rgba(0,122,255,0.30)}
 
 /* ── SECTIONS ── */
 .sec{display:none}.sec.on{display:block}
 
-/* ── METRICS — iOS lifted tile ── */
+/* ── METRICS ── (iOS lifted tile) */
 .metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:1rem}
-.mc{background:#ffffff;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow-sm);border:1px solid rgba(60,60,67,0.06)}
-.mc-l{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;font-weight:600}
-.mc-v{font-size:22px;font-weight:700;line-height:1.1;letter-spacing:-0.02em;font-feature-settings:"tnum"}
-.mc-s{font-size:10px;margin-top:3px}
+.mc{background:var(--bg);border-radius:var(--rl);padding:14px 16px;border:1px solid var(--border);box-shadow:var(--shadow-sm);transition:transform .15s ease, box-shadow .15s ease}
+.mc:hover{transform:translateY(-1px);box-shadow:var(--shadow)}
+.mc-l{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;font-weight:600}
+.mc-v{font-size:22px;font-weight:700;line-height:1.1;letter-spacing:-0.02em;font-variant-numeric:tabular-nums}
+.mc-s{font-size:10px;margin-top:4px;font-weight:500}
 .g{color:var(--tc-green)}.r{color:var(--tc-red)}.a{color:var(--tc-amber)}.b{color:var(--tc-blue)}
 
 /* ── BADGES — iOS pill ── */
@@ -75,16 +76,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display'
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:1rem}
 .full{grid-column:1/-1}
 
-/* ── CARDS — iOS rounded surface with soft elevation ── */
-.card{background:var(--bg);border-radius:var(--rl);border:1px solid rgba(60,60,67,0.06);padding:1rem 1.125rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
+/* ── CARDS ── (iOS soft elevation) */
+.card{background:var(--bg);border-radius:var(--rl);border:1px solid var(--border);padding:1rem 1.125rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
 .card:last-child{margin-bottom:0}
-.ct{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:.625rem;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.ct{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:.75rem;padding-bottom:6px;border-bottom:1px solid var(--border)}
 
-/* ── TABLES ── */
-.dt{width:100%;border-collapse:collapse;font-size:11px}
-.dt th{color:var(--text3);font-weight:700;text-align:right;padding:4px 5px;border-bottom:1px solid var(--border);font-size:10px;white-space:nowrap}
+/* ── TABLES ── (iOS hairlines + tabular nums) */
+.dt{width:100%;border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums}
+.dt th{color:var(--text3);font-weight:700;text-align:right;padding:6px 6px;border-bottom:1px solid var(--border);font-size:10px;white-space:nowrap;text-transform:uppercase;letter-spacing:.3px}
 .dt th:first-child,.dt th.l{text-align:left}
-.dt td{padding:4px 5px;text-align:right;border-bottom:1px solid var(--border)}
+.dt td{padding:6px 6px;text-align:right;border-bottom:1px solid var(--border)}
 .dt td:first-child,.dt td.l{text-align:left;color:var(--text2)}
 .dt tr:last-child td{border-bottom:none}
 .dt .tot td{font-weight:700;background:var(--bg2)}
@@ -99,26 +100,26 @@ td.actual { color: var(--text) !important; }
 .fg{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:.875rem}
 .fg2{grid-template-columns:repeat(2,1fr)}
 .fg4{grid-template-columns:repeat(4,1fr)}
-.fl label{display:block;font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;font-weight:600}
-.fl input,.fl select,.fl textarea{width:100%;padding:8px 11px;border:1px solid var(--border2);border-radius:10px;background:var(--bg);color:var(--text);font-size:12px;font-family:inherit;transition:border-color .15s,box-shadow .15s}
-.fl input:focus,.fl select:focus,.fl textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,122,255,0.18)}
+.fl label{display:block;font-size:10px;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+.fl input,.fl select,.fl textarea{width:100%;padding:8px 11px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-family:inherit;transition:border-color .15s, box-shadow .15s}
+.fl input:focus,.fl select:focus,.fl textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,122,255,0.15)}
 .fl textarea{resize:vertical;min-height:56px}
 .section-lbl{font-size:10px;font-weight:700;color:var(--text2);margin:.75rem 0 .5rem;padding-bottom:4px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px}
 
-/* ── BUTTONS — iOS pill ── */
-.btn{padding:7px 16px;border-radius:980px;font-size:12px;cursor:pointer;border:1px solid var(--border2);background:#ffffff;color:var(--text);font-family:inherit;font-weight:600;transition:background .15s,color .15s,opacity .15s,transform .05s,box-shadow .15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
-.btn:hover{background:var(--bg3)}
-.btn:active{transform:scale(0.97)}
-.btn-p{background:var(--blue);color:#fff;border-color:var(--blue);box-shadow:0 1px 2px rgba(0,122,255,0.20)}
-.btn-p:hover{background:#0064d2;border-color:#0064d2}
-.btn-g{background:var(--bg-green);color:var(--tc-green);border-color:transparent}
+/* ── BUTTONS ── (iOS pill) */
+.btn{padding:7px 14px;border-radius:999px;font-size:12px;cursor:pointer;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;font-weight:600;transition:all .15s ease;white-space:nowrap;letter-spacing:-0.01em;-webkit-tap-highlight-color:transparent}
+.btn:hover{background:var(--bg2);transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+.btn:active{transform:translateY(0) scale(0.98);opacity:.85}
+.btn-p{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 1px 3px rgba(0,122,255,0.30)}
+.btn-p:hover{background:#0062cc;border-color:#0062cc;color:#fff}
+.btn-g{background:var(--bg-green);color:var(--tc-green);border-color:rgba(52,199,89,0.30)}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:.875rem}
 
-/* ── AI BOX — iOS soft surface ── */
-.ai-box{background:linear-gradient(180deg,#ffffff,#fbfbfd);border-radius:var(--rl);border:1px solid var(--border);padding:1rem 1.125rem;min-height:72px;margin-bottom:.875rem;box-shadow:var(--shadow-sm)}
-.ai-content{font-size:12px;line-height:1.8;white-space:pre-wrap}
+/* ── AI BOX ── */
+.ai-box{background:linear-gradient(135deg, rgba(0,122,255,0.04), rgba(88,86,214,0.03));border-radius:var(--rl);border:1px solid var(--border);padding:1.125rem;min-height:72px;margin-bottom:.875rem;box-shadow:var(--shadow-sm)}
+.ai-content{font-size:12px;line-height:1.85;white-space:pre-wrap}
 .ai-loading{color:var(--text3);font-style:italic;font-size:12px;display:flex;align-items:center;gap:6px}
-.spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--text);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+.spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ── CHARTS ── */
@@ -128,9 +129,9 @@ td.actual { color: var(--text) !important; }
 .pb{height:6px;background:rgba(120,120,128,0.16);border-radius:980px;overflow:hidden;margin-top:6px}
 .pf{height:100%;border-radius:980px;transition:width .4s ease}
 
-/* ── UPLOAD ZONE — iOS card ── */
-.upload-zone{border:2px dashed var(--border2);border-radius:var(--rl);padding:2rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative;background:#ffffff}
-.upload-zone:hover,.upload-zone.drag{border-color:var(--blue);background:var(--bg-blue)}
+/* ── UPLOAD ZONE ── (iOS card) */
+.upload-zone{border:2px dashed var(--border2);border-radius:var(--rl);padding:2rem;text-align:center;cursor:pointer;transition:all .2s ease;position:relative;background:var(--bg2)}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:var(--bg-blue)}
 .upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
 .uz-icon{font-size:32px;margin-bottom:.5rem}
 .uz-title{font-size:14px;font-weight:600;margin-bottom:4px}
@@ -139,19 +140,20 @@ td.actual { color: var(--text) !important; }
 /* ── CSV PREVIEW ── */
 .csv-preview{border-radius:var(--r);border:1px solid var(--border);overflow:hidden;margin-top:.75rem;font-size:11px;max-height:220px;overflow-y:auto}
 
-/* ── MONTH TABS — iOS rounded chips ── */
-.month-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.875rem;padding-bottom:.875rem;border-bottom:1px solid var(--border)}
-.mt{padding:5px 12px;border-radius:980px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:#ffffff;color:var(--text3);font-family:inherit;font-weight:600;transition:background .15s,color .15s,border-color .15s}
-.mt:hover{background:var(--bg3);color:var(--text2)}
-.mt.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+/* ── MONTH TABS ── (iOS rounded chips) */
+.month-tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:.875rem;padding-bottom:.875rem;border-bottom:1px solid var(--border)}
+.mt{padding:5px 12px;border-radius:999px;font-size:11px;cursor:pointer;border:1px solid transparent;background:var(--bg4);color:var(--text3);font-family:inherit;font-weight:500;transition:all .15s ease}
+.mt:hover{background:var(--bg2);color:var(--text2)}
+.mt.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700;box-shadow:0 1px 3px rgba(0,122,255,0.30)}
 .mt.has-data{color:var(--text2)}
-.mt.has-actual::after{content:'•';font-size:10px;vertical-align:middle;color:var(--tc-green);margin-left:3px}
+.mt.has-actual::after{content:'●';font-size:6px;vertical-align:super;color:var(--tc-green);margin-left:2px}
+.mt.active.has-actual::after{color:#fff}
 
 /* ── SIM SLIDERS ── */
 .sim-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1rem}
 .sg label{font-size:10px;color:var(--text3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;font-weight:600}
 .sr{display:flex;align-items:center;gap:8px}
-.sr input[type=range]{flex:1;accent-color:#378ADD}
+.sr input[type=range]{flex:1;accent-color:#0a84ff}
 .sv{font-size:13px;font-weight:700;min-width:50px;text-align:right}
 
 /* ── DIFF CELLS ── */
@@ -206,10 +208,10 @@ td.actual { color: var(--text) !important; }
 .import-log{background:var(--bg2);border-radius:var(--r);padding:.75rem;font-size:11px;line-height:1.7;max-height:200px;overflow-y:auto;font-family:monospace;margin-top:.75rem}
 .log-ok{color:var(--tc-green)}.log-warn{color:var(--tc-amber)}.log-err{color:var(--tc-red)}.log-info{color:var(--tc-blue)}
 
-/* ── PRED/ACT TOGGLE — iOS segmented control ── */
-.pa-toggle{display:inline-flex;background:rgba(120,120,128,0.12);border-radius:9px;padding:2px;margin-bottom:.875rem;gap:0}
-.pa-btn{padding:5px 14px;font-size:11px;cursor:pointer;background:transparent;border:none;color:var(--text2);font-family:inherit;font-weight:600;border-radius:7px;transition:background .2s,color .2s,box-shadow .2s}
-.pa-btn.active{background:#ffffff;color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,0.08),0 0 0 0.5px rgba(0,0,0,0.04)}
+/* ── PRED/ACT TOGGLE ── (iOS segmented) */
+.pa-toggle{display:flex;background:var(--bg4);border-radius:var(--r);overflow:hidden;margin-bottom:.875rem;padding:2px;gap:2px}
+.pa-btn{padding:6px 14px;font-size:11px;cursor:pointer;background:transparent;border:none;color:var(--text2);font-family:inherit;font-weight:600;transition:all .2s ease;border-radius:7px}
+.pa-btn.active{background:var(--bg);color:var(--text);box-shadow:var(--shadow-sm)}
 
 /* monthly PL/CF table */
 .yoyo-table{display:grid;grid-template-columns:160px repeat(12,1fr);gap:0;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;font-size:10px;overflow-x:auto}
@@ -419,7 +421,7 @@ input.cells-edit-input {
    ════════════════════════════════════════════════════════════════ */
 #sec-workforce .wf-toolbar{background:var(--bg);padding:10px 14px;border-radius:var(--rl);margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border:1px solid var(--border);box-shadow:var(--shadow-sm);border-left:3px solid var(--blue)}
 #sec-workforce .wf-current-label{font-size:11px;color:var(--text3)}
-#sec-workforce .wf-current-name{font-weight:700;font-size:13px;color:#5aabf0;margin-left:4px}
+#sec-workforce .wf-current-name{font-weight:700;font-size:13px;color:#0a84ff;margin-left:4px}
 #sec-workforce .wf-unsaved-badge{background:#ff9500;color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:3px;margin-left:6px}
 #sec-workforce .wf-current-badge{background:#34c759;color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:3px;margin-left:6px}
 
@@ -442,7 +444,7 @@ input.cells-edit-input {
 #sec-payroll .wf-pl-table td.member-name{position:sticky;left:0;background:var(--bg)!important;z-index:1;text-align:left;font-weight:600;min-width:140px;border-right:2px solid var(--text)}
 #sec-payroll .wf-pl-table thead th.member-name-head{position:sticky;left:0;z-index:2;border-right:2px solid var(--text)}
 #sec-payroll .pay-cell{width:58px;padding:3px 5px;border:1px solid transparent;border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:transparent;color:var(--text);font-family:inherit}
-#sec-payroll .pay-cell:focus{outline:2px solid #5aabf0;background:var(--bg)}
+#sec-payroll .pay-cell:focus{outline:2px solid #0a84ff;background:var(--bg)}
 #sec-payroll .pay-cell.has-val{background:rgba(232,244,255,0.18);font-weight:600}
 #sec-payroll .pay-cell.zero{color:var(--text3);opacity:.45}
 #sec-payroll .pay-row-total{position:sticky;right:0;background:var(--bg2)!important;font-weight:700;color:var(--text);min-width:70px}
@@ -474,15 +476,15 @@ input.cells-edit-input {
 #sec-workforce .wf-pl-table .row-summary td{background:var(--text);color:var(--bg);font-weight:700;font-size:12px;border-top:2px solid var(--text)}
 #sec-workforce .wf-pl-table .row-section td{background:rgba(254,232,230,0.10);font-weight:700}
 #sec-workforce .wf-pl-input{width:100%;padding:3px 5px;border:1px solid transparent;border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:transparent;color:var(--text);font-family:inherit}
-#sec-workforce .wf-pl-input:focus,#sec-workforce .wf-pl-input:hover{outline:1px solid #5aabf0;background:var(--bg)}
+#sec-workforce .wf-pl-input:focus,#sec-workforce .wf-pl-input:hover{outline:1px solid #0a84ff;background:var(--bg)}
 #sec-workforce .wf-pl-table .row-detail .wf-pl-input{background:var(--bg);border-color:var(--border2)}
 #sec-workforce .wf-add-row-btn{background:none;border:1px dashed var(--border2);color:var(--text3);padding:3px 8px;border-radius:4px;cursor:pointer;font-size:10px;font-family:inherit}
 #sec-workforce .wf-add-row-btn:hover{border-color:var(--text);color:var(--text)}
-#sec-workforce .wf-del-row-btn{background:none;border:none;color:#e87070;cursor:pointer;font-size:12px;padding:0 4px}
+#sec-workforce .wf-del-row-btn{background:none;border:none;color:#ff3b30;cursor:pointer;font-size:12px;padding:0 4px}
 #sec-workforce .wf-ratio-cell{font-weight:700;text-align:center;font-size:10px}
-#sec-workforce .wf-ratio-cell.good{color:#5dbd7e}
-#sec-workforce .wf-ratio-cell.warn{color:#f0a060}
-#sec-workforce .wf-ratio-cell.bad{color:#e87070}
+#sec-workforce .wf-ratio-cell.good{color:#34c759}
+#sec-workforce .wf-ratio-cell.warn{color:#ff9500}
+#sec-workforce .wf-ratio-cell.bad{color:#ff3b30}
 
 /* グリッド (編集モード) */
 #sec-workforce .wf-grid-wrap{overflow:auto;max-height:75vh;position:relative;border:1px solid var(--border);border-radius:var(--rl)}
@@ -530,7 +532,7 @@ input.cells-edit-input {
 #sec-workforce table.wf-grid{border-collapse:separate;border-spacing:0;font-size:10px;width:max-content;min-width:100%}
 #sec-workforce table.wf-grid th,#sec-workforce table.wf-grid td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:3px 5px;text-align:center;background:var(--bg);white-space:nowrap;color:var(--text)}
 #sec-workforce table.wf-grid thead tr.lv1 th{background:var(--text);color:var(--bg);font-size:11px;font-weight:700;position:sticky;top:0;z-index:5;padding:5px 4px;border-right:2px solid var(--text2)}
-#sec-workforce table.wf-grid thead tr.lv2 th{background:var(--text2);color:#fff;font-size:9px;font-weight:600;position:sticky;top:26px;z-index:5;padding:4px}
+#sec-workforce table.wf-grid thead tr.lv2 th{background:#f5f5f7;color:var(--text2);font-size:9px;font-weight:600;position:sticky;top:26px;z-index:5;padding:4px}
 #sec-workforce table.wf-grid thead tr.summary-row th,#sec-workforce table.wf-grid thead tr.summary-row td{position:sticky;z-index:5;padding:5px 6px;font-size:10px}
 #sec-workforce table.wf-grid thead tr.sr-required th,#sec-workforce table.wf-grid thead tr.sr-required td{top:53px;background:var(--bg2)!important;border-bottom:1px solid var(--border)}
 #sec-workforce table.wf-grid thead tr.sr-invested th,#sec-workforce table.wf-grid thead tr.sr-invested td{top:80px;background:var(--bg2)!important;border-bottom:1px solid var(--border)}
@@ -546,9 +548,9 @@ input.cells-edit-input {
 #sec-workforce table.wf-grid thead tr.lv1 .wf-col-ability{background:var(--text)!important}
 #sec-workforce table.wf-grid thead tr.lv2 .wf-col-name,
 #sec-workforce table.wf-grid thead tr.lv2 .wf-col-cost,
-#sec-workforce table.wf-grid thead tr.lv2 .wf-col-ability{background:var(--text2)!important;color:#fff}
+#sec-workforce table.wf-grid thead tr.lv2 .wf-col-ability{background:#f5f5f7!important;color:var(--text2)}
 #sec-workforce .wf-grid-cell-input{width:42px;padding:3px 4px;border:1px solid transparent;border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:transparent;color:var(--text);font-family:inherit}
-#sec-workforce .wf-grid-cell-input:focus{outline:2px solid #5aabf0;background:var(--bg)}
+#sec-workforce .wf-grid-cell-input:focus{outline:2px solid #0a84ff;background:var(--bg)}
 #sec-workforce .wf-grid-cell-input.zero{color:var(--text3);opacity:.4}
 #sec-workforce .wf-grid-cell-input.has-val{background:rgba(232,244,255,0.18);color:var(--text);font-weight:600}
 #sec-workforce td.wf-role-営業{background:rgba(255,245,245,0.10)!important}
@@ -570,30 +572,30 @@ input.cells-edit-input {
 #sec-workforce td.wf-biz-end,#sec-workforce th.wf-biz-end{border-right:2px solid var(--text)!important}
 #sec-workforce .wf-name-input{border:1px solid transparent;background:transparent;font-size:11px;font-weight:600;padding:2px 4px;border-radius:3px;width:100%;color:var(--text);font-family:inherit}
 #sec-workforce .wf-role-input{border:1px solid transparent;background:transparent;font-size:9px;color:var(--text3);padding:1px 4px;border-radius:3px;width:100%;font-family:inherit}
-#sec-workforce .wf-name-input:focus,#sec-workforce .wf-role-input:focus,#sec-workforce .wf-cost-input:focus,#sec-workforce .wf-ability-input:focus{outline:1px solid #5aabf0;background:var(--bg)}
+#sec-workforce .wf-name-input:focus,#sec-workforce .wf-role-input:focus,#sec-workforce .wf-cost-input:focus,#sec-workforce .wf-ability-input:focus{outline:1px solid #0a84ff;background:var(--bg)}
 #sec-workforce .wf-cost-input{width:72px;padding:3px 4px;border:1px solid var(--border2);border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:var(--bg);color:var(--text);font-family:inherit}
 #sec-workforce .wf-cost-readonly{cursor:pointer;font-size:10px;line-height:1.2;font-weight:600}
-#sec-workforce .wf-cost-readonly:hover{background:rgba(90,171,240,0.10)!important;outline:1px solid #5aabf0}
+#sec-workforce .wf-cost-readonly:hover{background:rgba(90,171,240,0.10)!important;outline:1px solid #0a84ff}
 #sec-workforce .wf-ability-input{width:48px;padding:3px 4px;border:1px solid var(--border2);border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:var(--bg);color:var(--text);font-family:inherit}
-#sec-workforce .wf-ability-input.high{background:rgba(255,224,230,0.30);color:#e87070;font-weight:700}
+#sec-workforce .wf-ability-input.high{background:rgba(255,224,230,0.30);color:#ff3b30;font-weight:700}
 #sec-workforce .wf-ability-input.low{background:rgba(180,180,180,0.15);color:var(--text3)}
 #sec-workforce .wf-col-total,#sec-workforce .wf-col-rev,#sec-workforce .wf-col-ratio{background:var(--bg2)!important;font-weight:600}
 #sec-workforce .wf-total-pct{font-size:10px}
-#sec-workforce .wf-total-pct.ok{color:#5dbd7e}
-#sec-workforce .wf-total-pct.warn{color:#f0a060}
-#sec-workforce .wf-total-pct.err{color:#e87070}
+#sec-workforce .wf-total-pct.ok{color:#34c759}
+#sec-workforce .wf-total-pct.warn{color:#ff9500}
+#sec-workforce .wf-total-pct.err{color:#ff3b30}
 #sec-workforce .wf-ratio-num{padding:2px 6px;border-radius:3px;font-weight:700;font-size:10px}
 #sec-workforce .wf-ratio-num.good{background:var(--bg-green);color:var(--tc-green)}
 #sec-workforce .wf-ratio-num.warn{background:var(--bg-amber);color:var(--tc-amber)}
 #sec-workforce .wf-ratio-num.bad{background:var(--bg-red);color:var(--tc-red)}
 #sec-workforce .wf-ful-cell{font-size:9px;line-height:1.2}
 #sec-workforce .wf-ful-cell .pct{font-weight:700;font-size:10px}
-#sec-workforce .wf-ful-cell.good .pct{color:#5dbd7e}
-#sec-workforce .wf-ful-cell.low .pct{color:#e87070}
-#sec-workforce .wf-ful-cell.over .pct{color:#f0a060}
+#sec-workforce .wf-ful-cell.good .pct{color:#34c759}
+#sec-workforce .wf-ful-cell.low .pct{color:#ff3b30}
+#sec-workforce .wf-ful-cell.over .pct{color:#ff9500}
 #sec-workforce .wf-col-del{background:var(--bg)!important}
 #sec-workforce .wf-delete-btn,
-#sec-payroll .wf-delete-btn{background:none;border:none;color:#e87070;cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px}
+#sec-payroll .wf-delete-btn{background:none;border:none;color:#ff3b30;cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px}
 #sec-workforce .wf-delete-btn:hover,
 #sec-payroll .wf-delete-btn:hover{background:rgba(232,112,112,0.15)}
 
@@ -603,25 +605,25 @@ input.cells-edit-input {
 #sec-workforce .wf-config-tbl th{background:var(--text);color:var(--bg);font-size:10px;font-weight:600}
 #sec-workforce .wf-config-tbl td:first-child,#sec-workforce .wf-config-tbl th:first-child{text-align:left;font-weight:600}
 #sec-workforce .wf-config-input{width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:4px;text-align:right;font-size:11px;font-variant-numeric:tabular-nums;background:var(--bg);color:var(--text);font-family:inherit}
-#sec-workforce .wf-config-input:focus{outline:2px solid #5aabf0}
-#sec-workforce .wf-weight-total.ok{color:#5dbd7e;font-weight:700}
-#sec-workforce .wf-weight-total.warn{color:#e87070;font-weight:700}
+#sec-workforce .wf-config-input:focus{outline:2px solid #0a84ff}
+#sec-workforce .wf-weight-total.ok{color:#34c759;font-weight:700}
+#sec-workforce .wf-weight-total.warn{color:#ff3b30;font-weight:700}
 
 /* ヒートマップセル */
 #sec-workforce .wf-heat-cell{padding:8px!important;min-width:110px;border:1px solid var(--border)!important}
 #sec-workforce .wf-heat-pct{font-size:15px;font-weight:700}
 #sec-workforce .wf-heat-detail{font-size:9px;color:var(--text3);margin-top:2px}
-#sec-workforce .wf-heat-good{background:rgba(212,244,221,0.18)!important;color:#5dbd7e}
-#sec-workforce .wf-heat-low{background:rgba(250,220,217,0.18)!important;color:#e87070}
-#sec-workforce .wf-heat-over{background:rgba(255,243,205,0.18)!important;color:#f0a060}
+#sec-workforce .wf-heat-good{background:rgba(212,244,221,0.18)!important;color:#34c759}
+#sec-workforce .wf-heat-low{background:rgba(250,220,217,0.18)!important;color:#ff3b30}
+#sec-workforce .wf-heat-over{background:rgba(255,243,205,0.18)!important;color:#ff9500}
 #sec-workforce .wf-heat-zero{background:var(--bg2)!important;color:var(--text3)}
 
 /* 充足度サマリーカード */
 #sec-workforce .wf-ful-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
 #sec-workforce .wf-ful-card{background:var(--bg2);border-radius:var(--r);padding:10px 12px;border-left:3px solid}
-#sec-workforce .wf-ful-card.action-hire{border-left-color:#e87070}
-#sec-workforce .wf-ful-card.action-shift{border-left-color:#f0a060}
-#sec-workforce .wf-ful-card.action-ok{border-left-color:#5dbd7e}
+#sec-workforce .wf-ful-card.action-hire{border-left-color:#ff3b30}
+#sec-workforce .wf-ful-card.action-shift{border-left-color:#ff9500}
+#sec-workforce .wf-ful-card.action-ok{border-left-color:#34c759}
 #sec-workforce .wf-ful-card h4{font-size:12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;font-weight:700}
 #sec-workforce .wf-ful-card .badge-count{background:var(--text);color:var(--bg);border-radius:10px;padding:1px 7px;font-size:10px}
 #sec-workforce .wf-ful-card-list{font-size:10px}
@@ -718,9 +720,9 @@ input.cells-edit-input {
 /* バージョン一覧 */
 #sec-workforce .wf-version-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
 #sec-workforce .wf-version-card{background:var(--bg2);border-radius:var(--r);padding:11px 13px;border-left:3px solid var(--border2)}
-#sec-workforce .wf-version-card.is-current{border-left-color:#5dbd7e}
+#sec-workforce .wf-version-card.is-current{border-left-color:#34c759}
 #sec-workforce .wf-version-card.cmp-from{border-left-color:#af52de;background:rgba(175,82,222,0.10)}
-#sec-workforce .wf-version-card.cmp-to{border-left-color:#f0a060;background:rgba(240,160,96,0.10)}
+#sec-workforce .wf-version-card.cmp-to{border-left-color:#ff9500;background:rgba(240,160,96,0.10)}
 #sec-workforce .wf-version-card h4{font-size:13px;font-weight:700;margin-bottom:3px;display:flex;justify-content:space-between;align-items:center}
 #sec-workforce .wf-version-card .v-date{font-size:9px;color:var(--text3);margin-bottom:5px}
 #sec-workforce .wf-version-card .v-memo{font-size:11px;color:var(--text2);margin-bottom:6px;min-height:30px;line-height:1.4}
@@ -730,18 +732,18 @@ input.cells-edit-input {
 #sec-workforce .wf-version-card .v-actions button{padding:3px 8px;border:1px solid var(--border2);border-radius:3px;background:var(--bg);cursor:pointer;font-size:9px;font-weight:600;color:var(--text);font-family:inherit}
 #sec-workforce .wf-version-card .v-actions button:hover{background:var(--bg3)}
 #sec-workforce .wf-version-card .v-actions button.primary{background:var(--text);color:var(--bg);border-color:var(--text)}
-#sec-workforce .wf-version-card .v-actions button.danger{color:#e87070;border-color:#e87070}
-#sec-workforce .wf-version-card .v-current-tag{background:#5dbd7e;color:#fff;font-size:9px;padding:1px 6px;border-radius:3px;font-weight:600}
+#sec-workforce .wf-version-card .v-actions button.danger{color:#ff3b30;border-color:#ff3b30}
+#sec-workforce .wf-version-card .v-current-tag{background:#34c759;color:#fff;font-size:9px;padding:1px 6px;border-radius:3px;font-weight:600}
 
 /* 差分テーブル */
 #sec-workforce .wf-diff-tbl{width:100%;border-collapse:collapse;font-size:11px;background:var(--bg2);border-radius:var(--r);overflow:hidden;margin-bottom:10px}
 #sec-workforce .wf-diff-tbl th{background:var(--text);color:var(--bg);padding:6px 8px;text-align:left;font-size:10px}
 #sec-workforce .wf-diff-tbl td{padding:5px 8px;border-bottom:1px solid var(--border)}
-#sec-workforce .wf-diff-add{background:rgba(93,189,126,0.12);color:#5dbd7e}
-#sec-workforce .wf-diff-remove{background:rgba(232,112,112,0.12);color:#e87070}
+#sec-workforce .wf-diff-add{background:rgba(93,189,126,0.12);color:#34c759}
+#sec-workforce .wf-diff-remove{background:rgba(232,112,112,0.12);color:#ff3b30}
 #sec-workforce .wf-diff-change{background:rgba(240,160,96,0.10)}
-#sec-workforce .wf-diff-old{color:#e87070;text-decoration:line-through}
-#sec-workforce .wf-diff-new{color:#5dbd7e;font-weight:600}
+#sec-workforce .wf-diff-old{color:#ff3b30;text-decoration:line-through}
+#sec-workforce .wf-diff-new{color:#34c759;font-weight:600}
 #sec-workforce .wf-diff-arrow{color:var(--text3);margin:0 6px}
 
 /* モーダル */
@@ -783,6 +785,58 @@ input.cells-edit-input {
 .aic-send{flex:0 0 auto;padding:0 16px;border:none;border-radius:9px;background:#4f46e5;color:#fff;font-weight:700;cursor:pointer;font-family:inherit;font-size:12px}
 .aic-send:disabled{opacity:.5;cursor:default}
 .aic-typing{align-self:flex-start;font-size:11px;color:var(--text3);padding:4px 8px}
+
+/* ════════════════════════════════════════════════════════════════
+   資本政策タブ (sec-capital-policy) — 独自パレット + スコープ化
+   親のiOSライト UI と分離するため全ルールを #sec-capital-policy 配下に限定
+   ════════════════════════════════════════════════════════════════ */
+#sec-capital-policy{--cp-ink:#12233d;--cp-ink2:#3d5470;--cp-paper:#f7f6f2;--cp-card:#fff;--cp-line:#e2e0d8;--cp-court:#d9822b;--cp-court-soft:#f6e3cd;--cp-fund:#c1442e}
+#sec-capital-policy .cp-root{font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;background:var(--cp-paper);color:var(--cp-ink);padding:24px 28px 40px;font-size:14px;border-radius:var(--rl);margin:-4px 0 0}
+#sec-capital-policy .cp-eyebrow{font-size:11px;letter-spacing:.22em;color:var(--cp-court);font-weight:700;margin-bottom:6px}
+#sec-capital-policy .cp-h1{font-size:22px;font-weight:800;color:var(--cp-ink);margin:0}
+#sec-capital-policy .cp-sub{color:var(--cp-ink2);margin-top:6px;font-size:12.5px;line-height:1.7}
+#sec-capital-policy .cp-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;margin:22px 0 26px}
+#sec-capital-policy .cp-kpi{background:var(--cp-card);border:1px solid var(--cp-line);border-top:3px solid var(--cp-court);border-radius:8px;padding:12px 14px}
+#sec-capital-policy .cp-kpi .l{font-size:11px;color:var(--cp-ink2)}
+#sec-capital-policy .cp-kpi .v{font-size:19px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums;color:var(--cp-ink)}
+#sec-capital-policy .cp-kpi .s{font-size:10.5px;color:var(--cp-ink2);margin-top:2px}
+#sec-capital-policy .cp-grid{display:grid;grid-template-columns:1fr 1.35fr;gap:16px;margin-bottom:16px}
+@media(max-width:900px){#sec-capital-policy .cp-grid{grid-template-columns:1fr}}
+#sec-capital-policy .cp-card{background:var(--cp-card);border:1px solid var(--cp-line);border-radius:10px;padding:18px}
+#sec-capital-policy .cp-h2{font-size:14px;font-weight:800;margin:0 0 12px;display:flex;align-items:center;gap:8px;color:var(--cp-ink)}
+#sec-capital-policy .cp-h2::before{content:"";width:8px;height:8px;background:var(--cp-court);border-radius:2px}
+#sec-capital-policy .cp-controls{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 14px}
+#sec-capital-policy .cp-seg{display:inline-flex;border:1px solid var(--cp-line);border-radius:8px;overflow:hidden;background:#fff;flex-wrap:wrap}
+#sec-capital-policy .cp-seg button{border:0;background:transparent;padding:7px 12px;font-size:12px;cursor:pointer;color:var(--cp-ink2);font-family:inherit;white-space:nowrap;font-weight:400}
+#sec-capital-policy .cp-seg button.on{background:var(--cp-ink);color:#fff;font-weight:700}
+#sec-capital-policy .cp-nowtag{background:var(--cp-court);color:#fff;font-size:9.5px;padding:1px 6px;border-radius:99px;margin-left:5px;font-weight:700}
+#sec-capital-policy table{width:100%;border-collapse:collapse;font-size:12.5px}
+#sec-capital-policy th{background:var(--cp-ink);color:#fff;padding:8px 9px;text-align:right;font-weight:600;white-space:nowrap;position:sticky;top:0}
+#sec-capital-policy th:nth-child(-n+3),#sec-capital-policy td:nth-child(-n+3){text-align:left}
+#sec-capital-policy th.cp-sellcol{background:var(--cp-fund)}
+#sec-capital-policy th.cp-addcol{background:#2f6f8f}
+#sec-capital-policy input.cp-addinput.cp-active-add{border-color:#2f6f8f;color:#2f6f8f;font-weight:700}
+#sec-capital-policy td{padding:7px 9px;border-bottom:1px solid var(--cp-line);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--cp-ink);background:#fff}
+#sec-capital-policy tr.cp-sub td{background:var(--cp-court-soft);font-weight:800}
+#sec-capital-policy tr.cp-tot td{background:var(--cp-ink);color:#fff;font-weight:800}
+#sec-capital-policy tr.cp-fund td{background:#faf0ee}
+#sec-capital-policy td.cp-acq{font-size:11px;color:var(--cp-ink2);text-align:left;white-space:normal;min-width:150px}
+#sec-capital-policy .cp-tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;color:#fff}
+#sec-capital-policy .cp-sold{color:#a33;font-weight:700}
+#sec-capital-policy .cp-tblwrap{max-height:560px;overflow:auto;border:1px solid var(--cp-line);border-radius:8px;background:#fff}
+#sec-capital-policy .cp-legend-note{font-size:11px;color:var(--cp-ink2);margin-top:10px;line-height:1.8}
+#sec-capital-policy .cp-chartbox{position:relative;height:280px}
+#sec-capital-policy .cp-simlbl{display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px}
+#sec-capital-policy .cp-simlbl span{color:var(--cp-ink2)}
+#sec-capital-policy .cp-simlbl b{font-variant-numeric:tabular-nums}
+#sec-capital-policy input[type=range]{width:100%;accent-color:var(--cp-court)}
+#sec-capital-policy input.cp-sellinput{width:74px;padding:3px 5px;border:1.5px solid var(--cp-line);border-radius:5px;text-align:right;font-family:inherit;font-size:12px;background:#fff;color:var(--cp-ink)}
+#sec-capital-policy input.cp-sellinput.cp-active{border-color:var(--cp-fund);color:var(--cp-fund);font-weight:700}
+#sec-capital-policy .cp-editnote{font-size:11.5px;color:var(--cp-fund);margin-bottom:8px;font-weight:700}
+/* number input のスピナー除去 (スプレッドシート風) */
+#sec-capital-policy input[type=number]::-webkit-outer-spin-button,
+#sec-capital-policy input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+#sec-capital-policy input[type=number]{-moz-appearance:textfield;appearance:textfield}
 </style>
 </head>
 <body>
@@ -833,6 +887,7 @@ input.cells-edit-input {
         <button class="tab" data-ent="neo solo" data-tab="payroll" onclick="sw('payroll',this)">💴 人件費</button>
         <button class="tab" data-ent="neo solo" data-tab="expense" onclick="sw('expense',this)">💳 経費申請</button>
         <button class="tab" data-ent="neo solo" data-tab="expense-detail" onclick="sw('expense-detail',this)">📜 経費明細（過去）</button>
+        <button class="tab" data-ent="neo solo group" data-tab="capital-policy" onclick="sw('capital-policy',this)">🥧 資本政策</button>
         <button class="tab" data-ent="neo solo" data-tab="report" onclick="sw('report',this)">📋 月次レポート</button>
         <button class="tab" data-ent="neo solo" data-tab="pdf" onclick="sw('pdf',this)">📄 役員PDF</button>
         <button class="tab" data-ent="group" data-tab="gsummary" onclick="sw('gsummary',this)">📊 経営サマリー</button>
@@ -1030,9 +1085,9 @@ input.cells-edit-input {
     </summary>
     <div style="padding:0 1rem 1rem">
       <div style="font-size:11px;color:var(--text2);margin-bottom:12px">残りキャッシュ期間：<strong id="runway-val" style="color:var(--text)">—</strong>（バーンレート <span id="burnrate-val">—</span>千円/月）</div>
-      <div class="risk-row"><div class="risk-lbl">🔴 危険</div><div class="risk-track"><div class="risk-fill" style="width:25%;background:#E24B4A"></div></div><div style="font-size:10px;color:var(--text3)">3ヶ月未満</div></div>
-      <div class="risk-row"><div class="risk-lbl">🟠 警戒</div><div class="risk-track"><div class="risk-fill" style="width:50%;background:#EF9F27"></div></div><div style="font-size:10px;color:var(--text3)">3〜6ヶ月</div></div>
-      <div class="risk-row"><div class="risk-lbl">🟡 注意</div><div class="risk-track"><div class="risk-fill" style="width:75%;background:#EF9F27;opacity:.6"></div></div><div style="font-size:10px;color:var(--text3)">6〜12ヶ月</div></div>
+      <div class="risk-row"><div class="risk-lbl">🔴 危険</div><div class="risk-track"><div class="risk-fill" style="width:25%;background:#ff3b30"></div></div><div style="font-size:10px;color:var(--text3)">3ヶ月未満</div></div>
+      <div class="risk-row"><div class="risk-lbl">🟠 警戒</div><div class="risk-track"><div class="risk-fill" style="width:50%;background:#ff9500"></div></div><div style="font-size:10px;color:var(--text3)">3〜6ヶ月</div></div>
+      <div class="risk-row"><div class="risk-lbl">🟡 注意</div><div class="risk-track"><div class="risk-fill" style="width:75%;background:#ff9500;opacity:.6"></div></div><div style="font-size:10px;color:var(--text3)">6〜12ヶ月</div></div>
       <div class="risk-row"><div class="risk-lbl">🟢 安全</div><div class="risk-track"><div class="risk-fill" style="width:100%;background:#639922;opacity:.5"></div></div><div style="font-size:10px;color:var(--text3)">12ヶ月以上</div></div>
     </div>
   </details>
@@ -1094,7 +1149,7 @@ input.cells-edit-input {
 <div class="sec" id="sec-pl-cf">
   <!-- レジェンド（PL/CF/BSサブタブはヘッダーへ移動） -->
   <div style="display:flex;justify-content:flex-end;margin-bottom:.75rem">
-    <div class="legend"><div class="li"><div class="ld" style="background:#378ADD;opacity:.5"></div>予算</div><div class="li"><div class="ld" style="background:#378ADD"></div>実績</div><div class="li"><div class="ld" style="background:#3B6D11"></div>予実差</div></div>
+    <div class="legend"><div class="li"><div class="ld" style="background:#0a84ff;opacity:.5"></div>予算</div><div class="li"><div class="ld" style="background:#0a84ff"></div>実績</div><div class="li"><div class="ld" style="background:#34c759"></div>予実差</div></div>
   </div>
 
   <!-- PL 予実 -->
@@ -1173,7 +1228,7 @@ input.cells-edit-input {
     </div>
     <div class="card">
       <div class="ct">CF詳細テーブル（千円）</div>
-      <div class="scroll-x" id="cf-table-wrap" style="max-height:70vh;overflow:auto"></div>
+      <div class="scroll-x" id="cf-table-wrap" style="overflow-x:auto;overflow-y:clip"></div>
     </div>
   </div>
 
@@ -1587,49 +1642,49 @@ input.cells-edit-input {
           <div>
             <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">NEO会費（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
-              <input type="range" min="0" max="2000" step="50" value="700" id="qs-fee" oninput="onQS()" style="flex:1;accent-color:#378ADD">
+              <input type="range" min="0" max="2000" step="50" value="700" id="qs-fee" oninput="onQS()" style="flex:1;accent-color:#0a84ff">
               <input type="number" id="qsn-fee" value="700" min="0" max="9999" oninput="onQSNum('fee')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
             <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">研修売上（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
-              <input type="range" min="0" max="1000" step="10" value="150" id="qs-training" oninput="onQS()" style="flex:1;accent-color:#378ADD">
+              <input type="range" min="0" max="1000" step="10" value="150" id="qs-training" oninput="onQS()" style="flex:1;accent-color:#0a84ff">
               <input type="number" id="qsn-training" value="150" min="0" max="9999" oninput="onQSNum('training')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
             <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">その他売上（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
-              <input type="range" min="0" max="500" step="10" value="30" id="qs-other-rev" oninput="onQS()" style="flex:1;accent-color:#378ADD">
+              <input type="range" min="0" max="500" step="10" value="30" id="qs-other-rev" oninput="onQS()" style="flex:1;accent-color:#0a84ff">
               <input type="number" id="qsn-other-rev" value="30" min="0" max="9999" oninput="onQSNum('other-rev')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
             <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">人件費（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
-              <input type="range" min="0" max="800" step="10" value="320" id="qs-labor" oninput="onQS()" style="flex:1;accent-color:#E24B4A">
+              <input type="range" min="0" max="800" step="10" value="320" id="qs-labor" oninput="onQS()" style="flex:1;accent-color:#ff3b30">
               <input type="number" id="qsn-labor" value="320" min="0" max="9999" oninput="onQSNum('labor')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
             <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">業務委託費（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
-              <input type="range" min="0" max="800" step="10" value="400" id="qs-outsource" oninput="onQS()" style="flex:1;accent-color:#E24B4A">
+              <input type="range" min="0" max="800" step="10" value="400" id="qs-outsource" oninput="onQS()" style="flex:1;accent-color:#ff3b30">
               <input type="number" id="qsn-outsource" value="400" min="0" max="9999" oninput="onQSNum('outsource')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
             <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">広告販促費（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
-              <input type="range" min="0" max="500" step="10" value="100" id="qs-adv" oninput="onQS()" style="flex:1;accent-color:#EF9F27">
+              <input type="range" min="0" max="500" step="10" value="100" id="qs-adv" oninput="onQS()" style="flex:1;accent-color:#ff9500">
               <input type="number" id="qsn-adv" value="100" min="0" max="9999" oninput="onQSNum('adv')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
           <div>
             <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">外注費（千円/月）</div>
             <div style="display:flex;align-items:center;gap:8px">
-              <input type="range" min="0" max="400" step="10" value="80" id="qs-gaichu" oninput="onQS()" style="flex:1;accent-color:#D85A30">
+              <input type="range" min="0" max="400" step="10" value="80" id="qs-gaichu" oninput="onQS()" style="flex:1;accent-color:#ff3b30">
               <input type="number" id="qsn-gaichu" value="80" min="0" max="9999" oninput="onQSNum('gaichu')" style="width:64px;padding:4px 6px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;text-align:right;font-family:inherit">
             </div>
           </div>
@@ -2263,6 +2318,85 @@ input.cells-edit-input {
   </div>
 </div>
 
+<!-- ──────────────────────────────────────
+     資本政策 (window.CAPPOLICY)
+     株主政策・NEO1000ファンド シミュレーション
+     機密データを含むため Vercel Deployment Protection の有効化を推奨。
+     内部ロジック・DATA は原本 (CapitalPolicyTab.jsx) を移植。UI は独自パレット。
+────────────────────────────────────── -->
+<div class="sec" id="sec-capital-policy">
+  <div class="cp-root">
+    <div class="cp-eyebrow">SPORTS NATION ── CAPITAL POLICY</div>
+    <h1 class="cp-h1">資本政策｜設立からシリーズAまでの全ラウンド推移</h1>
+    <div class="cp-sub">設立2020/12（100株@¥10,000：サフィルヴァ60／Wiz40）→ 譲渡・SO発行・100分割（2021/6：三木50%体制）→ シード@¥20,000（2021/8〜）→ 代表SO行使12,000株（2022/7）・J-KISS転換@¥29,200 → <b>プレシリーズA完了＝現在</b>（@¥36,500）→ シリーズA想定（条件は未確定・変動：下のシミュレーションと株主名簿で変更可）</div>
+
+    <div class="cp-kpis" id="cp-kpis"></div>
+
+    <div class="cp-grid">
+      <div class="cp-card">
+        <h2 class="cp-h2">持株比率（区分別）— ラウンド別</h2>
+        <div class="cp-controls" style="flex-direction:column;align-items:flex-start">
+          <span class="cp-seg" id="cp-stageSeg"></span>
+          <span class="cp-seg" id="cp-basisSeg"></span>
+        </div>
+        <div class="cp-chartbox"><canvas id="cp-pie"></canvas></div>
+      </div>
+      <div class="cp-card">
+        <h2 class="cp-h2">全ラウンドの持株数推移（SO込み）</h2>
+        <div class="cp-chartbox" style="height:336px"><canvas id="cp-bar"></canvas></div>
+        <div class="cp-legend-note">株数はSO（潜在株）込み・100分割調整後。シリーズA後（想定）はシミュレーションと株主名簿の売却株数に連動します。</div>
+      </div>
+    </div>
+
+    <div class="cp-card" style="margin-bottom:16px">
+      <h2 class="cp-h2">ラウンド別 株価の推移（100分割調整後）</h2>
+      <div class="cp-chartbox"><canvas id="cp-price"></canvas></div>
+      <div class="cp-legend-note">設立時¥10,000／株は100分割調整後の¥100で表示。シリーズA（白抜き・破線）は想定値のため変動します。</div>
+    </div>
+
+    <div class="cp-card" style="border-top:3px solid var(--cp-court);margin-bottom:16px">
+      <h2 class="cp-h2">NEO1000オーナーズファンド シミュレーション</h2>
+      <div style="font-size:11.5px;color:var(--cp-ink2);margin-bottom:12px">セカンダリー買取とシリーズA条件は<b>未確定・変動</b>です。「誰から何株買い取るか」は下の<b>株主名簿（シリーズA後タブ）の売却株数列</b>で株主ごとに編集でき、ここに即時反映されます。</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:20px">
+        <div style="display:grid;gap:12px;align-content:start">
+          <div style="font-size:11.5px;display:flex;justify-content:space-between;background:var(--cp-paper);border-radius:6px;padding:8px 10px"><span style="color:var(--cp-ink2)">買取株数（株主名簿で編集）</span><b id="cp-v_ts" style="font-variant-numeric:tabular-nums"></b></div>
+          <div><div class="cp-simlbl"><span>買取株価</span><b id="cp-v_bp"></b></div><input type="range" id="cp-i_bp" min="10000" max="80000" step="500" value="20000"></div>
+          <div><div class="cp-simlbl"><span>NEOへの新規出資額</span><b id="cp-v_iv"></b></div><input type="range" id="cp-i_iv" min="0" max="500000000" step="10000000" value="200000000"></div>
+          <div><div class="cp-simlbl"><span>新規出資株価</span><b id="cp-v_np"></b></div><input type="range" id="cp-i_np" min="20000" max="120000" step="500" value="80000"></div>
+          <div id="cp-fundtotal" style="font-size:11px;color:var(--cp-ink2);background:var(--cp-paper);border-radius:6px;padding:8px 10px;line-height:1.8"></div>
+        </div>
+        <div style="display:grid;gap:6px;align-content:start">
+          <div style="font-size:12px;font-weight:800">① 買取に必要な資金</div>
+          <div id="cp-buyneed" style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums"></div>
+          <div id="cp-buynote" style="font-size:11px"></div>
+          <div id="cp-alloc" style="border-top:1px solid var(--cp-line);margin-top:4px;padding-top:6px;display:grid;gap:2px"></div>
+          <div style="font-size:12px;font-weight:800;margin-top:10px">② NEO1000の取得比率</div>
+          <div id="cp-stake" style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums"></div>
+          <div id="cp-stakenote" style="font-size:11px;color:var(--cp-ink2)"></div>
+          <div id="cp-adders" style="display:grid;gap:2px"></div>
+          <div id="cp-valblock" style="border-top:1px solid var(--cp-line);margin-top:8px;padding-top:8px;display:grid;gap:4px"></div>
+        </div>
+        <div style="display:grid;gap:8px;align-content:start">
+          <div style="font-size:12px;font-weight:800">③ 実行後の全体株式比率（SO込み）</div>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <div style="position:relative;width:160px;height:160px"><canvas id="cp-simPie"></canvas></div>
+            <div id="cp-complist" style="font-size:11.5px;line-height:1.9"></div>
+          </div>
+          <div style="font-size:10px;color:var(--cp-ink2);line-height:1.7">買取はセカンダリーのため総株数は増えず、売却株主の持分がNEO1000へ移転。売却しない株主の株数は不変（比率のみ新規発行分で希薄化）。GP報酬等は未考慮。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cp-card">
+      <h2 class="cp-h2">株主名簿（取得株価・持株数・比率）</h2>
+      <div class="cp-controls"><span class="cp-seg" id="cp-tblSeg"></span></div>
+      <div class="cp-editnote" id="cp-editnote" style="display:none"><span style="color:var(--cp-fund)">「売却株数」</span>＝セカンダリー売却、<span style="color:#2f6f8f">「追加出資株数」</span>＝新規出資株価での追加引受。株主ごとに編集でき、シミュレーションに即時反映されます（Enterまたはフォーカスアウトで確定）</div>
+      <div class="cp-tblwrap"><table id="cp-tbl"><thead id="cp-thead"></thead><tbody></tbody></table></div>
+      <div class="cp-legend-note">「SO込」＝潜在株式（SO・新株予約権）込みのフルダイリューテッドベース。株数は100分割調整後。シリーズA後（想定）の売却株数・追加出資株数・株価・出資額は変動値です。追加出資は新規出資株価での引受として発行済株式数に加算されます。<br>出典：「資本政策最新」シート（設立2020/12〜シード・SO行使の実績）＋「株式整理 シリーズA買取」シート（J-KISS転換以降）。<br>※推定を含む箇所：高橋健太氏500株→石川聡彦・野尻・佐良土・平野の4名へ譲渡、田中祐太氏1,000株→辻本郷へ譲渡、国本氏のシード期+500株。J-KISS転換価格 ¥29,200 ＝ CAP株価¥36,500 × 80%。</div>
+    </div>
+  </div>
+</div>
+
 </div><!-- /wrap -->
 
 <!-- バージョン管理オーバーレイ -->
@@ -2514,6 +2648,7 @@ function sw(id, el) {
   if (id === 'gsummary' && window.GSUMMARY) setTimeout(() => window.GSUMMARY.render(), 30);
   if (id === 'products' && window.PRODUCTS) setTimeout(() => window.PRODUCTS.open(), 30);
   if (id === 'expense-detail' && window.EXPDETAIL) setTimeout(() => window.EXPDETAIL.open(), 30);
+  if (id === 'capital-policy' && window.CAPPOLICY) setTimeout(() => window.CAPPOLICY.open(), 30);
 }
 
 // ── 商品別 売上進捗 (window.PRODUCTS) ──
@@ -3259,14 +3394,14 @@ function renderExecDashboard(ctx){
       : '販管費の予算/実績データ未入力';
   }
 
-  // ② 人件費生産性（実現売上 ÷ 総人件費）— 工数管理から取得
+  // ② 人件費生産性（総売上(設定) ÷ 総人件費）— 工数管理から取得
   let prodRatio = null, prodSub = '工数管理タブで設定';
-  if (window.WF && typeof window.WF.totalRealizedRev === 'function' && typeof window.WF.totalCost === 'function'){
-    const realRev = window.WF.totalRealizedRev();
+  if (window.WF && typeof window.WF.totalTargetRevenue === 'function' && typeof window.WF.totalCost === 'function'){
+    const targetRev = window.WF.totalTargetRevenue();
     const costAll = window.WF.totalCost();
     if (costAll > 0){
-      prodRatio = realRev / costAll;
-      prodSub = `売上${(realRev/10000).toFixed(0)}万 ÷ 人件費${(costAll/10000).toFixed(0)}万`;
+      prodRatio = targetRev / costAll;
+      prodSub = `売上${(targetRev/10000).toFixed(0)}万 ÷ 人件費${(costAll/10000).toFixed(0)}万`;
     }
   }
   const prodCls = prodRatio == null ? 'info' : prodRatio >= 3 ? 'good' : prodRatio >= 1.5 ? 'warn' : 'bad';
@@ -3390,7 +3525,7 @@ function initWeeklyCharts(d, lastIdx) {
       labels: months,
       datasets: [
         { label: '予算', data: revBudget, backgroundColor: 'rgba(55,138,221,0.3)', borderRadius: 3 },
-        { label: '実績', data: revActual, backgroundColor: '#378ADD', borderRadius: 3 }
+        { label: '実績', data: revActual, backgroundColor: '#0a84ff', borderRadius: 3 }
       ]
     },
     options: chartOpts(v => fmtAxisJPY(v))
@@ -3471,7 +3606,7 @@ function initWeeklyCharts(d, lastIdx) {
     datasets = [{
       label: '月平均',
       data: hasAnyCost ? avgData : [320, 400, 80, 100, 80],
-      backgroundColor: '#378ADD',
+      backgroundColor: '#0a84ff',
       borderRadius: 4,
     }];
   } else {
@@ -3479,7 +3614,7 @@ function initWeeklyCharts(d, lastIdx) {
       {
         label: `${lblOf(latestIdx)}（先月）`,
         data: hasAnyCost ? latestData : [320, 400, 80, 100, 80],
-        backgroundColor: '#378ADD',
+        backgroundColor: '#0a84ff',
         borderRadius: 4,
       },
       {
@@ -3994,7 +4129,7 @@ function renderCashFlowForecast() {
     const maxClose = Math.max(...closes.map(Math.abs), 1);
     sparkEl.innerHTML = closes.map((v, i) => {
       const h = Math.max(2, Math.round(Math.abs(v) / maxClose * 22));
-      const bg = v < 0 ? '#E24B4A' : v < 5000 ? '#EF9F27' : '#27ae60';
+      const bg = v < 0 ? '#ff3b30' : v < 5000 ? '#ff9500' : '#27ae60';
       const title = forecast[i].label + ': ' + Math.round(v).toLocaleString() + '千円';
       return '<div title="' + title + '" style="width:6px;height:' + h + 'px;background:' + bg + ';border-radius:1px;opacity:.8"></div>';
     }).join('');
@@ -5249,11 +5384,11 @@ function renderPLView(d) {
       labels: months,
       datasets: [
         { label: '売上予算', data: revB, backgroundColor: 'rgba(55,138,221,0.25)', borderRadius: 3, order: 3 },
-        { label: '売上実績', data: revA, backgroundColor: '#378ADD', borderRadius: 3, order: 2 },
+        { label: '売上実績', data: revA, backgroundColor: '#0a84ff', borderRadius: 3, order: 2 },
         { label: '原価実績', data: cogsAneg, backgroundColor: 'rgba(239,159,39,0.55)', borderRadius: 3, order: 2 },
         { label: '販管費実績', data: opexAneg, backgroundColor: 'rgba(226,75,74,0.55)', borderRadius: 3, order: 2 },
-        { type: 'line', label: '粗利', data: gpA, borderColor: '#EF9F27', borderDash: [4,3], pointRadius: 2, tension: 0.3, yAxisID: 'y2', order: 0 },
-        { type: 'line', label: '営業損益', data: profA, borderColor: '#3B6D11', pointRadius: 3, tension: 0.3, yAxisID: 'y2', order: 0 }
+        { type: 'line', label: '粗利', data: gpA, borderColor: '#ff9500', borderDash: [4,3], pointRadius: 2, tension: 0.3, yAxisID: 'y2', order: 0 },
+        { type: 'line', label: '営業損益', data: profA, borderColor: '#34c759', pointRadius: 3, tension: 0.3, yAxisID: 'y2', order: 0 }
       ]
     },
     options: {
@@ -5569,8 +5704,8 @@ function renderBSView(d) {
           { label: '固定資産',     data: arrFa,  backgroundColor: 'rgba(55,138,221,0.20)',  stack: 'asset',     borderRadius: 3, order: 3 },
           { label: '流動負債',     data: arrClN, backgroundColor: 'rgba(226,75,74,0.50)',   stack: 'liability', borderRadius: 3, order: 3 },
           { label: '固定負債',     data: arrFlN, backgroundColor: 'rgba(226,75,74,0.20)',   stack: 'liability', borderRadius: 3, order: 3 },
-          { type: 'line', label: '純資産', data: arrEq, borderColor: '#3B6D11', borderWidth: 2, pointRadius: 3, tension: 0.25, order: 0 },
-          { type: 'line', label: '資産合計', data: arrAssetTot, borderColor: '#378ADD', borderDash: [4,3], borderWidth: 1.5, pointRadius: 2, tension: 0.25, order: 1 },
+          { type: 'line', label: '純資産', data: arrEq, borderColor: '#34c759', borderWidth: 2, pointRadius: 3, tension: 0.25, order: 0 },
+          { type: 'line', label: '資産合計', data: arrAssetTot, borderColor: '#0a84ff', borderDash: [4,3], borderWidth: 1.5, pointRadius: 2, tension: 0.25, order: 1 },
         ]
       },
       options: {
@@ -5941,9 +6076,9 @@ function renderCFView(d) {
   // （bCloseDisplay/aCloseDisplay はテーブル用に後段で再計算され、ほぼ同等の値）
   const lineDatasets = [
     { type:'line', label:'残高（実績）', data: aCloseCalc.map(v=>Number(v)||null),
-      borderColor:'#378ADD', backgroundColor:'rgba(55,138,221,0.06)', fill:false,
+      borderColor:'#0a84ff', backgroundColor:'rgba(55,138,221,0.06)', fill:false,
       tension:0.3, pointRadius:4,
-      pointBackgroundColor: aCloseCalc.map(v=>Number(v)<0?'#E24B4A':'#378ADD'),
+      pointBackgroundColor: aCloseCalc.map(v=>Number(v)<0?'#ff3b30':'#0a84ff'),
       borderWidth:2.5, yAxisID:'y2' },
     { type:'line', label:'残高（予算）', data: bCloseCalc,
       borderColor:'rgba(55,138,221,0.55)', borderDash:[4,3], tension:0.3, pointRadius:2, borderWidth:1.5, yAxisID:'y2' },
@@ -6199,6 +6334,13 @@ function renderCFView(d) {
       isSub:true, colGroup:'cf-sec-revenue', noEdit:true,
     },
 
+    // ── 支出合計（原価+販管費+投資+財務出金）──
+    { label:'── 支出合計', section:true, sectionStyle:'outflow' },
+    { label:'支出合計（原価+販管費+投資+財務出金）',
+      bArr: Array.from({length:N},(_,i) => bCogsTot[i] + bTotalOutDetail[i]),
+      aArr: Array.from({length:N},(_,i) => aCogsTot[i] + aTotalOutDetail[i]),
+      isTot:true, isOut:true, noDiff:false },
+
     // ── 販管費合計 ──
     { label:'── 販管費合計', section:true, colId:'cf-sec-opex' },
     // 合計行は折りたたんでも常に表示（colGroup を付けない）
@@ -6243,17 +6385,20 @@ function renderCFView(d) {
   ];
 
   const minW = 100 + d.months.length * 82;
+  // 月ヘッダーはページスクロール時にも固定（topnav の下、~56px）+ ソフト影で境界を強調
+  const stickyBase = 'position:sticky;top:56px;z-index:3;background:var(--bg2);box-shadow:0 2px 0 rgba(60,60,67,0.08),0 3px 6px rgba(16,24,40,0.04)';
   let html = `<table class="dt" style="min-width:${minW}px;width:100%;border-collapse:separate;border-spacing:0">
     <thead><tr>
-      <th class="l" style="min-width:130px;position:sticky;top:0;z-index:3;background:var(--bg2)">科目</th>
-      <th class="l" style="min-width:36px;position:sticky;top:0;z-index:3;background:var(--bg2)">区分</th>
-      ${months.map(m=>`<th style="min-width:72px;position:sticky;top:0;z-index:3;background:var(--bg2)">${m}</th>`).join('')}
-      <th style="background:rgba(55,138,221,0.15);border-left:2px solid rgba(55,138,221,0.3);position:sticky;top:0;z-index:3">合計</th>
+      <th class="l" style="min-width:130px;${stickyBase}">科目</th>
+      <th class="l" style="min-width:36px;${stickyBase}">区分</th>
+      ${months.map(m=>`<th style="min-width:72px;${stickyBase}">${m}</th>`).join('')}
+      <th style="position:sticky;top:56px;z-index:3;background:rgba(10,132,255,0.15);border-left:2px solid rgba(10,132,255,0.3);box-shadow:0 2px 0 rgba(60,60,67,0.08),0 3px 6px rgba(16,24,40,0.04)">合計</th>
     </tr></thead><tbody>`;
 
   rows.forEach(row => {
     if (row.section) {
-      const secBg  = row.sectionStyle === 'revenue' ? 'background:rgba(55,138,221,0.12)' :
+      const secBg  = row.sectionStyle === 'revenue' ? 'background:rgba(10,132,255,0.14);color:var(--tc-blue)!important' :
+                     row.sectionStyle === 'outflow' ? 'background:rgba(255,59,48,0.12);color:var(--tc-red)!important' :
                      row.sectionStyle === 'sub'     ? 'background:var(--bg2)' :
                                                       'background:var(--bg3)';
       const indent = row.sectionStyle === 'sub' ? 'padding-left:20px' : 'padding:4px 8px';
@@ -6305,7 +6450,11 @@ function renderCFView(d) {
         html += `<td class="budget" style="${colorCls}">${dispVal}</td>`;
       }
     });
-    html += `<td class="budget" style="background:rgba(55,138,221,0.12);font-weight:700;border-left:2px solid rgba(55,138,221,0.3)">${row.noSum ? '─' : (bSum?bSum.toLocaleString():'─')}</td></tr>`;
+    // 年間合計セルは isOut かつ isTot の行を赤系、それ以外を青系で色分け（収入=青 / 支出=赤）
+    const budgetTotBg = isOut && isTot
+      ? 'background:rgba(255,59,48,0.12);border-left:2px solid rgba(255,59,48,0.30);color:var(--tc-red)'
+      : 'background:rgba(10,132,255,0.12);border-left:2px solid rgba(10,132,255,0.30)';
+    html += `<td class="budget" style="${budgetTotBg};font-weight:700">${row.noSum ? '─' : (bSum?bSum.toLocaleString():'─')}</td></tr>`;
 
     // 実績行
     const aSum = (row.aArr||[]).reduce((s,v)=>s+(Number(v)||0),0);
@@ -6322,7 +6471,11 @@ function renderCFView(d) {
         html += `<td class="actual" style="${colorCls}">${dispVal}</td>`;
       }
     });
-    html += `<td class="actual" style="background:rgba(39,174,96,0.10);font-weight:700;border-left:2px solid rgba(39,174,96,0.25)">${row.noSum ? '─' : (aSum?aSum.toLocaleString():'─')}</td></tr>`;
+    // 実績の年間合計セルも同様に色分け（収入=緑 / 支出=薄赤）
+    const actualTotBg = isOut && isTot
+      ? 'background:rgba(255,59,48,0.16);border-left:2px solid rgba(255,59,48,0.35);color:var(--tc-red)'
+      : 'background:rgba(52,199,89,0.14);border-left:2px solid rgba(52,199,89,0.30)';
+    html += `<td class="actual" style="${actualTotBg};font-weight:700">${row.noSum ? '─' : (aSum?aSum.toLocaleString():'─')}</td></tr>`;
 
     // 差異行（noDiff でないもの）
     if (!row.noDiff && !row.noSum) {
@@ -8787,32 +8940,32 @@ const SIM_MONTHS = {
 // ── 固定行（変更不可）──
 const PL_ROWS_BASE = [
   // ── 売上 ──
-  { key: 'rev',            label: '売上合計',           color: '#378ADD', isRev: true },
-  { key: 'fee',            label: 'NEO会費',             color: '#378ADD', indent: true, isRev: true },
-  { key: 'training',       label: '研修売上',             color: '#378ADD', indent: true, isRev: true },
-  { key: 'event',          label: 'イベント・その他',     color: '#378ADD', indent: true, isRev: true },
+  { key: 'rev',            label: '売上合計',           color: '#0a84ff', isRev: true },
+  { key: 'fee',            label: 'NEO会費',             color: '#0a84ff', indent: true, isRev: true },
+  { key: 'training',       label: '研修売上',             color: '#0a84ff', indent: true, isRev: true },
+  { key: 'event',          label: 'イベント・その他',     color: '#0a84ff', indent: true, isRev: true },
   // ── NEOプログラム原価 ──
-  { key: '_cogsHead',      label: '原価',               color: '#EF9F27', isCost: true, isSection: true },
-  { key: 'cogsHomeroom',   label: 'ホームルーム',         color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
-  { key: 'cogsHyogikai',   label: '評議会',               color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
-  { key: 'cogsOenKaigi',   label: '応援カイギ',           color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
-  { key: 'cogsBigEvent',   label: '大型イベント',         color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
-  { key: 'cogsOther',      label: 'その他原価',           color: '#EF9F27', indent: true, isCost: true, parentKey: '_cogsHead' },
+  { key: '_cogsHead',      label: '原価',               color: '#ff9500', isCost: true, isSection: true },
+  { key: 'cogsHomeroom',   label: 'ホームルーム',         color: '#ff9500', indent: true, isCost: true, parentKey: '_cogsHead' },
+  { key: 'cogsHyogikai',   label: '評議会',               color: '#ff9500', indent: true, isCost: true, parentKey: '_cogsHead' },
+  { key: 'cogsOenKaigi',   label: '応援カイギ',           color: '#ff9500', indent: true, isCost: true, parentKey: '_cogsHead' },
+  { key: 'cogsBigEvent',   label: '大型イベント',         color: '#ff9500', indent: true, isCost: true, parentKey: '_cogsHead' },
+  { key: 'cogsOther',      label: 'その他原価',           color: '#ff9500', indent: true, isCost: true, parentKey: '_cogsHead' },
   // ── 粗利（自動計算）──
   { key: '_grossProfit',   label: '粗利',                 color: '#3B9', isCalc: true },
   // ── 販管費（正準12項目：月次財務・工数管理と統一）──
-  { key: 'labor',          label: '人件費(社保込み)',     color: '#E24B4A', isCost: true },
-  { key: 'outsource',      label: '業務委託費',           color: '#D85A30', isCost: true },
-  { key: 'reward',         label: '支払い報酬',           color: '#D85A30', isCost: true },
-  { key: 'gaichu',         label: '外注費',               color: '#D85A30', isCost: true },
-  { key: 'recruit',        label: '採用研修費',           color: '#C56A3A', isCost: true },
-  { key: 'adv',            label: '広告販促費',           color: '#EF9F27', isCost: true },
-  { key: 'travel',         label: '旅費交通費',           color: '#A9A89F', isCost: true },
-  { key: 'comm',           label: '通信費',               color: '#A9A89F', isCost: true },
-  { key: 'entertain',      label: '会議・交際費',         color: '#A9A89F', isCost: true },
-  { key: 'rent',           label: '賃料(本社のみ)',       color: '#888780', isCost: true },
-  { key: 'supplies',       label: '消耗品・減価償却費',   color: '#888780', isCost: true },
-  { key: 'other',          label: 'その他',               color: '#B4B2A9', isCost: true },
+  { key: 'labor',          label: '人件費(社保込み)',     color: '#ff3b30', isCost: true },
+  { key: 'outsource',      label: '業務委託費',           color: '#ff3b30', isCost: true },
+  { key: 'reward',         label: '支払い報酬',           color: '#ff3b30', isCost: true },
+  { key: 'gaichu',         label: '外注費',               color: '#ff3b30', isCost: true },
+  { key: 'recruit',        label: '採用研修費',           color: '#c56a3a', isCost: true },
+  { key: 'adv',            label: '広告販促費',           color: '#ff9500', isCost: true },
+  { key: 'travel',         label: '旅費交通費',           color: '#8e8e93', isCost: true },
+  { key: 'comm',           label: '通信費',               color: '#8e8e93', isCost: true },
+  { key: 'entertain',      label: '会議・交際費',         color: '#8e8e93', isCost: true },
+  { key: 'rent',           label: '賃料(本社のみ)',       color: '#8e8e93', isCost: true },
+  { key: 'supplies',       label: '消耗品・減価償却費',   color: '#8e8e93', isCost: true },
+  { key: 'other',          label: 'その他',               color: '#b4b2a9', isCost: true },
 ];
 
 // ── ユーザーが追加した行（年度別・永続保存）──
@@ -8972,7 +9125,7 @@ function getCFRows() {
   customRows.slice().reverse().forEach(r => {
     const isRev = r.type === 'rev';
     const row = {
-      key: r.key, label: r.label, color: isRev ? '#378ADD' : '#E24B4A',
+      key: r.key, label: r.label, color: isRev ? '#0a84ff' : '#ff3b30',
       isCustom: true, isRev, isOut: !isRev,
       indent: !!r.parentKey, parentKey: r.parentKey || null
     };
@@ -8992,27 +9145,27 @@ let PL_ROWS = PL_ROWS_BASE;
 // 全セクションで小計を「項目の上」に統一: 売上入金合計 / 原価合計 / 販管費合計
 const CF_ROWS = [
   // ── 売上入金（合計を最上段に）──
-  { key: 'cfIn',            label: '売上入金合計',                color: '#378ADD', isRev: true, isParent: true },
-  { key: 'cfInFee',         label: 'NEO会費入金',                  color: '#378ADD', indent: true, isRev: true, parentKey: 'cfIn' },
-  { key: 'cfInTraining',    label: '研修入金',                     color: '#378ADD', indent: true, isRev: true, parentKey: 'cfIn' },
-  { key: 'cfInEvent',       label: 'イベント・その他入金',         color: '#378ADD', indent: true, isRev: true, parentKey: 'cfIn' },
+  { key: 'cfIn',            label: '売上入金合計',                color: '#0a84ff', isRev: true, isParent: true },
+  { key: 'cfInFee',         label: 'NEO会費入金',                  color: '#0a84ff', indent: true, isRev: true, parentKey: 'cfIn' },
+  { key: 'cfInTraining',    label: '研修入金',                     color: '#0a84ff', indent: true, isRev: true, parentKey: 'cfIn' },
+  { key: 'cfInEvent',       label: 'イベント・その他入金',         color: '#0a84ff', indent: true, isRev: true, parentKey: 'cfIn' },
   // ── 原価支払い（合計を最上段に）──
-  { key: 'cogsTotalCf',     label: '原価合計',                    color: '#EF9F27', isParent: true, isOut: true },
-  { key: 'cogsHomeroomPay', label: 'ホームルーム',                color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
-  { key: 'cogsHyogikaiPay', label: '評議会',                      color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
-  { key: 'cogsOenKaigiPay', label: '応援カイギ',                  color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
-  { key: 'cogsBigEventPay', label: '大型イベント',                color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
-  { key: 'cogsOtherPay',    label: 'その他原価',                  color: '#EF9F27', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
+  { key: 'cogsTotalCf',     label: '原価合計',                    color: '#ff9500', isParent: true, isOut: true },
+  { key: 'cogsHomeroomPay', label: 'ホームルーム',                color: '#ff9500', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
+  { key: 'cogsHyogikaiPay', label: '評議会',                      color: '#ff9500', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
+  { key: 'cogsOenKaigiPay', label: '応援カイギ',                  color: '#ff9500', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
+  { key: 'cogsBigEventPay', label: '大型イベント',                color: '#ff9500', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
+  { key: 'cogsOtherPay',    label: 'その他原価',                  color: '#ff9500', indent: true, isOut: true, parentKey: 'cogsTotalCf' },
   // ── 販管費（合計を最上段に）──
-  { key: 'opexTotalCf',     label: '販管費合計',                  color: '#E24B4A', isParent: true, isOut: true },
-  { key: 'laborPay',        label: '人件費（社保込）',            color: '#E24B4A', indent: true, isOut: true, parentKey: 'opexTotalCf' },
-  { key: 'outsourcePay',    label: '業務委託費',                  color: '#D85A30', indent: true, isOut: true, parentKey: 'opexTotalCf' },
-  { key: 'advPay',          label: '広告販促費',                  color: '#EF9F27', indent: true, isOut: true, parentKey: 'opexTotalCf' },
+  { key: 'opexTotalCf',     label: '販管費合計',                  color: '#ff3b30', isParent: true, isOut: true },
+  { key: 'laborPay',        label: '人件費（社保込）',            color: '#ff3b30', indent: true, isOut: true, parentKey: 'opexTotalCf' },
+  { key: 'outsourcePay',    label: '業務委託費',                  color: '#ff3b30', indent: true, isOut: true, parentKey: 'opexTotalCf' },
+  { key: 'advPay',          label: '広告販促費',                  color: '#ff9500', indent: true, isOut: true, parentKey: 'opexTotalCf' },
   { key: 'rentPay',         label: '賃料',                        color: '#888780', indent: true, isOut: true, parentKey: 'opexTotalCf' },
-  { key: 'gaichuPay',       label: '外注費',                      color: '#D85A30', indent: true, isOut: true, parentKey: 'opexTotalCf' },
+  { key: 'gaichuPay',       label: '外注費',                      color: '#ff3b30', indent: true, isOut: true, parentKey: 'opexTotalCf' },
   { key: 'otherPay',        label: 'その他費用',                  color: '#B4B2A9', indent: true, isOut: true, parentKey: 'opexTotalCf' },
   // ── CF特有：融資・調達 ──
-  { key: 'funding',         label: '融資・調達（+）',             color: '#3B6D11' },
+  { key: 'funding',         label: '融資・調達（+）',             color: '#34c759' },
 ];
 
 // インメモリ シムデータ
@@ -9905,9 +10058,9 @@ function drawSimPLChart(revArr, costArr, profitArr, cumArr) {
           data: goodProfit, borderColor:'#27ae60', backgroundColor:'rgba(39,174,96,0.08)',
           fill:false, tension:0.3, pointRadius:4, pointBackgroundColor:'#27ae60', borderWidth:2.5, yAxisID:'y', order:1 },
         { type:'line', label:'▶ ベースケース',
-          data: profitArr, borderColor:'#378ADD',
+          data: profitArr, borderColor:'#0a84ff',
           fill:false, tension:0.3, pointRadius:4, borderDash:[6,3],
-          pointBackgroundColor: profitArr.map(v => v >= 0 ? '#378ADD' : '#E24B4A'),
+          pointBackgroundColor: profitArr.map(v => v >= 0 ? '#0a84ff' : '#ff3b30'),
           borderWidth:2, yAxisID:'y', order:2 },
         { type:'line', label:`📉 Badケース（売上${SCENARIO_CONFIG.bad.revPct>=0?'+':''}${SCENARIO_CONFIG.bad.revPct}%・費用${SCENARIO_CONFIG.bad.costPct>=0?'+':''}${SCENARIO_CONFIG.bad.costPct}%）`,
           data: badProfit, borderColor:'#e67e22',
@@ -10190,20 +10343,20 @@ function drawSimCFChart(months, netArr, balArr) {
         { type:'line', label:`📈 Goodケース（入金${SCENARIO_CONFIG.good.revPct>=0?'+':''}${SCENARIO_CONFIG.good.revPct}%・出金${SCENARIO_CONFIG.good.costPct>=0?'+':''}${SCENARIO_CONFIG.good.costPct}%）`,
           data: balGood, borderColor:'#27ae60',
           fill:false, tension:0.3, pointRadius:4,
-          pointBackgroundColor: balGood.map(v => v < 0 ? '#E24B4A' : '#27ae60'),
+          pointBackgroundColor: balGood.map(v => v < 0 ? '#ff3b30' : '#27ae60'),
           borderWidth:2.5, yAxisID:'y2', order:1 },
         { type:'line', label:'▶ ベースケース（月末残高）',
-          data: balArr, borderColor:'#378ADD',
+          data: balArr, borderColor:'#0a84ff',
           fill:false, tension:0.3, pointRadius:4, borderDash:[6,3],
-          pointBackgroundColor: balArr.map(v => v < 0 ? '#E24B4A' : '#378ADD'),
+          pointBackgroundColor: balArr.map(v => v < 0 ? '#ff3b30' : '#0a84ff'),
           borderWidth:2, yAxisID:'y2', order:2 },
         { type:'line', label:`📉 Badケース（入金${SCENARIO_CONFIG.bad.revPct>=0?'+':''}${SCENARIO_CONFIG.bad.revPct}%・出金${SCENARIO_CONFIG.bad.costPct>=0?'+':''}${SCENARIO_CONFIG.bad.costPct}%）`,
           data: balBadArr, borderColor:'#e67e22',
           fill:false, tension:0.3, pointRadius:4, borderDash:[3,4],
-          pointBackgroundColor: balBadArr.map(v => v < 0 ? '#E24B4A' : '#e67e22'),
+          pointBackgroundColor: balBadArr.map(v => v < 0 ? '#ff3b30' : '#e67e22'),
           borderWidth:2, yAxisID:'y2', order:1 },
         { type:'line', label:'資金ショート境界',
-          data: Array(12).fill(0), borderColor:'#E24B4A', borderDash:[8,4],
+          data: Array(12).fill(0), borderColor:'#ff3b30', borderDash:[8,4],
           pointRadius:0, borderWidth:1.5, yAxisID:'y2', order:5 }
       ]
     },
@@ -10930,7 +11083,7 @@ function drawQSChart() {
   // 右軸：累積損益 3ライン（主役 — ここに傾きが出る）
   // 右軸に月次損益の水平線3本も薄く重ねる（参考線）
 
-  const zeroBorderColor = profit >= 0 ? '#27ae60' : profit > -50 ? '#EF9F27' : '#E24B4A';
+  const zeroBorderColor = profit >= 0 ? '#27ae60' : profit > -50 ? '#ff9500' : '#ff3b30';
 
   qsChart = new Chart(canvas, {
     type: 'bar',
@@ -10960,19 +11113,19 @@ function drawQSChart() {
           fill: true,
           tension: 0.1,
           pointRadius: 4,
-          pointBackgroundColor: cumGoodArr.map(v => v >= 0 ? '#27ae60' : '#E24B4A'),
+          pointBackgroundColor: cumGoodArr.map(v => v >= 0 ? '#27ae60' : '#ff3b30'),
           pointHoverRadius: 6,
           borderWidth: 2.5,
           yAxisID: 'y2', order: 1 },
         { type:'line',
           label: '▶ ベース 累積損益',
           data: cumBaseArr,
-          borderColor: '#378ADD',
+          borderColor: '#0a84ff',
           backgroundColor: 'rgba(55,138,221,0.06)',
           fill: true,
           tension: 0.1,
           pointRadius: 4,
-          pointBackgroundColor: cumBaseArr.map(v => v >= 0 ? '#378ADD' : '#E24B4A'),
+          pointBackgroundColor: cumBaseArr.map(v => v >= 0 ? '#0a84ff' : '#ff3b30'),
           pointHoverRadius: 6,
           borderDash: [6, 3],
           borderWidth: 2,
@@ -10985,7 +11138,7 @@ function drawQSChart() {
           fill: true,
           tension: 0.1,
           pointRadius: 4,
-          pointBackgroundColor: cumBadArr.map(v => v >= 0 ? '#e67e22' : '#E24B4A'),
+          pointBackgroundColor: cumBadArr.map(v => v >= 0 ? '#e67e22' : '#ff3b30'),
           pointHoverRadius: 6,
           borderDash: [3, 4],
           borderWidth: 2,
@@ -11262,11 +11415,11 @@ async function genAI(type) {
   const cumOpex = PL_OPEX_KEYS.reduce((s, k) => s + (d.pl.actual[k]||[]).reduce((a, v) => a + (Number(v) || 0), 0), 0);
   // 工数管理・経費申請のリアルタイム指標を取り込む (Phase 5.3)
   let prodLine = '', staffLine = '', expenseLine = '';
-  if (window.WF && typeof window.WF.totalRealizedRev === 'function'){
-    const realRev = window.WF.totalRealizedRev();
+  if (window.WF && typeof window.WF.totalTargetRevenue === 'function'){
+    const targetRev = window.WF.totalTargetRevenue();
     const costAll = window.WF.totalCost();
-    const ratio = costAll > 0 ? (realRev/costAll).toFixed(2) : '—';
-    prodLine = ` / 人件費生産性:${ratio}倍 (実現売上${(realRev/10000).toFixed(0)}万 ÷ 人件費${(costAll/10000).toFixed(0)}万)`;
+    const ratio = costAll > 0 ? (targetRev/costAll).toFixed(2) : '—';
+    prodLine = ` / 人件費生産性:${ratio}倍 (売上${(targetRev/10000).toFixed(0)}万 ÷ 人件費${(costAll/10000).toFixed(0)}万)`;
     if (Array.isArray(window.WF.BIZ) && Array.isArray(window.WF.ROLES)){
       const lows = [];
       window.WF.BIZ.forEach(b => window.WF.ROLES.forEach(r => {
@@ -11930,7 +12083,7 @@ window.addEventListener('load', async () => {
       const yBtns = document.querySelectorAll('.year-toggle .yt');
       if (yBtns[yIdx]) setYear(savedYear, yBtns[yIdx]);
     }
-    const tabOrder = ['weekly','pl-cf','products','import','sim','workforce','payroll','expense','expense-detail','report','pdf','hd','gsummary'];
+    const tabOrder = ['weekly','pl-cf','products','import','sim','workforce','payroll','expense','expense-detail','capital-policy','report','pdf','hd','gsummary'];
     const savedTab = localStorage.getItem('neo_active_tab');
     const tIdx = tabOrder.indexOf(savedTab);
     if (tIdx > 0) { // 0='weekly' はデフォルトなのでスキップ
@@ -14342,7 +14495,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const totalPersonnel = BIZ.reduce((s,b) => s + bizPersonnelCost(b), 0);
     h += `<td class="num">${fmtCol(totalPersonnel)}</td></tr>`;
 
-    // 人件費比率
+    // 人件費比率（売上比）
     h += `<tr class="row-detail"><td>　└ 人件費比率（売上比）</td>`;
     BIZ.forEach(b => {
       const rev = bizRevenue(b);
@@ -14379,12 +14532,12 @@ document.addEventListener('DOMContentLoaded', function() {
     h += `<tr class="row-summary"><td>営業利益</td>`;
     BIZ.forEach(b => {
       const op = bizOperatingProfit(b);
-      h += `<td class="num" style="color:${op>=0?'#5dbd7e':'#ff8a8a'}">${fmtCol(op)}</td>`;
+      h += `<td class="num" style="color:${op>=0?'#34c759':'#ff8a8a'}">${fmtCol(op)}</td>`;
     });
     const totalOP = totalOperatingProfit();
-    h += `<td class="num" style="color:${totalOP>=0?'#5dbd7e':'#ff8a8a'}">${fmtCol(totalOP)}</td></tr>`;
+    h += `<td class="num" style="color:${totalOP>=0?'#34c759':'#ff8a8a'}">${fmtCol(totalOP)}</td></tr>`;
 
-    // 営業利益率
+    // 営業利益率（売上比）
     h += `<tr class="row-detail"><td>　└ 営業利益率（売上比）</td>`;
     BIZ.forEach(b => {
       const op = bizOperatingProfit(b);
@@ -14395,7 +14548,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const totalMargin = totalRev > 0 ? (totalOP / totalRev * 100) : 0;
     h += `<td class="num" style="color:${totalOP>=0?'var(--tc-green)':'var(--tc-red)'}">${totalMargin.toFixed(1)}%</td></tr>`;
 
-    // 生産性倍率
+    // 生産性倍率（売上÷人件費）
     h += `<tr class="row-detail"><td>　└ 生産性倍率（売上÷人件費）</td>`;
     BIZ.forEach(b => {
       const rev = bizRevenue(b);
@@ -14721,9 +14874,9 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
       </div>`;
     container.innerHTML =
-      card('action-hire',  '🚨', '採用 / シフトが必要', hireList, it => `<span style="color:#e87070">${(it.fulfillment*100).toFixed(0)}%</span>`) +
-      card('action-shift', '⚠️', '過剰人員（再配置検討）', overList, it => `<span style="color:#f0a060">${it.required === 0 ? '不要' : (it.fulfillment*100).toFixed(0) + '%'}</span>`) +
-      card('action-ok',    '✅', '適正配置', okList, it => `<span style="color:#5dbd7e">${(it.fulfillment*100).toFixed(0)}%</span>`);
+      card('action-hire',  '🚨', '採用 / シフトが必要', hireList, it => `<span style="color:#ff3b30">${(it.fulfillment*100).toFixed(0)}%</span>`) +
+      card('action-shift', '⚠️', '過剰人員（再配置検討）', overList, it => `<span style="color:#ff9500">${it.required === 0 ? '不要' : (it.fulfillment*100).toFixed(0) + '%'}</span>`) +
+      card('action-ok',    '✅', '適正配置', okList, it => `<span style="color:#34c759">${(it.fulfillment*100).toFixed(0)}%</span>`);
   }
 
   function renderFTEMatrix(){
@@ -14897,7 +15050,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (curEl){
       if (curVer){
         curEl.textContent = curVer.name;
-        curEl.style.color = '#5aabf0';
+        curEl.style.color = '#0a84ff';
       } else {
         curEl.textContent = '— 未保存 —';
         curEl.style.color = 'var(--text3)';
@@ -14934,7 +15087,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return `<div class="${cls}">
           <h4>
             <span>${escapeHtml(v.name)}</span>
-            ${v.is_current ? '<span class="v-current-tag">採用中</span>' : (isCur ? '<span class="v-current-tag" style="background:#5aabf0">編集中</span>' : '')}
+            ${v.is_current ? '<span class="v-current-tag">採用中</span>' : (isCur ? '<span class="v-current-tag" style="background:#0a84ff">編集中</span>' : '')}
           </h4>
           <div class="v-date">📅 ${dateStr}</div>
           <div class="v-memo">${v.memo ? escapeHtml(v.memo) : '<span style="color:var(--text3)">（メモなし）</span>'}</div>
@@ -15103,7 +15256,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const sa = va.snapshot || {};
     const sb = vb.snapshot || {};
     let html = `<div class="card" style="margin-bottom:12px">
-      <div class="ct">📊 差分: <span style="color:#af52de">${escapeHtml(va.name)}</span> → <span style="color:#f0a060">${escapeHtml(vb.name)}</span></div>`;
+      <div class="ct">📊 差分: <span style="color:#af52de">${escapeHtml(va.name)}</span> → <span style="color:#ff9500">${escapeHtml(vb.name)}</span></div>`;
 
     // メンバー差分
     const aMembers = sa.members || [];
@@ -15845,7 +15998,7 @@ document.addEventListener('DOMContentLoaded', function() {
           label: '人件費合計（千円）',
           data: totals,
           backgroundColor: 'rgba(90,171,240,0.55)',
-          borderColor: '#5aabf0',
+          borderColor: '#0a84ff',
           borderWidth: 1,
         }],
       },
@@ -16194,7 +16347,7 @@ document.addEventListener('DOMContentLoaded', function() {
     filtered.forEach(r => {
       const date = (r.created_at || '').slice(5,10).replace('-','/');
       const isPending = r.status === 'pending';
-      const receipt = r.receipt_url ? `<a href="${escapeHtml(r.receipt_url)}" target="_blank" style="color:#5aabf0">📎</a>` : '';
+      const receipt = r.receipt_url ? `<a href="${escapeHtml(r.receipt_url)}" target="_blank" style="color:#0a84ff">📎</a>` : '';
       html += `<tr>
         <td style="font-size:10px">${date}</td>
         <td>${escapeHtml(r.requester_name)}${r.requester_email ? `<br><span style="font-size:9px;color:var(--text3)">${escapeHtml(r.requester_email)}</span>` : ''}</td>
@@ -18478,6 +18631,27 @@ document.addEventListener('DOMContentLoaded', function() {
     'その他':       'salesOtherPay',
     '融資返済':     'loanOut',
   };
+  // CFキー → 月次財務CF詳細テーブルでの表示ラベル (目視確認用)
+  const CF_KEY_LABEL = {
+    cogsOtherPay:  '原価 › その他原価',
+    salaryPay:     '販管費 › 人件費・税金',
+    devOutPay:     '販管費 › 開発外注',
+    bizComPay:     '販管費 › 業務委託＋経費',
+    expertPay:     '販管費 › 専門家外注',
+    rentPay:       '販管費 › 家賃',
+    expensePay:    '販管費 › 経費精算（旅費・ツール）',
+    telPay:        '販管費 › 通信費',
+    entertainPay:  '販管費 › 交際/会議費',
+    taxPay:        '販管費 › 租税公課',
+    toolsPay:      '販管費 › ツール費用',
+    suppliesPay:   '販管費 › 消耗品',
+    adSportsPay:   '販管費 › 広告費・スポーツ協賛',
+    eventCostPay:  '販管費 › 外注費 イベント運営費',
+    recruitPay:    '販管費 › 採用研修',
+    annualFeePay:  '販管費 › 年会費',
+    salesOtherPay: '販管費 › その他',
+    loanOut:       '財務収支 › 借入返済',
+  };
 
   async function syncToCF(){
     const fy = _year;
@@ -18550,7 +18724,261 @@ document.addEventListener('DOMContentLoaded', function() {
 
   window.EXPDETAIL = { open, setYear, render, addRow, exportJSON, resetYear, syncToCF, DATA };
 })();
-</script>
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         CAPPOLICY (資本政策): 全ラウンド推移 + NEO1000ファンドシミュレーション
+         原本 CapitalPolicyTab.jsx / CapitalPolicyTab.html のロジックを移植。
+         DATA / STAGES / 計算ロジックは不変。UI は Chart.js を使用。
+         ════════════════════════════════════════════════════════════════ -->
+    <script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const D = {"rows": [{"n": "三木智弘（代表取締役）", "c": "経営株主", "a": "譲受@¥10,000（設立直後）／SO行使@¥100（2022/7・12,000株）", "k": [0, 5000, 5000, 17000.0, 9000.0, 9000.0], "s": [0, 12000, 12000, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "㈱MIKI 三木資産管理会社", "c": "経営株主", "a": "譲渡取得（三木氏より9,000株）", "k": [0, 0, 0, 0.0, 9000.0, 9000.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "国本昂大（取締役会長）", "c": "経営株主", "a": "シード¥20,000／譲渡¥5,000／J-KISS¥29,200", "k": [0, 0, 1500, 1500.0, 3714.0, 3714.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 50000000.0, "sold": 0}, {"n": "千本倖生（取締役名誉会長）", "c": "経営株主", "a": "シード¥20,000／J-KISS¥29,200", "k": [0, 0, 250, 250.0, 764.0, 764.0], "s": [0, 0, 0, 250.0, 650.0, 650.0], "inv": 20000000.0, "sold": 0}, {"n": "岡田喜則（取締役）", "c": "経営株主", "a": "シード¥20,000／譲渡¥4,000", "k": [0, 0, 50, 50.0, 350.0, 350.0], "s": [0, 0, 0, 0.0, 700.0, 700.0], "inv": 0.0, "sold": 0}, {"n": "株式会社90s Management", "c": "経営株主", "a": "シード ¥20,000", "k": [0, 0, 500, 500.0, 500.0, 500.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 10000000.0, "sold": 0}, {"n": "三木浩江（執行役員）", "c": "経営株主", "a": "SOのみ", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 0, 0, 300.0, 350.0, 350.0], "inv": 0.0, "sold": 0}, {"n": "株式会社サフィルヴァ（設立発起・退出済）", "c": "創業期株主（退出済）", "a": "設立 ¥10,000 → 2021/6 全株譲渡", "k": [60, 0, 0, 0, 0, 0], "s": [0, 200, 200, 0, 0, 0], "inv": 0, "sold": 0}, {"n": "高橋健太（元取締役・退出済）", "c": "創業期株主（退出済）", "a": "譲受（2021/6）→ 退出（個人投資家4名へ譲渡と推定）", "k": [0, 500, 500, 0, 0, 0], "s": [0, 1000, 1000, 0, 0, 0], "inv": 0, "sold": 0}, {"n": "田中祐太（banker・退出済）", "c": "創業期株主（退出済）", "a": "シード ¥20,000 → 辻本郷へ譲渡（推定）", "k": [0, 0, 1000, 0, 0, 0], "s": [0, 0, 0, 0, 0, 0], "inv": 0, "sold": 0}, {"n": "三菱UFJ信託銀行", "c": "NEO共創株主", "a": "シード ¥20,000", "k": [0, 0, 1350, 1350.0, 1350.0, 1350.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 27000000.0, "sold": 0}, {"n": "矢頭徹（ライジングゼファー福岡）", "c": "NEO共創株主", "a": "J-KISS ¥29,200", "k": [0, 0, 0, 513.7, 1027.4, 1027.4], "s": [0, 0, 0, 0.0, 0.0, 0.6], "inv": 30000000.0, "sold": 0}, {"n": "藤木貴子 Caris&Co（佐賀バルーナーズ）", "c": "NEO共創株主", "a": "J-KISS ¥29,200", "k": [0, 0, 0, 1027.4, 1027.4, 1027.4], "s": [0, 0, 0, 0.0, 0.0, 0.6], "inv": 30000000.0, "sold": 0}, {"n": "株式会社Wiz（鹿児島レブナイズ）", "c": "NEO共創株主", "a": "設立発起（40株→分割後3,000株）", "k": [40, 3000, 3000, 3000.0, 1000.0, 1000.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "荒井邦彦（株式会社ストライク）", "c": "NEO共創株主", "a": "プレA J-KISS ¥29,200", "k": [0, 0, 0, 0.0, 513.7, 513.7], "s": [0, 0, 0, 0.0, 0.0, 0.3], "inv": 15000000.0, "sold": 0}, {"n": "澁谷陽史（ORENDA WORLD）", "c": "NEO共創株主", "a": "プレA ¥36,500", "k": [0, 0, 0, 0.0, 547.95, 547.95], "s": [0, 0, 0, 0.0, 0.0, 0.05], "inv": 20000000.0, "sold": 0}, {"n": "髙城いづみ（株式会社タカギ）", "c": "NEO共創株主", "a": "プレA ¥36,500", "k": [0, 0, 0, 0.0, 410.96, 410.96], "s": [0, 0, 0, 0.0, 0.0, 0.04], "inv": 15000000.0, "sold": 0}, {"n": "新規株主（残り1,500万円）", "c": "NEO共創株主", "a": "プレA ¥36,500", "k": [0, 0, 0, 0.0, 410.96, 410.96], "s": [0, 0, 0, 0.0, 0.0, 0.04], "inv": 15000000.0, "sold": 0}, {"n": "大木貴之", "c": "シード株主", "a": "譲受（2021/6）→100分割で1,500株", "k": [0, 1500, 1500, 1500.0, 500.0, 500.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 400000.0, "sold": 0}, {"n": "石川昌義", "c": "シード株主", "a": "シード ¥20,000", "k": [0, 0, 250, 250.0, 250.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 5000000.0, "sold": 250.0}, {"n": "辻本郷税理士事務所", "c": "シード株主", "a": "譲受（田中祐太氏分と推定）", "k": [0, 0, 0, 1000.0, 1000.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 1000.0}, {"n": "INCLUSIVE株式会社", "c": "シード株主", "a": "シード ¥20,000", "k": [0, 0, 1000, 1000.0, 1000.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 20000000.0, "sold": 1000.0}, {"n": "岡本祥治（未来ワークス代表）", "c": "シード株主", "a": "シード ¥20,000", "k": [0, 0, 250, 250.0, 250.0, 250.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 5000000.0, "sold": 0}, {"n": "石川聡彦（アイデミー代表）", "c": "シード株主", "a": "譲受 ¥20,000（高橋氏分と推定）", "k": [0, 0, 0, 50.0, 50.0, 50.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 1000000.0, "sold": 0}, {"n": "田浦航", "c": "シード株主", "a": "シード ¥20,000", "k": [0, 0, 500, 500.0, 500.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 10000000.0, "sold": 500.0}, {"n": "田中裕基", "c": "シード株主", "a": "譲受 ¥20,000", "k": [0, 0, 0, 0.0, 200.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 4000000.0, "sold": 200.0}, {"n": "佐良土雄亮（SBAパートナーズ）", "c": "シード株主", "a": "譲受 ¥20,000（プレAで売却済）", "k": [0, 0, 0, 150.0, 0.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "野尻雅之", "c": "シード株主", "a": "譲受 ¥20,000", "k": [0, 0, 0, 250.0, 250.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 5000000.0, "sold": 250.0}, {"n": "平野龍一", "c": "シード株主", "a": "譲受 ¥20,000（プレAで売却済）", "k": [0, 0, 0, 50.0, 0.0, 0.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 0.0, "sold": 0}, {"n": "シリーズA投資家（新規）", "c": "シリーズA投資家", "a": "シリーズA ¥80,000（新株3,500＋買取3,200）", "k": [0, 0, 0, 0.0, 0.0, 6700.0], "s": [0, 0, 0, 0.0, 0.0, 0.0], "inv": 280000000.0, "sold": 0}, {"n": "中川勝弘", "c": "SO保有者", "a": "SO（シード期発行150株）", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 0, 150, 150.0, 150.0, 150.0], "inv": 0.0, "sold": 0}, {"n": "神初忠宏", "c": "SO保有者", "a": "SO（シード期発行100株）", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 0, 100, 100.0, 100.0, 100.0], "inv": 0.0, "sold": 0}, {"n": "山崎俊（株式会社Wiz代表）", "c": "SO保有者", "a": "SO（2021/6発行200株）", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 200, 200, 200.0, 200.0, 200.0], "inv": 0.0, "sold": 0}, {"n": "株式会社北海道イエロースターズ", "c": "SO保有者", "a": "SO 200株", "k": [0, 0, 0, 0.0, 0.0, 0.0], "s": [0, 0, 0, 200.0, 200.0, 200.0], "inv": 0.0, "sold": 0}], "kpi": {"seriesA": 80000, "new_shares": 3500, "new_money": 280000000, "sec_shares": 3200, "sec_money": 64000000, "pre_money": 2689308493, "post_money": 2969308493, "a_stake": 0.1805}};
+  const STAGES = [
+    {label:'設立', sub:'2020/12 100株 @¥10,000', price:100},
+    {label:'創業体制', sub:'2021/6 譲渡・SO・100分割 @¥100', price:100},
+    {label:'シード', sub:'2021/8〜 @¥20,000', price:20000},
+    {label:'SO行使・J-KISS後', sub:'2022/7〜 転換@¥29,200', price:29200},
+    {label:'プレA後（現在）', sub:'@¥36,500', price:36500},
+    {label:'シリーズA後（想定）', sub:'変動（シミュレーション連動）', price:80000},
+  ];
+  const CURRENT = 4, LAST = 5;
+  const BASE_K = 33616.36, BASE_SO = 2350, UNIT = 30000000, BUDGET = 100000000;
+  const FUND_CAT = 'NEO1000・シリーズA投資家';
+  const CATS = ['経営株主','NEO共創株主','シード株主',FUND_CAT,'SO保有者','創業期株主（退出済）'];
+  const COLORS = {'経営株主':'#12233d','NEO共創株主':'#2f6f8f','シード株主':'#8fae9c',[FUND_CAT]:'#c1442e','SO保有者':'#b9b3a5','創業期株主（退出済）':'#7a766a'};
+  const yen = n => '¥' + Math.round(n).toLocaleString('ja-JP');
+  const oku = n => (n/1e8).toLocaleString('ja-JP',{maximumFractionDigits:2}) + '億円';
+  const num = n => Math.round(n).toLocaleString('ja-JP');
+  const pct = n => (n*100).toFixed(2) + '%';
+  const escapeHtml = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+  const sells = {}, adds = {};
+  D.rows.forEach(r => { if(r.sold > 0) sells[r.n] = r.sold; });
+  let buyPrice = 20000, invest = 200000000, newPrice = 80000;
+  let ROWS = [], newShares = 0, totalSell = 0, totalAdd = 0, fundShares = 0, postK = 0, postFD = 0;
+  let stage = CURRENT, basisFd = 1, tStage = LAST;
+  let pieChart = null, barChart = null, priceChart = null, simPie = null;
+  let initialized = false;
+
+  function rebuild(){
+    newShares = invest / newPrice; totalSell = 0; totalAdd = 0;
+    ROWS = D.rows.filter(r => r.c !== 'シリーズA投資家').map(r => {
+      const sell = Math.min(sells[r.n]||0, r.k[CURRENT]);
+      const add = Math.max(adds[r.n]||0, 0);
+      totalSell += sell; totalAdd += add;
+      const k = [...r.k]; k[LAST] = r.k[CURRENT] - sell + add;
+      const s = [...r.s]; s[LAST] = r.s[CURRENT];
+      return {...r, k, s, sell, add};
+    });
+    fundShares = totalSell + newShares;
+    const idx = ROWS.findIndex(r => r.c === 'SO保有者');
+    ROWS.splice(idx, 0, {n:'NEO1000ファンド（新規出資＋セカンダリー）', c:FUND_CAT,
+      a:'新規出資（株価は変動）＋既存株主からの買取（変動）',
+      k:[0,0,0,0,0,fundShares], s:[0,0,0,0,0,0], inv:invest, sell:0, add:0});
+    postK = BASE_K + newShares + totalAdd; postFD = postK + BASE_SO;
+  }
+  const valOf = (r, i, basis) => basis === 'k' ? r.k[i] : r.k[i] + r.s[i];
+  const aggregate = (i, basis) => {
+    const out = {}; CATS.forEach(c => out[c] = 0);
+    ROWS.forEach(r => out[r.c] += valOf(r, i, basis));
+    return out;
+  };
+
+  function renderKPIs(){
+    const kpis = [
+      ['現在地','プレシリーズA完了','J-KISS転換・代表SO行使済み（2026年7月時点）'],
+      ['現在の株価', yen(36500)+'／株', 'プレシリーズA価格（分割調整後の設立時¥100の365倍）'],
+      ['現在の時価総額', oku(36500 * BASE_K), 'SO込み ' + oku(36500 * (BASE_K + BASE_SO))],
+      ['発行済株式数', num(BASE_K) + '株', 'SO込み ' + num(BASE_K + BASE_SO) + '株'],
+      ['調達累計（設立〜プレA）', oku(282400000), '株主の累計出資ベース（シリーズA想定分を除く）'],
+      ['株主数（現在）', '23名', 'ほかSO保有者5名'],
+    ];
+    $('cp-kpis').innerHTML = kpis.map(k =>
+      '<div class="cp-kpi"><div class="l">' + escapeHtml(k[0]) + '</div><div class="v">' + escapeHtml(k[1]) + '</div><div class="s">' + escapeHtml(k[2]) + '</div></div>'
+    ).join('');
+  }
+
+  function seg(id, items, cur, cb){
+    const el = $(id);
+    el.innerHTML = items.map((l, i) => '<button data-v="' + i + '" class="' + (i === cur ? 'on' : '') + '">' + escapeHtml(l) + (i === CURRENT && items.length === STAGES.length ? '<span class="cp-nowtag">現在地</span>' : '') + '</button>').join('');
+    el.querySelectorAll('button').forEach(b => b.onclick = () => {
+      el.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on'); cb(+b.dataset.v);
+    });
+  }
+
+  function initCharts(){
+    pieChart = new Chart($('cp-pie'), {type:'doughnut',
+      data:{labels:CATS, datasets:[{data:[], backgroundColor:CATS.map(c => COLORS[c]), borderColor:'#fff', borderWidth:2}]},
+      options:{maintainAspectRatio:false, cutout:'55%',
+        plugins:{legend:{position:'bottom', labels:{boxWidth:10, font:{size:10.5}}},
+          title:{display:true, text:'', font:{size:12}},
+          tooltip:{callbacks:{label:t => { const tot = t.dataset.data.reduce((a,b) => a+b, 0); return ' ' + t.label + ': ' + num(t.parsed) + '株（' + (tot ? (t.parsed / tot * 100).toFixed(2) : 0) + '%）'; }}}}}});
+    barChart = new Chart($('cp-bar'), {type:'bar',
+      data:{labels:STAGES.map(s => s.label),
+        datasets:CATS.map(c => ({label:c, backgroundColor:COLORS[c], data:[]}))},
+      options:{maintainAspectRatio:false,
+        scales:{x:{stacked:true, grid:{display:false}, ticks:{font:{size:10}}}, y:{stacked:true, ticks:{callback:v => num(v)}, title:{display:true, text:'株数（SO込み）', font:{size:11}}}},
+        plugins:{legend:{position:'bottom', labels:{boxWidth:10, font:{size:10.5}}},
+          tooltip:{callbacks:{label:t => ' ' + t.dataset.label + ': ' + num(t.parsed.y) + '株'}}}}});
+    priceChart = new Chart($('cp-price'), {type:'line',
+      data:{labels:STAGES.map(s => s.label.replace('（現在）','').replace('（想定）','（想定・変動）')),
+        datasets:[{data:STAGES.map(s => s.price), borderColor:'#d9822b',
+          backgroundColor:STAGES.map((_, i) => i === LAST ? '#ffffff' : '#d9822b'),
+          pointBorderColor:'#d9822b', pointBorderWidth:STAGES.map((_, i) => i === LAST ? 2 : 1),
+          pointRadius:STAGES.map((_, i) => i === CURRENT ? 7 : i === LAST ? 6 : 5), tension:0, fill:false,
+          segment:{borderDash:ctx => ctx.p1DataIndex === LAST ? [6,4] : undefined}}]},
+      options:{maintainAspectRatio:false,
+        scales:{y:{ticks:{callback:v => yen(v)}, title:{display:true, text:'1株あたり株価', font:{size:11}}}},
+        plugins:{legend:{display:false}, tooltip:{callbacks:{label:t => ' ' + yen(t.parsed.y) + '／株'}}}}});
+    simPie = new Chart($('cp-simPie'), {type:'doughnut',
+      data:{labels:[], datasets:[{data:[], backgroundColor:[], borderColor:'#fff', borderWidth:2}]},
+      options:{maintainAspectRatio:false, cutout:'55%', plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:t => { const tot = t.dataset.data.reduce((a,b) => a+b, 0); return ' ' + t.label + ': ' + num(t.parsed) + '株（' + (t.parsed / tot * 100).toFixed(2) + '%）'; }}}}}});
+  }
+
+  function updatePie(){
+    if (!pieChart) return;
+    const a = aggregate(stage, basisFd ? 'fd' : 'k');
+    pieChart.data.datasets[0].data = CATS.map(c => a[c]);
+    const tot = CATS.reduce((x, c) => x + a[c], 0);
+    pieChart.options.plugins.title.text = STAGES[stage].label + ' ／ ' + (basisFd ? 'SO込み' : '顕在株') + ' ／ 合計 ' + num(tot) + '株';
+    pieChart.update();
+  }
+  function updateBar(){
+    if (!barChart) return;
+    barChart.data.datasets.forEach((ds, ci) => { ds.data = STAGES.map((_, i) => aggregate(i, 'fd')[CATS[ci]]); });
+    barChart.update();
+  }
+
+  function updateSim(){
+    $('cp-v_ts').textContent = num(totalSell) + '株';
+    $('cp-v_bp').textContent = yen(buyPrice) + '／株';
+    $('cp-v_iv').textContent = oku(invest);
+    $('cp-v_np').textContent = yen(newPrice) + '／株';
+    const buyNeed = totalSell * buyPrice, fundTotal = buyNeed + invest;
+    const addMoney = totalAdd * newPrice;
+    $('cp-fundtotal').innerHTML = 'ファンド必要総額：<b>' + oku(fundTotal) + '</b>（1口3,000万円 × ' + num(Math.ceil(fundTotal / UNIT)) + '口）<br>内訳：買取 ' + oku(buyNeed) + ' ＋ NEO出資 ' + oku(invest) + '<br>ラウンド調達額（NEOへの払込合計）：<b>' + oku(invest + addMoney) + '</b>'
+      + (totalAdd > 0 ? '（うち既存株主の追加出資 ' + oku(addMoney) + '・' + num(totalAdd) + '株）' : '');
+    $('cp-buyneed').textContent = yen(buyNeed);
+    $('cp-buyneed').style.color = buyNeed > BUDGET ? '#a33' : 'var(--cp-ink)';
+    $('cp-buynote').style.color = buyNeed > BUDGET ? '#a33' : 'var(--cp-ink2)';
+    $('cp-buynote').textContent = buyNeed > BUDGET ? '買取原資1億円を ' + yen(buyNeed - BUDGET) + ' 超過' : '買取原資1億円の範囲内（残り ' + yen(BUDGET - buyNeed) + '）';
+    const sellers = ROWS.filter(r => r.sell > 0);
+    $('cp-alloc').innerHTML = sellers.length
+      ? sellers.map(r => '<div style="display:flex;justify-content:space-between;font-size:11.5px"><span>' + escapeHtml(r.n) + '<span style="color:var(--cp-ink2)">（' + num(r.sell) + '株）</span></span><b style="font-variant-numeric:tabular-nums">' + yen(r.sell * buyPrice) + '</b></div>').join('')
+      : '<div style="font-size:11.5px;color:var(--cp-ink2)">売却株主なし（株主名簿で設定してください）</div>';
+    $('cp-stake').innerHTML = pct(fundShares / postK) + '<span style="font-size:12px;font-weight:400;color:var(--cp-ink2)">（顕在）／ SO込み ' + pct(fundShares / postFD) + '</span>';
+    $('cp-stakenote').textContent = '取得 ' + num(fundShares) + '株 ＝ 買取 ' + num(totalSell) + '株 ＋ 新規 ' + num(newShares) + '株（発行後 ' + num(postK) + '株）';
+    const adders = ROWS.filter(r => r.add > 0);
+    $('cp-adders').innerHTML = adders.length
+      ? '<div style="font-size:11px;font-weight:700;color:#2f6f8f;margin-top:6px;border-top:1px solid var(--cp-line);padding-top:6px">既存株主の追加出資（@' + yen(newPrice) + '）</div>'
+        + adders.map(r => '<div style="display:flex;justify-content:space-between;font-size:11.5px"><span>' + escapeHtml(r.n) + '<span style="color:var(--cp-ink2)">（' + num(r.add) + '株）</span></span><b style="font-variant-numeric:tabular-nums">' + yen(r.add * newPrice) + '</b></div>').join('')
+      : '';
+    $('cp-valblock').innerHTML =
+      '<div style="display:flex;justify-content:space-between;font-size:12px"><span>プレマネー時価総額<div style="font-size:10px;color:var(--cp-ink2)">SO込み ' + oku(newPrice * (BASE_K + BASE_SO)) + '</div></span><b style="font-size:15px;font-variant-numeric:tabular-nums">' + oku(newPrice * BASE_K) + '</b></div>'
+      + '<div style="display:flex;justify-content:space-between;font-size:12px"><span>ポストマネー時価総額<div style="font-size:10px;color:var(--cp-ink2)">SO込み ' + oku(newPrice * postFD) + '</div></span><b style="font-size:15px;font-variant-numeric:tabular-nums">' + oku(newPrice * postK) + '</b></div>'
+      + '<div style="font-size:10px;color:var(--cp-ink2)">新規出資株価 ' + yen(newPrice) + ' × 発行済株式数で算定（セカンダリー買取は時価総額に影響しません）</div>';
+    const agg = aggregate(LAST, 'fd'), aggK = aggregate(LAST, 'k');
+    const comp = CATS.map(c => [c, aggK[c], agg[c]]).filter(x => x[2] > 0);
+    simPie.data.labels = comp.map(x => x[0]);
+    simPie.data.datasets[0].data = comp.map(x => x[2]);
+    simPie.data.datasets[0].backgroundColor = comp.map(x => COLORS[x[0]]);
+    simPie.update();
+    const totFD = comp.reduce((a, x) => a + x[2], 0);
+    $('cp-complist').innerHTML = comp.map(row => {
+      const c = row[0], k = row[1], fd = row[2];
+      return '<div style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:2px;background:' + COLORS[c] + ';display:inline-block"></span><span style="min-width:150px">' + escapeHtml(c) + '</span><b style="font-variant-numeric:tabular-nums;min-width:52px;text-align:right">' + pct(fd / totFD) + '</b><span style="color:var(--cp-ink2);font-size:10.5px">　顕在 ' + (k > 0 ? pct(k / postK) : '—') + '</span></div>';
+    }).join('');
+  }
+
+  function renderTbl(){
+    $('cp-editnote').style.display = tStage === LAST ? 'block' : 'none';
+    const sellTh = tStage === LAST ? '<th class="cp-sellcol">売却株数</th><th class="cp-addcol">追加出資株数</th>' : '';
+    $('cp-thead').innerHTML = '<tr><th>株主（敬称略）</th><th>区分</th><th>取得ラウンド／取得時株価</th>' + sellTh + '<th>顕在株</th><th>SO込株数</th><th>顕在シェア</th><th>SO込シェア</th><th>累計出資額</th></tr>';
+    const totK = ROWS.reduce((a, r) => a + valOf(r, tStage, 'k'), 0);
+    const totF = ROWS.reduce((a, r) => a + valOf(r, tStage, 'fd'), 0);
+    let html = '';
+    for (const cat of CATS) {
+      const rs = ROWS.filter(r => r.c === cat);
+      const visible = rs.filter(r => valOf(r, tStage, 'fd') > 0 || (tStage === LAST && r.k[CURRENT] > 0));
+      if (!visible.length) continue;
+      const sk = rs.reduce((a, r) => a + valOf(r, tStage, 'k'), 0);
+      const sf = rs.reduce((a, r) => a + valOf(r, tStage, 'fd'), 0);
+      const si = rs.reduce((a, r) => a + r.inv, 0);
+      const catSell = rs.reduce((a, r) => a + (r.sell || 0), 0);
+      for (const r of visible) {
+        const k = valOf(r, tStage, 'k'), f = valOf(r, tStage, 'fd');
+        const soldOut = tStage === LAST && r.sell > 0 && k === 0;
+        const canSell = tStage === LAST && r.c !== FUND_CAT && r.k[CURRENT] > 0;
+        const nameEsc = escapeHtml(r.n);
+        const sellCell = tStage === LAST
+          ? '<td>' + (canSell ? '<input class="cp-sellinput' + ((sells[r.n]||0) > 0 ? ' cp-active' : '') + '" type="number" min="0" max="' + r.k[CURRENT] + '" step="50" value="' + (sells[r.n]||0) + '" data-name="' + nameEsc + '" data-max="' + r.k[CURRENT] + '" data-kind="sell">' : '—') + '</td>'
+            + '<td>' + (canSell ? '<input class="cp-sellinput cp-addinput' + ((adds[r.n]||0) > 0 ? ' cp-active-add' : '') + '" type="number" min="0" step="50" value="' + (adds[r.n]||0) + '" data-name="' + nameEsc + '" data-kind="add">' : '—') + '</td>'
+          : '';
+        html += '<tr' + (r.c === FUND_CAT ? ' class="cp-fund"' : '') + '><td>' + (soldOut ? '<span class="cp-sold">' + nameEsc + '（全株売却）</span>' : nameEsc) + '</td>'
+          + '<td><span class="cp-tag" style="background:' + COLORS[cat] + '">' + escapeHtml(cat) + '</span></td>'
+          + '<td class="cp-acq">' + escapeHtml(r.a) + '</td>' + sellCell
+          + '<td>' + num(k) + '</td><td>' + num(f) + '</td>'
+          + '<td>' + (totK && k ? pct(k / totK) : '—') + '</td><td>' + (totF && f ? pct(f / totF) : '—') + '</td>'
+          + '<td>' + (r.inv ? yen(r.inv) : '—') + '</td></tr>';
+      }
+      const catAdd = rs.reduce((a, r) => a + (r.add || 0), 0);
+      const sellSub = tStage === LAST ? '<td>' + (cat === FUND_CAT ? '—' : num(catSell)) + '</td><td>' + (cat === FUND_CAT ? '—' : num(catAdd)) + '</td>' : '';
+      html += '<tr class="cp-sub"><td>' + escapeHtml(cat) + ' 合計</td><td></td><td></td>' + sellSub + '<td>' + num(sk) + '</td><td>' + num(sf) + '</td><td>' + (totK && sk ? pct(sk / totK) : '—') + '</td><td>' + (totF && sf ? pct(sf / totF) : '—') + '</td><td>' + (si ? yen(si) : '—') + '</td></tr>';
+    }
+    const sellTot = tStage === LAST ? '<td>' + num(totalSell) + '</td><td>' + num(totalAdd) + '</td>' : '';
+    html += '<tr class="cp-tot"><td>合計（' + escapeHtml(STAGES[tStage].label) + '）</td><td></td><td></td>' + sellTot + '<td>' + num(totK) + '</td><td>' + num(totF) + '</td><td>100.00%</td><td>100.00%</td><td>' + yen(ROWS.reduce((a, r) => a + r.inv, 0)) + '</td></tr>';
+    document.querySelector('#cp-tbl tbody').innerHTML = html;
+    document.querySelectorAll('#sec-capital-policy .cp-sellinput').forEach(inp => {
+      inp.addEventListener('change', e => {
+        const name = e.target.dataset.name;
+        if (e.target.dataset.kind === 'add') {
+          adds[name] = Math.max(0, +e.target.value || 0);
+        } else {
+          const mx = +e.target.dataset.max;
+          sells[name] = Math.max(0, Math.min(+e.target.value || 0, mx));
+        }
+        recalcAll();
+      });
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
+    });
+  }
+
+  function recalcAll(){
+    rebuild(); updatePie(); updateBar(); updateSim(); renderTbl();
+  }
+
+  function open(){
+    if (!initialized) {
+      renderKPIs();
+      seg('cp-stageSeg', STAGES.map(s => s.label), stage, v => { stage = v; updatePie(); });
+      seg('cp-basisSeg', ['顕在株', 'SO込み'], basisFd, v => { basisFd = v; updatePie(); });
+      seg('cp-tblSeg', STAGES.map(s => s.label), tStage, v => { tStage = v; renderTbl(); });
+      ['cp-i_bp', 'cp-i_iv', 'cp-i_np'].forEach(id => $(id).addEventListener('input', () => {
+        buyPrice = +$('cp-i_bp').value; invest = +$('cp-i_iv').value; newPrice = +$('cp-i_np').value;
+        recalcAll();
+      }));
+      // Chart.js が読み込まれるのを待って初期化
+      if (typeof Chart !== 'undefined') {
+        initCharts();
+        initialized = true;
+        recalcAll();
+      } else {
+        // Chart.js 未ロード時: DOMContentLoaded 後に再試行
+        const wait = () => { if (typeof Chart !== 'undefined') { initCharts(); initialized = true; recalcAll(); } else { setTimeout(wait, 100); } };
+        wait();
+      }
+    } else {
+      recalcAll();
+    }
+  }
+
+  window.CAPPOLICY = { open, DATA: D, STAGES };
+})();
+    </script>
 
 </body>
 </html>
