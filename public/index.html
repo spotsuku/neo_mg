@@ -5881,6 +5881,12 @@ function renderCFView(d) {
   document.getElementById('cf-year-label').textContent = currentYear + '年度';
   const N = d.months.length;
   const months = d.months.map(m => MONTH_LABELS[m] || m);
+  // 月ヘッダー行 sticky 用: topnav の実測高さを CSS 変数に反映（タブ折返しで topnav が高くなっても追従）
+  try {
+    const topnav = document.querySelector('.topnav');
+    const h = topnav ? Math.ceil(topnav.getBoundingClientRect().height) : 56;
+    document.documentElement.style.setProperty('--cf-sticky-top', h + 'px');
+  } catch(e){}
 
   // ── CFサマリー更新 ──
   (() => {
@@ -6476,14 +6482,16 @@ function renderCFView(d) {
   ];
 
   const minW = 100 + d.months.length * 82;
-  // 月ヘッダーはページスクロール時にも固定（topnav の下、~56px）+ ソフト影で境界を強調
-  const stickyBase = 'position:sticky;top:56px;z-index:3;background:var(--bg2);box-shadow:0 2px 0 rgba(60,60,67,0.08),0 3px 6px rgba(16,24,40,0.04)';
+  // 月ヘッダーはページスクロール時にも固定。topnav が sticky top:0 なのでその実測高さを使う。
+  // タブが折り返して topnav が高くなっても追従できるよう CSS 変数を経由。
+  const stickyTopExpr = 'var(--cf-sticky-top, 56px)';
+  const stickyBase = 'position:sticky;top:' + stickyTopExpr + ';z-index:3;background:var(--bg2);box-shadow:0 2px 0 rgba(60,60,67,0.08),0 3px 6px rgba(16,24,40,0.04)';
   let html = `<table class="dt" style="min-width:${minW}px;width:100%;border-collapse:separate;border-spacing:0">
     <thead><tr>
       <th class="l" style="min-width:130px;${stickyBase}">科目</th>
       <th class="l" style="min-width:36px;${stickyBase}">区分</th>
       ${months.map(m=>`<th style="min-width:72px;${stickyBase}">${m}</th>`).join('')}
-      <th style="position:sticky;top:56px;z-index:3;background:rgba(10,132,255,0.15);border-left:2px solid rgba(10,132,255,0.3);box-shadow:0 2px 0 rgba(60,60,67,0.08),0 3px 6px rgba(16,24,40,0.04)">合計</th>
+      <th style="position:sticky;top:${stickyTopExpr};z-index:3;background:rgba(10,132,255,0.15);border-left:2px solid rgba(10,132,255,0.3);box-shadow:0 2px 0 rgba(60,60,67,0.08),0 3px 6px rgba(16,24,40,0.04)">合計</th>
     </tr></thead><tbody>`;
 
   rows.forEach(row => {
@@ -12182,6 +12190,26 @@ window.addEventListener('load', async () => {
       if (tBtns[tIdx]) sw(savedTab, tBtns[tIdx]);
     }
   } catch(e) { console.warn('restore tab/year:', e); }
+
+  // topnav 高さを sticky ヘッダー用 CSS 変数へ反映（タブ折り返しでも追従）
+  (function updateStickyTop(){
+    const apply = () => {
+      try {
+        const topnav = document.querySelector('.topnav');
+        const h = topnav ? Math.ceil(topnav.getBoundingClientRect().height) : 56;
+        document.documentElement.style.setProperty('--cf-sticky-top', h + 'px');
+      } catch(e){}
+    };
+    apply();
+    window.addEventListener('resize', apply);
+    // topnav 内のタブ折り返しが変わったら再計測 (ResizeObserver)
+    try {
+      const topnav = document.querySelector('.topnav');
+      if (topnav && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(apply).observe(topnav);
+      }
+    } catch(e){}
+  })();
 
   // 対象（エンティティ）を復元・適用（既定は HD連結）。タブ復元の後に実行して対象が支配する。
   try {
