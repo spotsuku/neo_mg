@@ -5323,9 +5323,30 @@ function renderPLCF() {
   else if (currentPaView === 'bs') renderBSView(d);
 }
 
+// 売上合計(rev) を商品別内訳の合計に同期。renderPLView 以外の consumer
+// (weekly KPI / CF / チャート / AI) も rev を最新値で読み取れるよう、
+// PL 表示以外のタイミング (loadDB 直後 等) でも呼び出す。
+function syncRevFromProducts(d) {
+  if (!d || !d.pl) return;
+  const N = (d.months || []).length;
+  if (!N) return;
+  const base = [{ key:'revFee' }, { key:'revTraining' }, { key:'revEvent' }];
+  const custom = (d.reportData && Array.isArray(d.reportData.productDefs)) ? d.reportData.productDefs : [];
+  const defs = base.concat(custom.map(c => ({ key: c.key })));
+  if (!d.pl.budget) d.pl.budget = {};
+  if (!d.pl.actual) d.pl.actual = {};
+  const sumFor = (side, i) => defs.reduce((s, p) => s + (Number((d.pl[side][p.key]||[])[i])||0), 0);
+  d.pl.budget.rev = Array.from({length:N}, (_, i) => sumFor('budget', i));
+  d.pl.actual.rev = Array.from({length:N}, (_, i) => sumFor('actual', i));
+}
+
 function renderPLView(d) {
   document.getElementById('pl-year-label').textContent = currentYear + '年度';
   const months = d.months.map(m => MONTH_LABELS[m] || m);
+  // 売上合計を商品別内訳の合計に同期 (renderPLView 内で使う _prodSumB/A は
+  // 後段で再計算するが、下流の他 renderer が d.pl.budget.rev を直接参照するため
+  // 冒頭で同期しておく)。
+  try { syncRevFromProducts(d); } catch(e){}
 
   // ── PLサマリー更新 ──
   (() => {
@@ -5539,18 +5560,20 @@ function renderPLView(d) {
   const _prodDefs = _prodBase.concat(_prodCustom.map(c => ({ key:c.key, label:c.label, custom:true })));
   const _prodSumB = Array.from({length:_N},(_,i)=>_prodDefs.reduce((s,p)=>s+(Number((d.pl.budget[p.key]||[])[i])||0),0));
   const _prodSumA = Array.from({length:_N},(_,i)=>_prodDefs.reduce((s,p)=>s+(Number((d.pl.actual[p.key]||[])[i])||0),0));
+  // 売上合計(rev) は 冒頭で syncRevFromProducts により既に同期済 (下流 consumer も反映済)。
 
   // Table
   const rows = [
-    { key: 'rev',          label: '売上合計',           b: d.pl.budget.rev,                    a: d.pl.actual.rev },
-    // ── 売上 商品別内訳（編集可・突合）──
+    // 売上合計は自動計算（編集不可）。商品別内訳を編集すると即時反映。
+    { key: 'rev',          label: '売上合計 <span style="font-size:9px;color:var(--text3);font-weight:400">（自動計算：商品別合計）</span>', b: _prodSumB, a: _prodSumA, isRev: true, isTot: true, noEdit: true },
+    // ── 売上 商品別内訳（編集可）──
     ..._prodDefs.map((p, idx) => {
       const br = idx === _prodDefs.length - 1 ? '└' : '├';
       const edit = ` <span onclick="event.stopPropagation(); window.PRODUCTS && window.PRODUCTS.rename('${p.key}', currentYear)" title="名称を変更" style="cursor:pointer;color:var(--text3);opacity:.7">✎</span>`;
       const del = p.custom ? ` <span onclick="event.stopPropagation(); window.PRODUCTS && window.PRODUCTS.remove('${p.key}', currentYear)" title="この売上項目を削除" style="cursor:pointer;color:var(--tc-red);opacity:.6">✕</span>` : '';
       return { key: p.key, label: `${br} ${p.label}${edit}${del}`, b: d.pl.budget[p.key]||[], a: d.pl.actual[p.key]||[], indent: true, isRev: true };
     }),
-    { key: '_prodTotal',   label: '　商品計（売上合計と突合）', b: _prodSumB, a: _prodSumA, isTot: true, isRev: true, noEdit: true, indent: true },
+    // 商品計行は撤廃（売上合計が同一の値・同一の意味を持つため）
     // ── 原価セクション ──
     { key: '_cogsTotal',   label: 'NEOプログラム原価',  b: cogsB, a: cogsA, isTot: true, isOut: true },
     { key: 'cogsHomeroom', label: '├ ホームルーム',     b: getCogs('budget','cogsHomeroom'),   a: getCogs('actual','cogsHomeroom'),   indent: true, isOut: true },
@@ -5605,12 +5628,16 @@ function renderPLView(d) {
       (Array.isArray(arr) && arr[i] !== undefined) ? arr[i] : '');
     const _bArr = _toDense(row.b);
     const _aArr = _toDense(row.a);
-    _bArr.forEach((v, i) => { html += `<td class="budget" tabindex="0" data-cell-key="pl.budget.${row.key}" data-cell-idx="${i}">${v !== '' && v !== undefined ? Number(v).toLocaleString() : '─'}</td>`; });
+    // noEdit の合計/自動計算行は data-cell-key を付与しない（Cells で編集モードに入らない）
+    const _cellAttrB = (i) => row.noEdit ? '' : ` tabindex="0" data-cell-key="pl.budget.${row.key}" data-cell-idx="${i}"`;
+    const _cellAttrA = (i) => row.noEdit ? '' : ` tabindex="0" data-cell-key="pl.actual.${row.key}" data-cell-idx="${i}"`;
+    const _cellStyle = row.noEdit ? ' style="cursor:default;background:var(--bg2)"' : '';
+    _bArr.forEach((v, i) => { html += `<td class="budget"${_cellAttrB(i)}${_cellStyle}>${v !== '' && v !== undefined ? Number(v).toLocaleString() : '─'}</td>`; });
     html += `<td class="budget">${bSum.toLocaleString()}</td></tr>`;
     // actual row
     const aSum = _aArr.reduce((s, v) => s + (Number(v) || 0), 0);
      html += `<tr><td class="l" style="${_ind}"></td><td class="l" style="font-size:9px;font-weight:700;color:var(--text);${_sb2}">実績</td>`;
-    _aArr.forEach((v, i) => { html += `<td class="actual" tabindex="0" data-cell-key="pl.actual.${row.key}" data-cell-idx="${i}">${v !== '' && v !== undefined && v !== null ? Number(v).toLocaleString() : '─'}</td>`; });
+    _aArr.forEach((v, i) => { html += `<td class="actual"${_cellAttrA(i)}${_cellStyle}>${v !== '' && v !== undefined && v !== null ? Number(v).toLocaleString() : '─'}</td>`; });
     html += `<td class="actual">${aSum ? aSum.toLocaleString() : '─'}</td></tr>`;
     // diff row
      html += `<tr><td class="l" style="${_ind}"></td><td class="l" style="font-size:9px;color:var(--text3);${_sb2}">差異</td>`;
@@ -11772,6 +11799,13 @@ async function loadDB() {
   } catch (e) {
     console.warn('loadDB failed, using defaults:', e);
   }
+  // ロード完了後: 売上合計を商品別内訳の合計に同期
+  // (renderPLView を通らずに他ビューが rev を参照するケースに備えるため)
+  try {
+    if (typeof syncRevFromProducts === 'function') {
+      ['2024','2025','2026'].forEach(yr => { if (DB[yr]) syncRevFromProducts(DB[yr]); });
+    }
+  } catch(e) { console.warn('syncRevFromProducts on loadDB:', e); }
 }
 
 // ───────────────────────────────────────────
