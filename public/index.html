@@ -898,11 +898,12 @@ input.cells-edit-input {
 </div>
 
 <!-- ── 対象（エンティティ）切替：ページ全体の最上位階層 ── -->
+<!-- 固定3ボタン + HD会社一覧から動的追加 (renderEntityBar が末尾に append) -->
 <div class="entity-bar" id="entity-bar">
   <span class="ent-label">対象</span>
-  <button class="ent-btn active" data-ent="group" onclick="setEntity('group',this)">🏢 HD連結<span class="ent-sub">グループ全体</span></button>
-  <button class="ent-btn" data-ent="solo" onclick="setEntity('solo',this)">🏛 HD単独<span class="ent-sub">持株会社</span></button>
-  <button class="ent-btn" data-ent="neo" onclick="setEntity('neo',this)">🏪 NEO福岡<span class="ent-sub">子会社</span></button>
+  <button class="ent-btn active" data-ent="group" data-company="" onclick="setEntity('group',this)">🏢 HD連結<span class="ent-sub">グループ全体</span></button>
+  <button class="ent-btn" data-ent="solo" data-company="HD_SOLO" onclick="setEntity('solo',this)">🏛 HD単独<span class="ent-sub">持株会社</span></button>
+  <button class="ent-btn" data-ent="neo" data-company="" onclick="setEntity('neo',this)">🏪 NEO福岡<span class="ent-sub">子会社</span></button>
 </div>
 
 <!-- ── AI経営相談（フローティング・チャット） ── -->
@@ -3017,9 +3018,21 @@ const ENTITY_TITLES = {
 };
 function setEntity(ent, el) {
   currentEntity = ent;
-  try { localStorage.setItem('neo_entity', ent); } catch(e) {}
-  document.querySelectorAll('.entity-bar .ent-btn').forEach(b => b.classList.toggle('active', b.dataset.ent === ent));
-  // 注: タイトルは会社選択ドロップダウン(#company-sel)になったため textContent では上書きしない
+  // data-company 属性で会社スコープを明示指定できる (追加会社ボタン用)。未指定なら COMPANY_FOR フォールバック。
+  const COMPANY_FOR = { neo: '', solo: 'HD_SOLO', group: '' };
+  const wantCompany = (el && el.dataset && el.dataset.company !== undefined)
+    ? (el.dataset.company || '')
+    : (COMPANY_FOR[ent] != null ? COMPANY_FOR[ent] : '');
+  try {
+    localStorage.setItem('neo_entity', ent);
+    localStorage.setItem('neo_entity_company', wantCompany);
+  } catch(e) {}
+  // アクティブ切替: ent + company の組合せで一意に判定
+  document.querySelectorAll('.entity-bar .ent-btn').forEach(b => {
+    const bEnt = b.dataset.ent;
+    const bCid = b.dataset.company || '';
+    b.classList.toggle('active', bEnt === ent && bCid === wantCompany);
+  });
 
   // 対象に属するタブだけ表示
   let firstTab = null, firstBtn = null;
@@ -3030,10 +3043,7 @@ function setEntity(ent, el) {
     if (show && !firstTab) { firstTab = b.dataset.tab; firstBtn = b; }
   });
 
-  // 財務データの会社スコープを対象に合わせて切替（solo=HD単独専用 fiscal_data、neo/group=NEOベース）
-  // ※ 既存の switchCompany(currentCompanyId / fiscal_data.company_id) 機構を利用
-  const COMPANY_FOR = { neo: '', solo: 'HD_SOLO', group: '' };
-  const wantCompany = COMPANY_FOR[ent] || '';
+  // 財務データの会社スコープを対象に合わせて切替
   if (typeof switchCompany === 'function' && (typeof currentCompanyId === 'undefined' || (currentCompanyId || '') !== wantCompany)) {
     switchCompany(wantCompany); // loadDB → setYear で再描画
   }
@@ -3047,6 +3057,53 @@ function setEntity(ent, el) {
   const activeBelongs = activeTab && (activeTab.dataset.ent || '').split(' ').indexOf(ent) >= 0 && activeTab.style.display !== 'none';
   if (!activeBelongs && firstBtn) sw(firstTab, firstBtn);
 }
+
+// ─────────────────────────────────────────────
+// 対象バーの動的描画: HD.state.companies から子会社/関連会社を末尾に追加
+// - HD_SOLO と 元の3ボタン(HD連結/HD単独/NEO福岡) は固定
+// - 追加会社ボタン: data-ent="neo" (=子会社と同じタブセット) + data-company="{id}"
+// - HD 側で会社が追加/削除/リネームされたら再呼び出しで同期
+// ─────────────────────────────────────────────
+function renderEntityBar() {
+  const bar = document.getElementById('entity-bar');
+  if (!bar) return;
+  const comps = (window.HD && window.HD.state && window.HD.state.companies) || [];
+  // 既存の追加ボタンを一旦全削除 (data-dynamic="1" が目印)
+  bar.querySelectorAll('.ent-btn[data-dynamic="1"]').forEach(b => b.remove());
+  // 親会社(HD)は HD連結/HD単独 で既に表現済のためスキップ。
+  // 子会社/関連会社 のみを追加ボタン化。ただし NEO福岡 相当 (data-company="" 既存) と重複しないように、
+  // 既に data-company="{id}" が固定ボタンに存在する場合はスキップ。
+  const fixedCompanyIds = new Set(Array.from(bar.querySelectorAll('.ent-btn:not([data-dynamic="1"])')).map(b => b.dataset.company || ''));
+  const iconOf = t => t === '親会社' ? '🏢' : t === '関連会社' ? '🔗' : '🏪';
+  const subOf = t => t === '親会社' ? '親会社' : t === '関連会社' ? '関連会社' : '子会社';
+  comps.forEach(co => {
+    if (!co || co.is_active === false) return;
+    if (co.type === '親会社') return; // HD単独で表現済
+    if (fixedCompanyIds.has(co.id)) return;
+    const btn = document.createElement('button');
+    btn.className = 'ent-btn';
+    btn.setAttribute('data-ent', 'neo');
+    btn.setAttribute('data-company', co.id);
+    btn.setAttribute('data-dynamic', '1');
+    btn.setAttribute('onclick', "setEntity('neo',this)");
+    btn.innerHTML = iconOf(co.type) + ' ' + (co.name || co.id) + '<span class="ent-sub">' + subOf(co.type) + '</span>';
+    bar.appendChild(btn);
+  });
+  // 現在の active 状態を維持するため setEntity 再実行はしないが、
+  // localStorage の company が新規追加ボタンに合致する場合は復元
+  try {
+    const savedEnt = localStorage.getItem('neo_entity');
+    const savedCid = localStorage.getItem('neo_entity_company');
+    if (savedEnt && savedCid) {
+      const match = bar.querySelector('.ent-btn[data-ent="' + savedEnt + '"][data-company="' + savedCid + '"]');
+      if (match && !match.classList.contains('active')) {
+        bar.querySelectorAll('.ent-btn').forEach(b => b.classList.remove('active'));
+        match.classList.add('active');
+      }
+    }
+  } catch(e){}
+}
+window.renderEntityBar = renderEntityBar;
 
 function setYear(y, el) {
   currentYear = y;
@@ -12128,8 +12185,14 @@ window.addEventListener('load', async () => {
 
   // 対象（エンティティ）を復元・適用（既定は HD連結）。タブ復元の後に実行して対象が支配する。
   try {
+    // HD.init は initCompanySelector 側で早期起動されるが、renderEntityBar が非同期の
+    // loadRemote 完了後に走ることがあるため、まず現在の state で 1 度描画してからボタン検索する。
+    if (typeof window.renderEntityBar === 'function') window.renderEntityBar();
     const savedEnt = localStorage.getItem('neo_entity') || 'group';
-    const entBtn = document.querySelector('.entity-bar .ent-btn[data-ent="' + savedEnt + '"]');
+    const savedCid = localStorage.getItem('neo_entity_company') || '';
+    // ent + company の完全一致を優先、なければ ent のみ一致で妥協
+    let entBtn = document.querySelector('.entity-bar .ent-btn[data-ent="' + savedEnt + '"][data-company="' + savedCid + '"]');
+    if (!entBtn) entBtn = document.querySelector('.entity-bar .ent-btn[data-ent="' + savedEnt + '"]');
     setEntity(savedEnt, entBtn);
   } catch(e) { console.warn('restore entity:', e); }
 });
@@ -16986,8 +17049,12 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       fillPeriodSelects();
       renderCurrentPanel();
+      if (typeof window.renderEntityBar === 'function') window.renderEntityBar();
       const ok = await loadRemote();
-      if (ok){ fillFinCompanySelect(); renderCurrentPanel(); }
+      if (ok){
+        fillFinCompanySelect(); renderCurrentPanel();
+        if (typeof window.renderEntityBar === 'function') window.renderEntityBar();
+      }
     },
     onYearMonthChange: function(){
       const ys = $('hd-year'), ms = $('hd-month');
@@ -17038,6 +17105,8 @@ document.addEventListener('DOMContentLoaded', function() {
       saveLocal(); upsertCompany(co);
       HD.closeAddModal();
       renderCompanies(); fillFinCompanySelect();
+      if (typeof window.renderEntityBar === 'function') window.renderEntityBar();
+      if (typeof window.initCompanySelector === 'function') window.initCompanySelector();
     },
     updateCompany: function(id, field, value){
       const co = state.companies.find(c => c.id === id); if (!co) return;
@@ -17050,7 +17119,12 @@ document.addEventListener('DOMContentLoaded', function() {
       else co[field] = value;
       saveLocal(); upsertCompany(co);
       // 連結対象・有効・名称・種別はセレクト類や連結に波及するため再描画
-      if (field === 'name' || field === 'is_active' || field === 'consolidate') { fillFinCompanySelect(); }
+      if (field === 'name' || field === 'is_active' || field === 'consolidate' || field === 'type') { fillFinCompanySelect(); }
+      // 対象バーへの反映（名称/有効/種別が変わったとき）
+      if (field === 'name' || field === 'is_active' || field === 'type') {
+        if (typeof window.renderEntityBar === 'function') window.renderEntityBar();
+        if (typeof window.initCompanySelector === 'function') window.initCompanySelector();
+      }
     },
     deleteCompany: function(id){
       const co = state.companies.find(c => c.id === id);
@@ -17060,6 +17134,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (state.finCompanyId === id) state.finCompanyId = state.companies.length ? state.companies[0].id : null;
       saveLocal(); deleteRemote('holdings_companies', id);
       renderCompanies(); fillFinCompanySelect();
+      if (typeof window.renderEntityBar === 'function') window.renderEntityBar();
+      if (typeof window.initCompanySelector === 'function') window.initCompanySelector();
     },
     setFin: function(code, value){
       const cid = state.finCompanyId; if (!cid) return;
