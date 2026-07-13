@@ -900,14 +900,15 @@ input.cells-edit-input {
 </div>
 
 <!-- ── 対象（エンティティ）切替：ページ全体の最上位階層 ── -->
-<!-- 株式会社NEO 自体が親会社 (HDホールディング会社は存在しない)。
-     NEOグループ連結 / 株式会社NEO単体 / 子会社 の3区分。
-     固定3ボタン + 会社一覧から動的追加 (renderEntityBar が末尾に append) -->
+<!-- 実態: 株式会社NEO 自体が親会社。HDホールディング会社は存在しない。
+     旧「NEO福岡 子会社」(data-company="") が実際の 株式会社NEO 単体データを保持しているため、
+     ラベルのみ「株式会社NEO単体」に付け替え、data-company は "" のまま保持 (既存データを維持)。
+     旧「HD単独 (data-company=HD_SOLO)」ボタンは実在しない会社を指していたため撤去。
+     子会社は会社一覧から動的追加 (renderEntityBar が末尾に append)。 -->
 <div class="entity-bar" id="entity-bar">
   <span class="ent-label">対象</span>
   <button class="ent-btn active" data-ent="group" data-company="" onclick="setEntity('group',this)">🏢 NEOグループ連結<span class="ent-sub">グループ全体</span></button>
-  <button class="ent-btn" data-ent="solo" data-company="HD_SOLO" onclick="setEntity('solo',this)">🏛 株式会社NEO単体<span class="ent-sub">親会社単体</span></button>
-  <button class="ent-btn" data-ent="neo" data-company="" onclick="setEntity('neo',this)">🏪 NEO福岡<span class="ent-sub">子会社</span></button>
+  <button class="ent-btn" data-ent="neo" data-company="" onclick="setEntity('neo',this)">🏛 株式会社NEO単体<span class="ent-sub">親会社単体</span></button>
 </div>
 
 <!-- ── AI経営相談（フローティング・チャット） ── -->
@@ -12249,16 +12250,19 @@ window.addEventListener('load', async () => {
     } catch(e){}
   })();
 
-  // 対象（エンティティ）を復元・適用（既定は HD連結）。タブ復元の後に実行して対象が支配する。
+  // 対象（エンティティ）を復元・適用（既定は NEOグループ連結）。タブ復元の後に実行して対象が支配する。
   try {
     // HD.init は initCompanySelector 側で早期起動されるが、renderEntityBar が非同期の
     // loadRemote 完了後に走ることがあるため、まず現在の state で 1 度描画してからボタン検索する。
     if (typeof window.renderEntityBar === 'function') window.renderEntityBar();
-    const savedEnt = localStorage.getItem('neo_entity') || 'group';
-    const savedCid = localStorage.getItem('neo_entity_company') || '';
-    // ent + company の完全一致を優先、なければ ent のみ一致で妥協
+    let savedEnt = localStorage.getItem('neo_entity') || 'group';
+    let savedCid = localStorage.getItem('neo_entity_company') || '';
+    // 後方互換: 旧 "solo" (=HD_SOLO ボタン) は撤去済のため、"neo" (株式会社NEO単体) に移行
+    if (savedEnt === 'solo') { savedEnt = 'neo'; savedCid = ''; try { localStorage.setItem('neo_entity', 'neo'); localStorage.setItem('neo_entity_company', ''); } catch(e){} }
+    // ent + company の完全一致を優先、なければ ent のみ一致で妥協、それもなければ group にフォールバック
     let entBtn = document.querySelector('.entity-bar .ent-btn[data-ent="' + savedEnt + '"][data-company="' + savedCid + '"]');
     if (!entBtn) entBtn = document.querySelector('.entity-bar .ent-btn[data-ent="' + savedEnt + '"]');
+    if (!entBtn) { savedEnt = 'group'; entBtn = document.querySelector('.entity-bar .ent-btn[data-ent="group"]'); }
     setEntity(savedEnt, entBtn);
   } catch(e) { console.warn('restore entity:', e); }
 });
