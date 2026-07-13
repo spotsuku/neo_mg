@@ -1249,7 +1249,7 @@ input.cells-edit-input {
     </div>
     <div class="card">
       <div class="ct">CF詳細テーブル（千円）</div>
-      <div class="scroll-x" id="cf-table-wrap" style="overflow-x:auto;overflow-y:clip"></div>
+      <div class="scroll-x" id="cf-table-wrap" style="overflow:auto;max-height:70vh"></div>
     </div>
   </div>
 
@@ -1331,7 +1331,7 @@ input.cells-edit-input {
   </div>
   <div class="card">
     <div class="ct">📋 月次 予算 / 実績（千円）</div>
-    <div id="prod-monthly" style="overflow-x:auto"></div>
+    <div id="prod-monthly" style="overflow:auto;max-height:70vh"></div>
   </div>
 </div>
 
@@ -1635,8 +1635,8 @@ input.cells-edit-input {
     <!-- 月次入力テーブル -->
     <div class="card">
       <div class="ct">月次PL入力テーブル（千円）— テーブルかグラフのどちらからでも編集できます</div>
-      <div class="scroll-x">
-        <table id="sim-pl-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%;table-layout:fixed"></table>
+      <div class="scroll-x" style="max-height:70vh;overflow:auto">
+        <table id="sim-pl-input-table" style="border-collapse:separate;border-spacing:0;font-size:11px;min-width:900px;width:100%;table-layout:fixed"></table>
       </div>
       <div id="sim-pl-add-area"></div>
     </div>
@@ -1768,8 +1768,8 @@ input.cells-edit-input {
     </div>
     <div class="card">
       <div class="ct">月次CF入力テーブル（千円）</div>
-      <div class="scroll-x">
-        <table id="sim-cf-input-table" style="border-collapse:collapse;font-size:11px;min-width:900px;width:100%;table-layout:fixed"></table>
+      <div class="scroll-x" style="max-height:70vh;overflow:auto">
+        <table id="sim-cf-input-table" style="border-collapse:separate;border-spacing:0;font-size:11px;min-width:900px;width:100%;table-layout:fixed"></table>
       </div>
       <div style="font-size:10px;color:var(--text3);margin-top:6px">※ 月初残高は前月末残高から自動計算。最初の月のみ手動入力してください。</div>
       <div id="sim-cf-add-area"></div>
@@ -2260,7 +2260,7 @@ input.cells-edit-input {
   <!-- カテゴリ×月マトリックス -->
   <div class="card">
     <div class="ct">カテゴリ×月 マトリックス — <span id="ed-table-year">2025年度</span>（4-3月・千円）</div>
-    <div class="scroll-x" id="ed-matrix-wrap" style="font-size:11px"></div>
+    <div class="scroll-x" id="ed-matrix-wrap" style="font-size:11px;max-height:70vh;overflow:auto"></div>
   </div>
 
   <!-- 明細（全件編集可） -->
@@ -2927,9 +2927,9 @@ window.PRODUCTS = (function(){
     const aAll=D.map(def=>arr(d,'actual',def));
     const sumAt=(arrs,i)=>arrs.reduce((s,a)=>s+(a[i]||0),0);
     const revB=revArr(d,'budget'), revA=revArr(d,'actual');
-    let h=`<table id="prod-pl-table" class="dt" style="min-width:${140+N*58}px;border-collapse:separate;border-spacing:0;font-size:11px"><thead><tr><th class="l" style="position:sticky;left:0;background:var(--bg2);min-width:140px">商品 / 区分</th>`;
-    (d.months||[]).forEach((m,i)=>{ h+=`<th style="${i===li?'color:var(--tc-blue)':''}">${mlab(m)}</th>`; });
-    h+=`<th>合計</th></tr></thead><tbody>`;
+    let h=`<table id="prod-pl-table" class="dt" style="min-width:${140+N*58}px;border-collapse:separate;border-spacing:0;font-size:11px"><thead><tr><th class="l" style="position:sticky;left:0;top:0;background:var(--bg2);min-width:140px;z-index:5">商品 / 区分</th>`;
+    (d.months||[]).forEach((m,i)=>{ h+=`<th style="position:sticky;top:0;background:var(--bg2);z-index:3;${i===li?'color:var(--tc-blue)':''}">${mlab(m)}</th>`; });
+    h+=`<th style="position:sticky;top:0;background:var(--bg2);z-index:3">合計</th></tr></thead><tbody>`;
     D.forEach((def,di)=>{
       const bA=bAll[di], aA=aAll[di], tA=tgtMArr(d,def.key);
       const _ren=`<span onclick="event.stopPropagation();window.PRODUCTS.rename('${def.key}')" title="名称を変更" style="cursor:pointer;color:var(--text3);font-size:10px;opacity:.7;margin-left:4px">✎</span>`;
@@ -6529,16 +6529,14 @@ function renderCFView(d) {
   ];
 
   const minW = 100 + d.months.length * 82;
-  // 月ヘッダーはページスクロール時にも固定。topnav が sticky top:0 なのでその実測高さを使う。
-  // タブが折り返して topnav が高くなっても追従できるよう CSS 変数を経由。
-  const stickyTopExpr = 'var(--cf-sticky-top, 56px)';
-  const stickyBase = 'position:sticky;top:' + stickyTopExpr + ';z-index:3;background:var(--bg2);box-shadow:0 2px 0 rgba(60,60,67,0.08),0 3px 6px rgba(16,24,40,0.04)';
+  // 月ヘッダー行は wrapper (max-height:70vh + overflow:auto) の内部スクロールで sticky top:0 に固定。
+  const stickyBase = 'position:sticky;top:0;z-index:3;background:var(--bg2);box-shadow:0 2px 0 rgba(60,60,67,0.08),0 3px 6px rgba(16,24,40,0.04)';
   let html = `<table class="dt" style="min-width:${minW}px;width:100%;border-collapse:separate;border-spacing:0">
     <thead><tr>
       <th class="l" style="min-width:130px;${stickyBase}">科目</th>
       <th class="l" style="min-width:36px;${stickyBase}">区分</th>
       ${months.map(m=>`<th style="min-width:72px;${stickyBase}">${m}</th>`).join('')}
-      <th style="position:sticky;top:${stickyTopExpr};z-index:3;background:rgba(10,132,255,0.15);border-left:2px solid rgba(10,132,255,0.3);box-shadow:0 2px 0 rgba(60,60,67,0.08),0 3px 6px rgba(16,24,40,0.04)">合計</th>
+      <th style="position:sticky;top:0;z-index:3;background:rgba(10,132,255,0.15);border-left:2px solid rgba(10,132,255,0.3);box-shadow:0 2px 0 rgba(60,60,67,0.08),0 3px 6px rgba(16,24,40,0.04)">合計</th>
     </tr></thead><tbody>`;
 
   rows.forEach(row => {
@@ -9715,9 +9713,10 @@ function buildSimPLTable() {
 
   const cellStyle = 'border:1px solid var(--border);padding:0;';
   const inputStyle = 'box-sizing:border-box;width:100%;padding:4px 5px;border:none;background:transparent;color:var(--text);font-size:11px;text-align:right;font-family:inherit;min-width:58px;';
-  const thStyle = 'background:var(--bg2);color:var(--text3);font-size:10px;font-weight:700;padding:5px 6px;border:1px solid var(--border);white-space:nowrap;text-align:center;';
+  // 月ヘッダー行を sticky top:0 に固定 (wrapper が max-height:70vh で内部スクロール)
+  const thStyle = 'background:var(--bg2);color:var(--text3);font-size:10px;font-weight:700;padding:5px 6px;border:1px solid var(--border);white-space:nowrap;text-align:center;position:sticky;top:0;z-index:3;';
   const labelStyle = 'background:var(--bg2);color:var(--text2);font-size:10px;padding:5px 8px;border:1px solid var(--border);white-space:nowrap;position:sticky;left:0;z-index:2;';
-  const thLabelStyle = thStyle + 'position:sticky;left:0;z-index:3;text-align:left;';
+  const thLabelStyle = thStyle + 'left:0;z-index:5;text-align:left;';
 
   // 列幅を固定（4月などコンテンツが多い列だけ広がるのを防ぐ）
   const colGroup = `<colgroup>`
@@ -9860,9 +9859,10 @@ function buildSimCFTable() {
 
   const cellStyle = 'border:1px solid var(--border);padding:0;';
   const inputStyle = 'box-sizing:border-box;width:100%;padding:4px 5px;border:none;background:transparent;color:var(--text);font-size:11px;text-align:right;font-family:inherit;min-width:58px;';
-  const thStyle = 'background:var(--bg2);color:var(--text3);font-size:10px;font-weight:700;padding:5px 6px;border:1px solid var(--border);white-space:nowrap;text-align:center;';
+  // 月ヘッダー行を sticky top:0 に固定 (wrapper が max-height:70vh で内部スクロール)
+  const thStyle = 'background:var(--bg2);color:var(--text3);font-size:10px;font-weight:700;padding:5px 6px;border:1px solid var(--border);white-space:nowrap;text-align:center;position:sticky;top:0;z-index:3;';
   const labelStyle = 'background:var(--bg2);color:var(--text2);font-size:10px;padding:5px 8px;border:1px solid var(--border);white-space:nowrap;position:sticky;left:0;z-index:2;';
-  const thLabelStyleCf = thStyle + 'position:sticky;left:0;z-index:3;text-align:left;';
+  const thLabelStyleCf = thStyle + 'left:0;z-index:5;text-align:left;';
 
   // 列幅を固定（4月などコンテンツが多い列だけ広がるのを防ぐ）
   const colGroup = `<colgroup>`
@@ -18577,9 +18577,11 @@ document.addEventListener('DOMContentLoaded', function() {
       wrap.innerHTML = '<div style="color:var(--text3);padding:12px;font-size:11px">この年度はカテゴリ別集計データがありません（詳細明細のみ）</div>';
       return;
     }
-    let h = '<table class="dt" style="min-width:980px"><thead><tr><th class="l">カテゴリ</th>';
-    M_LABELS.forEach(m => h += '<th>'+m+'</th>');
-    h += '<th style="background:rgba(0,122,255,0.08)">年度合計</th></tr></thead><tbody>';
+    // 月ヘッダー行を sticky top:0 に固定 (wrapper max-height:70vh + overflow:auto)
+    let h = '<table class="dt" style="min-width:980px;border-collapse:separate;border-spacing:0"><thead><tr>'
+      + '<th class="l" style="position:sticky;left:0;top:0;z-index:5;background:var(--bg2)">カテゴリ</th>';
+    M_LABELS.forEach(m => h += '<th style="position:sticky;top:0;z-index:3;background:var(--bg2)">'+m+'</th>');
+    h += '<th style="position:sticky;top:0;z-index:3;background:rgba(0,122,255,0.08)">年度合計</th></tr></thead><tbody>';
     const totals = Array(12).fill(0);
     CAT_ORDER.forEach(cat => {
       const arr = cats[cat] || Array(12).fill(0);
