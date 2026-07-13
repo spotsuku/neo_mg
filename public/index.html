@@ -3309,23 +3309,36 @@ function updateWeeklyKPIs() {
       }
     }
 
-    // ターゲット月（lastActualIdx）にCF実績があるか判定
-    // ※ ストアcfClose 単独は「古い期末残高だけが残っている」可能性があるため
-    //   「実績反映済み」とは見做さない。BS現預金 or 入金/出金 が入っていることを必須とする。
-    const i = lastActualIdx;
+    // 「最新実績月の月末残高」を採用する。
+    // 資金繰り予測(renderCashFlowForecast)の起点と揃えるため、
+    // BS現預金 > storedClose > 実績純CFロール の優先順で最終実績月末を決定。
+    // (以前は「target月に実績が無ければ予算月末に fallback」していたため、
+    //  予算 4-6月の残高ロール = 現金残高 → 資金繰り予測の実績起点 と乖離していた)
+    let i = lastActualIdx;
+    // 実績データが1つでも入っている最終月を探し直す (bsCash / cfClose / 入金 / 出金 のいずれか)
+    for (let k = N - 1; k >= 0; k--) {
+      const bsCk = Number(d.bs?.actual?.[k]?.cash) || 0;
+      const ccAk = Number(d.cf?.actual?.cfClose?.[k]) || 0;
+      const nk   = netCFOf('actual', k);
+      if (bsCk !== 0 || ccAk !== 0 || nk.inflow > 0 || (nk.cogs + nk.opex + nk.invest + nk.finOut) > 0) {
+        i = k; break;
+      }
+    }
     const bsCi = Number(d.bs?.actual?.[i]?.cash) || 0;
     const aN   = netCFOf('actual', i);
     const monthHasActual = bsCi !== 0
                         || aN.inflow > 0
                         || (aN.cogs + aN.opex + aN.invest + aN.finOut) > 0;
-
-    if (monthHasActual) {
+    // 実績月末を優先。実績が全く無い年度のみ予算月末を採用。
+    if (monthHasActual || Number(d.cf?.actual?.cfClose?.[i]) > 0) {
       lastCash = aCloseDisplay[i];
       lastCashIsActual = true;
     } else {
       lastCash = bCloseDisplay[i];
       lastCashIsActual = false;
     }
+    // lastActualIdx を実績月末の月に更新（サブラベル "◯月末実績" を正しく表示するため）
+    lastActualIdx = i;
 
     // 診断用: コンソールから window.__cashDebug() で値を確認できる
     try {
@@ -3540,9 +3553,10 @@ function renderExecDashboard(ctx){
     if (!ctx.hasActual) {
       $('exec-runway-sub').textContent = 'バーンレート未確定';
     } else if (Number(ctx.burnrate) <= 0) {
-      $('exec-runway-sub').textContent = `バーンレートが0以下のため算出不可 ・ 残高 ${ctx.lastCash ? (ctx.lastCash/10).toLocaleString()+'千円' : '—'}`;
+      // ctx.lastCash は既に千円単位。/10 は誤り (10倍表示ずれの原因) だったため撤去。
+      $('exec-runway-sub').textContent = `バーンレートが0以下のため算出不可 ・ 残高 ${ctx.lastCash ? Math.round(ctx.lastCash).toLocaleString()+'千円' : '—'}`;
     } else {
-      $('exec-runway-sub').textContent = `バーンレート ${(ctx.burnrate||0).toLocaleString()}千円/月 ・ 残高 ${ctx.lastCash ? (ctx.lastCash/10).toLocaleString()+'千円' : '—'}`;
+      $('exec-runway-sub').textContent = `バーンレート ${(ctx.burnrate||0).toLocaleString()}千円/月 ・ 残高 ${ctx.lastCash ? Math.round(ctx.lastCash).toLocaleString()+'千円' : '—'}`;
     }
   }
 
