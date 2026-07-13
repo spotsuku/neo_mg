@@ -442,9 +442,9 @@ input.cells-edit-input {
 #sec-payroll .wf-pl-table th,#sec-payroll .wf-pl-table td{padding:4px 6px;font-size:10px}
 #sec-payroll .wf-pl-table th.month-col{min-width:62px;text-align:center}
 #sec-payroll .wf-pl-table td.member-name{position:sticky;left:0;background:var(--bg)!important;z-index:1;text-align:left;font-weight:600;min-width:140px;border-right:2px solid var(--text)}
-/* 月ヘッダー行を topnav の下にsticky固定（--cf-sticky-top は動的計測） */
-#sec-payroll .wf-pl-table thead th{position:sticky;top:var(--cf-sticky-top, 56px);z-index:2}
-#sec-payroll .wf-pl-table thead th.member-name-head{position:sticky;left:0;top:var(--cf-sticky-top, 56px);z-index:3;border-right:2px solid var(--text)}
+/* 月ヘッダー行は sticky 化しない (wrapper overflow との相性で表示位置が
+   崩れるケースがあるため、シンプルな通常配置に戻す) */
+#sec-payroll .wf-pl-table thead th.member-name-head{position:sticky;left:0;z-index:2;border-right:2px solid var(--text)}
 #sec-payroll .pay-cell{width:58px;padding:3px 5px;border:1px solid transparent;border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:transparent;color:var(--text);font-family:inherit}
 #sec-payroll .pay-cell:focus{outline:2px solid #0a84ff;background:var(--bg)}
 #sec-payroll .pay-cell.has-val{background:rgba(232,244,255,0.18);font-weight:600}
@@ -2024,7 +2024,7 @@ input.cells-edit-input {
       <button class="btn" onclick="PAYROLL.copyAcrossMonths()" style="font-size:10px;padding:3px 10px" title="行内の全月セルを左端の値で埋める">→ 全月にコピー</button>
       <button class="btn" onclick="PAYROLL.resetToWorkforce()" style="font-size:10px;padding:3px 10px" title="工数管理の年額を12等分してリセット">⟲ 年額から12等分</button>
     </div>
-    <div id="payroll-scroll-wrap" style="overflow-x:auto;overflow-y:clip"><table class="wf-pl-table" id="payroll-table" style="min-width:1200px"></table></div>
+    <div id="payroll-scroll-wrap" style="overflow-x:auto"><table class="wf-pl-table" id="payroll-table" style="min-width:1200px"></table></div>
   </div>
 
   <!-- 月別合計の推移グラフ -->
