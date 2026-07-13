@@ -900,11 +900,13 @@ input.cells-edit-input {
 </div>
 
 <!-- ── 対象（エンティティ）切替：ページ全体の最上位階層 ── -->
-<!-- 固定3ボタン + HD会社一覧から動的追加 (renderEntityBar が末尾に append) -->
+<!-- 株式会社NEO 自体が親会社 (HDホールディング会社は存在しない)。
+     NEOグループ連結 / 株式会社NEO単体 / 子会社 の3区分。
+     固定3ボタン + 会社一覧から動的追加 (renderEntityBar が末尾に append) -->
 <div class="entity-bar" id="entity-bar">
   <span class="ent-label">対象</span>
-  <button class="ent-btn active" data-ent="group" data-company="" onclick="setEntity('group',this)">🏢 HD連結<span class="ent-sub">グループ全体</span></button>
-  <button class="ent-btn" data-ent="solo" data-company="HD_SOLO" onclick="setEntity('solo',this)">🏛 HD単独<span class="ent-sub">持株会社</span></button>
+  <button class="ent-btn active" data-ent="group" data-company="" onclick="setEntity('group',this)">🏢 NEOグループ連結<span class="ent-sub">グループ全体</span></button>
+  <button class="ent-btn" data-ent="solo" data-company="HD_SOLO" onclick="setEntity('solo',this)">🏛 株式会社NEO単体<span class="ent-sub">親会社単体</span></button>
   <button class="ent-btn" data-ent="neo" data-company="" onclick="setEntity('neo',this)">🏪 NEO福岡<span class="ent-sub">子会社</span></button>
 </div>
 
@@ -2021,7 +2023,7 @@ input.cells-edit-input {
       <button class="btn" onclick="PAYROLL.copyAcrossMonths()" style="font-size:10px;padding:3px 10px" title="行内の全月セルを左端の値で埋める">→ 全月にコピー</button>
       <button class="btn" onclick="PAYROLL.resetToWorkforce()" style="font-size:10px;padding:3px 10px" title="工数管理の年額を12等分してリセット">⟲ 年額から12等分</button>
     </div>
-    <div style="overflow-x:auto;overflow-y:clip"><table class="wf-pl-table" id="payroll-table" style="min-width:1200px"></table></div>
+    <div id="payroll-scroll-wrap" style="overflow-x:auto;overflow-y:clip"><table class="wf-pl-table" id="payroll-table" style="min-width:1200px"></table></div>
   </div>
 
   <!-- 月別合計の推移グラフ -->
