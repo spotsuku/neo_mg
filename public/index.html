@@ -449,6 +449,10 @@ input.cells-edit-input {
 /* セクションヘッダー (正社員 / 業務委託) */
 #sec-payroll .wf-section-head td{background:var(--bg2)!important;color:var(--text)!important;font-weight:700;font-size:11px;padding:8px 10px!important;border-top:2px solid var(--border2);letter-spacing:.02em}
 #sec-payroll .wf-section-head td:first-child{position:sticky;left:0;background:var(--bg2)!important;z-index:1;text-align:left}
+/* 区分ごとの小計行 (正社員 小計 / 業務委託 小計) */
+#sec-payroll .wf-section-sub td{background:var(--bg3)!important;font-weight:700;font-size:11px;border-top:1px solid var(--border);border-bottom:2px solid var(--border2)}
+#sec-payroll .wf-section-sub td.member-name{position:sticky;left:0;background:var(--bg3)!important;z-index:1}
+#sec-payroll .wf-section-sub .pay-row-total{background:var(--bg2)!important;color:var(--text)!important}
 /* D&D 補助スタイル */
 #sec-payroll .wf-drag-handle{cursor:grab;color:var(--text3);padding:0 4px;user-select:none;display:inline-block;font-size:12px}
 #sec-payroll .wf-drag-handle:active{cursor:grabbing}
@@ -16148,10 +16152,13 @@ document.addEventListener('DOMContentLoaded', function() {
         + '<td colspan="' + COLSPAN + '">■ ' + type + ' <span style="color:var(--text3);font-weight:500">' + cnt + '名</span>'
         + (cnt === 0 ? '  <span style="font-size:10px;color:var(--text3);font-weight:400">（ここへドラッグ&ドロップで移動）</span>' : '')
         + '</td></tr>';
+      // セクション内の月別小計 (メンバー描画中に累積)
+      const secMonth = Array(12).fill(0);
       idxs.forEach(idx => {
         const m = members[idx];
         const monthly = m.costMonthly || Array(12).fill(0);
         const yearTotal = monthly.reduce((s,v) => s + (Number(v)||0), 0);
+        monthly.forEach((v, mi) => { secMonth[mi] += Number(v) || 0; });
         html += '<tr draggable="true" data-member-idx="' + idx + '" data-emp-type="' + escapeHtml(type) + '">';
         html += '<td class="wf-drag-handle" title="ドラッグで並び替え">⋮⋮</td>';
         html += '<td><button class="wf-delete-btn" onclick="PAYROLL.deleteMember(' + idx + ')" title="このメンバーを削除（工数管理にも反映）">🗑</button></td>';
@@ -16167,6 +16174,16 @@ document.addEventListener('DOMContentLoaded', function() {
         html += '<td class="pay-row-total">' + fmtK(yearTotal) + '</td>';
         html += '</tr>';
       });
+      // セクションごとの月別小計行 (人数 0 でも表示)
+      const secYear = secMonth.reduce((s,v) => s+v, 0);
+      html += '<tr class="wf-section-sub">';
+      html += '<td></td>';
+      html += '<td></td>';
+      html += '<td class="member-name" style="font-weight:700">' + type + ' 小計</td>';
+      html += '<td></td>';
+      secMonth.forEach(t => { html += '<td style="font-weight:700;color:var(--text)">' + (t ? fmtK(t) : '─') + '</td>'; });
+      html += '<td class="pay-row-total">' + (secYear ? fmtK(secYear) : '─') + '</td>';
+      html += '</tr>';
     });
 
     // 月別合計フッター
