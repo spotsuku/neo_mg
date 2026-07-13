@@ -442,9 +442,20 @@ input.cells-edit-input {
 #sec-payroll .wf-pl-table th,#sec-payroll .wf-pl-table td{padding:4px 6px;font-size:10px}
 #sec-payroll .wf-pl-table th.month-col{min-width:62px;text-align:center}
 #sec-payroll .wf-pl-table td.member-name{position:sticky;left:0;background:var(--bg)!important;z-index:1;text-align:left;font-weight:600;min-width:140px;border-right:2px solid var(--text)}
-/* 月ヘッダー行は sticky 化しない (wrapper overflow との相性で表示位置が
-   崩れるケースがあるため、シンプルな通常配置に戻す) */
-#sec-payroll .wf-pl-table thead th.member-name-head{position:sticky;left:0;z-index:2;border-right:2px solid var(--text)}
+/* 月ヘッダー行を sticky 固定 (wrapper に max-height を指定して内部スクロール
+   コンテナ化しているため、top:0 が確実に効く) */
+#sec-payroll .wf-pl-table thead th{position:sticky;top:0;z-index:2;background:var(--text);color:var(--bg)}
+#sec-payroll .wf-pl-table thead th.member-name-head{position:sticky;left:0;top:0;z-index:3;border-right:2px solid var(--text)}
+/* セクションヘッダー (正社員 / 業務委託) */
+#sec-payroll .wf-section-head td{background:var(--bg2)!important;color:var(--text)!important;font-weight:700;font-size:11px;padding:8px 10px!important;border-top:2px solid var(--border2);letter-spacing:.02em}
+#sec-payroll .wf-section-head td:first-child{position:sticky;left:0;background:var(--bg2)!important;z-index:1;text-align:left}
+/* D&D 補助スタイル */
+#sec-payroll .wf-drag-handle{cursor:grab;color:var(--text3);padding:0 4px;user-select:none;display:inline-block;font-size:12px}
+#sec-payroll .wf-drag-handle:active{cursor:grabbing}
+#sec-payroll tr.wf-dragging{opacity:.4}
+#sec-payroll tr.wf-drop-target-above td{box-shadow:inset 0 3px 0 var(--accent, #0a84ff)}
+#sec-payroll tr.wf-drop-target-below td{box-shadow:inset 0 -3px 0 var(--accent, #0a84ff)}
+#sec-payroll tr.wf-section-head.wf-drop-target td{background:rgba(10,132,255,0.15)!important;box-shadow:inset 0 0 0 2px var(--accent, #0a84ff)}
 #sec-payroll .pay-cell{width:58px;padding:3px 5px;border:1px solid transparent;border-radius:3px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;background:transparent;color:var(--text);font-family:inherit}
 #sec-payroll .pay-cell:focus{outline:2px solid #0a84ff;background:var(--bg)}
 #sec-payroll .pay-cell.has-val{background:rgba(232,244,255,0.18);font-weight:600}
@@ -2024,7 +2035,7 @@ input.cells-edit-input {
       <button class="btn" onclick="PAYROLL.copyAcrossMonths()" style="font-size:10px;padding:3px 10px" title="行内の全月セルを左端の値で埋める">→ 全月にコピー</button>
       <button class="btn" onclick="PAYROLL.resetToWorkforce()" style="font-size:10px;padding:3px 10px" title="工数管理の年額を12等分してリセット">⟲ 年額から12等分</button>
     </div>
-    <div id="payroll-scroll-wrap" style="overflow-x:auto"><table class="wf-pl-table" id="payroll-table" style="min-width:1200px"></table></div>
+    <div id="payroll-scroll-wrap" style="overflow:auto;max-height:70vh;border:1px solid var(--border);border-radius:var(--r)"><table class="wf-pl-table" id="payroll-table" style="min-width:1200px"></table></div>
   </div>
 
   <!-- 月別合計の推移グラフ -->
@@ -16100,6 +16111,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  // 雇用区分 (正社員 / 業務委託) の正規化
+  const EMP_TYPES = ['正社員','業務委託'];
+  function empTypeOf(m){
+    const t = (m && m.employment_type) || '正社員';
+    return EMP_TYPES.indexOf(t) >= 0 ? t : '正社員';
+  }
+
   function renderTable(){
     const tbl = $('payroll-table');
     if (!tbl) return;
@@ -16108,38 +16126,54 @@ document.addEventListener('DOMContentLoaded', function() {
       tbl.innerHTML = '<tr><td style="padding:18px;text-align:center;color:var(--text3);font-size:11px">メンバーがいません。工数管理タブから追加してください。</td></tr>';
       return;
     }
+    const COLSPAN = 4 + 12 + 1; // ハンドル + 削除 + メンバー + → + 12ヶ月 + 年合計
     let html = '<thead><tr>';
-    html += '<th style="background:var(--text);color:var(--bg);min-width:32px"></th>'; // 削除列
-    html += '<th class="member-name-head" style="background:var(--text);color:var(--bg)">メンバー</th>';
-    html += '<th style="background:var(--text);color:var(--bg);min-width:46px" title="行内全月に4月の値を反映">→</th>';
-    MONTH_LABELS_FY.forEach((lbl, i) => {
-      html += '<th class="month-col" style="background:var(--text);color:var(--bg)">' + lbl + '</th>';
+    html += '<th style="min-width:24px" title="ドラッグで並び替え"></th>'; // D&D ハンドル列
+    html += '<th style="min-width:32px"></th>'; // 削除列
+    html += '<th class="member-name-head">メンバー</th>';
+    html += '<th style="min-width:46px" title="行内全月に4月の値を反映">→</th>';
+    MONTH_LABELS_FY.forEach((lbl) => {
+      html += '<th class="month-col">' + lbl + '</th>';
     });
-    html += '<th style="background:var(--bg2);color:var(--text);position:sticky;right:0;z-index:1;min-width:74px">年合計</th>';
+    html += '<th style="position:sticky;right:0;top:0;z-index:3;min-width:74px;background:var(--bg2)!important;color:var(--text)!important">年合計</th>';
     html += '</tr></thead><tbody>';
 
-    members.forEach((m, idx) => {
-      const monthly = m.costMonthly || Array(12).fill(0);
-      const yearTotal = monthly.reduce((s,v) => s + (Number(v)||0), 0);
-      html += '<tr>';
-      html += '<td><button class="wf-delete-btn" onclick="PAYROLL.deleteMember(' + idx + ')" title="このメンバーを削除（工数管理にも反映）">🗑</button></td>';
-      html += '<td class="member-name" onclick="PAYROLL.editMember(' + idx + ')" style="cursor:pointer" title="クリックして名前・役職・能力を編集">' + escapeHtml(m.name || '') +
-        (m.role ? '<br><span style="font-size:9px;color:var(--text3);font-weight:400">' + escapeHtml(m.role) + '</span>' : '') +
-        ' <span style="font-size:9px;color:var(--text3);opacity:.6">✎</span></td>';
-      html += '<td><button class="btn" onclick="PAYROLL.copyRow(' + idx + ')" style="font-size:9px;padding:2px 6px" title="この行の4月の値を全月にコピー">→</button></td>';
-      monthly.forEach((v, mi) => {
-        const cls = (Number(v) > 0) ? 'pay-cell has-val' : 'pay-cell zero';
-        html += '<td><input type="number" class="' + cls + '" value="' + (Number(v)||0) +
-          '" min="0" step="1" onchange="PAYROLL.updateCell(' + idx + ',' + mi + ',this.value)"></td>';
+    // 区分別にグループ化しつつ、元の並び順を保持
+    EMP_TYPES.forEach(type => {
+      const idxs = [];
+      members.forEach((m, i) => { if (empTypeOf(m) === type) idxs.push(i); });
+      // セクションヘッダー (空セクションでも表示: D&D 先として使えるように)
+      const cnt = idxs.length;
+      html += '<tr class="wf-section-head" data-emp-type="' + escapeHtml(type) + '">'
+        + '<td colspan="' + COLSPAN + '">■ ' + type + ' <span style="color:var(--text3);font-weight:500">' + cnt + '名</span>'
+        + (cnt === 0 ? '  <span style="font-size:10px;color:var(--text3);font-weight:400">（ここへドラッグ&ドロップで移動）</span>' : '')
+        + '</td></tr>';
+      idxs.forEach(idx => {
+        const m = members[idx];
+        const monthly = m.costMonthly || Array(12).fill(0);
+        const yearTotal = monthly.reduce((s,v) => s + (Number(v)||0), 0);
+        html += '<tr draggable="true" data-member-idx="' + idx + '" data-emp-type="' + escapeHtml(type) + '">';
+        html += '<td class="wf-drag-handle" title="ドラッグで並び替え">⋮⋮</td>';
+        html += '<td><button class="wf-delete-btn" onclick="PAYROLL.deleteMember(' + idx + ')" title="このメンバーを削除（工数管理にも反映）">🗑</button></td>';
+        html += '<td class="member-name" onclick="PAYROLL.editMember(' + idx + ')" style="cursor:pointer" title="クリックして名前・役職・能力を編集">' + escapeHtml(m.name || '') +
+          (m.role ? '<br><span style="font-size:9px;color:var(--text3);font-weight:400">' + escapeHtml(m.role) + '</span>' : '') +
+          ' <span style="font-size:9px;color:var(--text3);opacity:.6">✎</span></td>';
+        html += '<td><button class="btn" onclick="PAYROLL.copyRow(' + idx + ')" style="font-size:9px;padding:2px 6px" title="この行の4月の値を全月にコピー">→</button></td>';
+        monthly.forEach((v, mi) => {
+          const cls = (Number(v) > 0) ? 'pay-cell has-val' : 'pay-cell zero';
+          html += '<td><input type="number" class="' + cls + '" value="' + (Number(v)||0) +
+            '" min="0" step="1" onchange="PAYROLL.updateCell(' + idx + ',' + mi + ',this.value)"></td>';
+        });
+        html += '<td class="pay-row-total">' + fmtK(yearTotal) + '</td>';
+        html += '</tr>';
       });
-      html += '<td class="pay-row-total">' + fmtK(yearTotal) + '</td>';
-      html += '</tr>';
     });
 
     // 月別合計フッター
     const totals = monthTotalsK();
     const grand = totals.reduce((s,v) => s+v, 0);
     html += '<tr class="pay-month-total">';
+    html += '<td></td>';
     html += '<td></td>';
     html += '<td class="member-name">月別合計（千円）</td>';
     html += '<td></td>';
@@ -16148,6 +16182,101 @@ document.addEventListener('DOMContentLoaded', function() {
     html += '</tr></tbody>';
 
     tbl.innerHTML = html;
+    // D&D バインド
+    bindDragAndDrop(tbl);
+  }
+
+  // ── HTML5 ドラッグ&ドロップ: 並び替え + 区分移動 ──
+  let _dragSrcIdx = null;
+  function bindDragAndDrop(tbl){
+    _dragSrcIdx = null;
+    const clearTargetClasses = () => {
+      tbl.querySelectorAll('tr').forEach(tr => tr.classList.remove('wf-drop-target-above', 'wf-drop-target-below', 'wf-drop-target'));
+    };
+    tbl.querySelectorAll('tr[draggable="true"]').forEach(row => {
+      row.addEventListener('dragstart', e => {
+        _dragSrcIdx = Number(row.dataset.memberIdx);
+        row.classList.add('wf-dragging');
+        try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(_dragSrcIdx)); } catch(err){}
+      });
+      row.addEventListener('dragend', () => {
+        row.classList.remove('wf-dragging');
+        clearTargetClasses();
+        _dragSrcIdx = null;
+      });
+      row.addEventListener('dragover', e => {
+        if (_dragSrcIdx == null) return;
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = 'move'; } catch(err){}
+        clearTargetClasses();
+        const rect = row.getBoundingClientRect();
+        const above = e.clientY < rect.top + rect.height / 2;
+        row.classList.add(above ? 'wf-drop-target-above' : 'wf-drop-target-below');
+      });
+      row.addEventListener('drop', e => {
+        if (_dragSrcIdx == null) return;
+        e.preventDefault();
+        const dstIdx = Number(row.dataset.memberIdx);
+        const dstType = row.dataset.empType || '正社員';
+        const rect = row.getBoundingClientRect();
+        const above = e.clientY < rect.top + rect.height / 2;
+        clearTargetClasses();
+        moveMember(_dragSrcIdx, dstIdx, above ? 'before' : 'after', dstType);
+        _dragSrcIdx = null;
+      });
+    });
+    // セクションヘッダーへのドロップ (空セクション or 末尾に追加)
+    tbl.querySelectorAll('tr.wf-section-head').forEach(sec => {
+      sec.addEventListener('dragover', e => {
+        if (_dragSrcIdx == null) return;
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = 'move'; } catch(err){}
+        clearTargetClasses();
+        sec.classList.add('wf-drop-target');
+      });
+      sec.addEventListener('dragleave', () => sec.classList.remove('wf-drop-target'));
+      sec.addEventListener('drop', e => {
+        if (_dragSrcIdx == null) return;
+        e.preventDefault();
+        const dstType = sec.dataset.empType || '正社員';
+        clearTargetClasses();
+        moveMemberToSection(_dragSrcIdx, dstType);
+        _dragSrcIdx = null;
+      });
+    });
+  }
+
+  // src を dst の before/after に移動 (区分をまたぐと employment_type も更新)
+  function moveMember(srcIdx, dstIdx, position, dstType){
+    const members = getMembers();
+    if (srcIdx === dstIdx) return;
+    const src = members[srcIdx];
+    if (!src) return;
+    src.employment_type = dstType;
+    // srcIdx を配列から抜く
+    members.splice(srcIdx, 1);
+    // 抜いた後の dstIdx を再計算
+    let newDst = dstIdx > srcIdx ? dstIdx - 1 : dstIdx;
+    const insertAt = position === 'before' ? newDst : newDst + 1;
+    members.splice(insertAt, 0, src);
+    renderAll();
+    if (window.WF && window.WF.renderAll) window.WF.renderAll();
+  }
+  // セクションヘッダーへのドロップ: そのセクション末尾に配置
+  function moveMemberToSection(srcIdx, dstType){
+    const members = getMembers();
+    const src = members[srcIdx];
+    if (!src) return;
+    if (empTypeOf(src) === dstType) return; // 同じ区分ならスキップ
+    src.employment_type = dstType;
+    // srcIdx から抜き、dstType の最後の位置に挿入
+    members.splice(srcIdx, 1);
+    // 挿入位置 = 最後の dstType メンバーの次
+    let lastDstIdx = -1;
+    members.forEach((m, i) => { if (empTypeOf(m) === dstType) lastDstIdx = i; });
+    members.splice(lastDstIdx + 1, 0, src);
+    renderAll();
+    if (window.WF && window.WF.renderAll) window.WF.renderAll();
   }
 
   function renderTrendChart(){
