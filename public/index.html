@@ -19145,12 +19145,23 @@ document.addEventListener('DOMContentLoaded', function() {
     return out;
   };
 
+  // 三木智弘＋㈱MIKI 合算比率 (指定ステージ index の顕在ベース / SO込み)
+  function mikiRatio(stageIdx){
+    const MIKI_NAMES = ['三木智弘（代表取締役）','㈱MIKI 三木資産管理会社'];
+    const mikiRows = D.rows.filter(r => MIKI_NAMES.indexOf(r.n) >= 0);
+    const k = mikiRows.reduce((s, r) => s + (Number(r.k?.[stageIdx])||0), 0);
+    const fd = mikiRows.reduce((s, r) => s + (Number(r.k?.[stageIdx])||0) + (Number(r.s?.[stageIdx])||0), 0);
+    // 顕在比率は BASE_K (現在の発行済株数)、SO込み は BASE_K + BASE_SO で除する
+    return { k, fd, ratioK: BASE_K > 0 ? k / BASE_K : 0, ratioFD: (BASE_K + BASE_SO) > 0 ? fd / (BASE_K + BASE_SO) : 0 };
+  }
   function renderKPIs(){
+    const miki = mikiRatio(CURRENT);
     const kpis = [
       ['現在地','プレシリーズA完了','J-KISS転換・代表SO行使済み（2026年7月時点）'],
       ['現在の株価', yen(36500)+'／株', 'プレシリーズA価格（分割調整後の設立時¥100の365倍）'],
       ['現在の時価総額', oku(36500 * BASE_K), 'SO込み ' + oku(36500 * (BASE_K + BASE_SO))],
       ['発行済株式数', num(BASE_K) + '株', 'SO込み ' + num(BASE_K + BASE_SO) + '株'],
+      ['三木家 合算比率', pct(miki.ratioK), '三木智弘 + ㈱MIKI ／ SO込み ' + pct(miki.ratioFD) + ' (' + num(miki.k) + '株)'],
       ['調達累計（設立〜プレA）', oku(282400000), '株主の累計出資ベース（シリーズA想定分を除く）'],
       ['株主数（現在）', '23名', 'ほかSO保有者5名'],
     ];
@@ -19247,10 +19258,28 @@ document.addEventListener('DOMContentLoaded', function() {
     simPie.data.datasets[0].backgroundColor = comp.map(x => COLORS[x[0]]);
     simPie.update();
     const totFD = comp.reduce((a, x) => a + x[2], 0);
-    $('cp-complist').innerHTML = comp.map(row => {
+    // 三木智弘＋㈱MIKI 合算 (代表取締役 実質保有分)
+    const MIKI_KEY = ['三木智弘（代表取締役）','㈱MIKI 三木資産管理会社'];
+    const mikiRows = ROWS.filter(r => MIKI_KEY.some(k => r.n && r.n.indexOf(k.replace('（代表取締役）','')) >= 0));
+    const mikiK = mikiRows.reduce((s, r) => s + (Number(r.k?.[LAST])||0), 0);
+    const mikiFD = mikiRows.reduce((s, r) => s + (Number(r.k?.[LAST])||0) + (Number(r.s?.[LAST])||0), 0);
+    const mikiRatioFD = totFD > 0 ? (mikiFD / totFD) : 0;
+    const mikiRatioK = postK > 0 ? (mikiK / postK) : 0;
+    let html = comp.map(row => {
       const c = row[0], k = row[1], fd = row[2];
       return '<div style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:2px;background:' + COLORS[c] + ';display:inline-block"></span><span style="min-width:150px">' + escapeHtml(c) + '</span><b style="font-variant-numeric:tabular-nums;min-width:52px;text-align:right">' + pct(fd / totFD) + '</b><span style="color:var(--cp-ink2);font-size:10.5px">　顕在 ' + (k > 0 ? pct(k / postK) : '—') + '</span></div>';
     }).join('');
+    // 経営者持分 合算行 (三木智弘 + ㈱MIKI)
+    if (mikiFD > 0) {
+      html += '<div style="margin-top:6px;padding:6px 8px;background:rgba(18,35,61,0.06);border-radius:6px;border-left:3px solid var(--cp-ink);display:flex;align-items:center;gap:6px">'
+        + '<span style="min-width:150px;font-weight:700">👤 三木家 合算</span>'
+        + '<b style="font-variant-numeric:tabular-nums;min-width:52px;text-align:right;color:var(--cp-ink)">' + pct(mikiRatioFD) + '</b>'
+        + '<span style="color:var(--cp-ink2);font-size:10.5px">　顕在 ' + pct(mikiRatioK) + '</span>'
+        + '<span style="color:var(--cp-ink2);font-size:10px;margin-left:auto">' + num(mikiK) + '株</span>'
+        + '</div>'
+        + '<div style="font-size:9.5px;color:var(--cp-ink2);margin-top:2px;padding-left:6px">三木智弘 + ㈱MIKI 三木資産管理会社</div>';
+    }
+    $('cp-complist').innerHTML = html;
   }
 
   function renderTbl(){
@@ -19288,6 +19317,26 @@ document.addEventListener('DOMContentLoaded', function() {
       const catAdd = rs.reduce((a, r) => a + (r.add || 0), 0);
       const sellSub = tStage === LAST ? '<td>' + (cat === FUND_CAT ? '—' : num(catSell)) + '</td><td>' + (cat === FUND_CAT ? '—' : num(catAdd)) + '</td>' : '';
       html += '<tr class="cp-sub"><td>' + escapeHtml(cat) + ' 合計</td><td></td><td></td>' + sellSub + '<td>' + num(sk) + '</td><td>' + num(sf) + '</td><td>' + (totK && sk ? pct(sk / totK) : '—') + '</td><td>' + (totF && sf ? pct(sf / totF) : '—') + '</td><td>' + (si ? yen(si) : '—') + '</td></tr>';
+      // 経営株主 の後に「三木家 合算 (三木智弘 + ㈱MIKI)」ハイライト行を追加
+      if (cat === '経営株主') {
+        const MIKI_NAMES = ['三木智弘（代表取締役）','㈱MIKI 三木資産管理会社'];
+        const mikiRows = ROWS.filter(r => MIKI_NAMES.indexOf(r.n) >= 0);
+        const mk = mikiRows.reduce((a, r) => a + valOf(r, tStage, 'k'), 0);
+        const mf = mikiRows.reduce((a, r) => a + valOf(r, tStage, 'fd'), 0);
+        const mSell = mikiRows.reduce((a, r) => a + (r.sell || 0), 0);
+        const mAdd = mikiRows.reduce((a, r) => a + (r.add || 0), 0);
+        const mikiSellSub = tStage === LAST ? '<td>' + num(mSell) + '</td><td>' + num(mAdd) + '</td>' : '';
+        if (mf > 0) {
+          html += '<tr style="background:rgba(18,35,61,0.06);border-left:3px solid var(--cp-ink)">'
+            + '<td style="font-weight:700;padding-left:10px">└ 三木家 合算 <span style="font-size:9.5px;font-weight:400;color:var(--cp-ink2)">(三木智弘 + ㈱MIKI)</span></td>'
+            + '<td></td><td></td>' + mikiSellSub
+            + '<td style="font-weight:700">' + num(mk) + '</td>'
+            + '<td style="font-weight:700">' + num(mf) + '</td>'
+            + '<td style="font-weight:700">' + (totK && mk ? pct(mk / totK) : '—') + '</td>'
+            + '<td style="font-weight:700">' + (totF && mf ? pct(mf / totF) : '—') + '</td>'
+            + '<td></td></tr>';
+        }
+      }
     }
     const sellTot = tStage === LAST ? '<td>' + num(totalSell) + '</td><td>' + num(totalAdd) + '</td>' : '';
     html += '<tr class="cp-tot"><td>合計（' + escapeHtml(STAGES[tStage].label) + '）</td><td></td><td></td>' + sellTot + '<td>' + num(totK) + '</td><td>' + num(totF) + '</td><td>100.00%</td><td>100.00%</td><td>' + yen(ROWS.reduce((a, r) => a + r.inv, 0)) + '</td></tr>';
