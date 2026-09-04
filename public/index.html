@@ -19636,18 +19636,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ── SVG ドーナツ ──
     const donutSVG = (agg, tot, title) => {
-      const R = 55, C = 2 * Math.PI * R, cx = 75, cy = 75;
+      // 1ページに収めるため小型化 (150→110)
+      const R = 40, C = 2 * Math.PI * R, cx = 55, cy = 55;
       let off = 0;
       const arcs = CATS.map(c => {
         const f = tot ? agg[c] / tot : 0;
-        const el = `<circle r="${R}" fill="none" stroke="${COLORS[c]}" stroke-width="26" stroke-dasharray="${(f*C).toFixed(2)} ${(C-f*C).toFixed(2)}" stroke-dashoffset="${(-off*C).toFixed(2)}"/>`;
+        const el = `<circle r="${R}" fill="none" stroke="${COLORS[c]}" stroke-width="20" stroke-dasharray="${(f*C).toFixed(2)} ${(C-f*C).toFixed(2)}" stroke-dashoffset="${(-off*C).toFixed(2)}"/>`;
         off += f;
         return el;
       }).join('');
-      return `<svg width="150" height="150" viewBox="0 0 150 150" xmlns="http://www.w3.org/2000/svg">
+      return `<svg width="110" height="110" viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg">
         <g transform="translate(${cx},${cy}) rotate(-90)">${arcs}</g>
-        <text x="${cx}" y="${cy-4}" text-anchor="middle" font-size="8" fill="#3d5470">${escapeHtml(title)}</text>
-        <text x="${cx}" y="${cy+10}" text-anchor="middle" font-size="12" font-weight="700" fill="#12233d">${num(tot)}株</text>
+        <text x="${cx}" y="${cy-3}" text-anchor="middle" font-size="7" fill="#3d5470">${escapeHtml(title)}</text>
+        <text x="${cx}" y="${cy+8}" text-anchor="middle" font-size="10" font-weight="700" fill="#12233d">${num(tot)}株</text>
       </svg>`;
     };
 
@@ -19655,7 +19656,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const priceSteps = STAGES.map(s => s.price);
     const maxPrice = Math.max(...priceSteps);
     const stepSVG = (() => {
-      const W = 320, H = 140, ml = 40, mr = 10, mt = 10, mb = 30;
+      // 1ページに収めるため高さ 140→105
+      const W = 320, H = 105, ml = 40, mr = 10, mt = 10, mb = 24;
       const w = W - ml - mr, h = H - mt - mb;
       const n = priceSteps.length;
       const barW = w / n * 0.7;
@@ -19717,29 +19719,30 @@ body { font-family: "Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiry
 .hdr h1 { font-size:16pt; font-weight:800; margin-top:2px; color:#12233d; }
 .hdr .meta { font-size:8pt; color:#3d5470; text-align:right; }
 .hdr .meta b { color:#12233d; font-size:9pt; }
-.kpi-strip { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-bottom:10px; }
-.kpi-box { background:#f7f6f2; border:1px solid #e2e0d8; border-top:3px solid #d9822b; border-radius:5px; padding:6px 8px; }
-.kpi-box .l { font-size:7pt; color:#3d5470; font-weight:700; }
-.kpi-box .v { font-size:12pt; font-weight:800; color:#12233d; margin-top:2px; font-variant-numeric:tabular-nums; }
-.kpi-box .s { font-size:7pt; color:#3d5470; margin-top:1px; }
+.kpi-strip { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; margin-bottom:6px; }
+.kpi-box { background:#f7f6f2; border:1px solid #e2e0d8; border-top:2px solid #d9822b; border-radius:4px; padding:4px 7px; }
+.kpi-box .l { font-size:6.5pt; color:#3d5470; font-weight:700; }
+.kpi-box .v { font-size:11pt; font-weight:800; color:#12233d; margin-top:1px; font-variant-numeric:tabular-nums; }
+.kpi-box .s { font-size:6.5pt; color:#3d5470; margin-top:1px; }
 .grid { display:grid; grid-template-columns:1.15fr 1fr; gap:10px; }
-.section { background:#fff; border:1px solid #e2e0d8; border-radius:6px; padding:8px 10px; margin-bottom:8px; }
-.section h3 { font-size:9pt; font-weight:800; color:#12233d; margin-bottom:6px; padding-bottom:3px; border-bottom:1.5px solid #d9822b; display:flex; align-items:center; gap:5px; }
+.section { background:#fff; border:1px solid #e2e0d8; border-radius:6px; padding:6px 9px; margin-bottom:6px; page-break-inside:avoid; break-inside:avoid; }
+.section h3 { font-size:8.5pt; font-weight:800; color:#12233d; margin-bottom:4px; padding-bottom:2px; border-bottom:1.5px solid #d9822b; display:flex; align-items:center; gap:5px; }
 .section h3::before { content:""; width:6px; height:6px; background:#d9822b; border-radius:1px; }
-.round-tbl { width:100%; font-size:8.5pt; }
-.round-tbl td { padding:3px 6px; border-bottom:1px dotted #e2e0d8; }
+.round-tbl { width:100%; font-size:7.5pt; }
+.round-tbl td { padding:2px 5px; border-bottom:1px dotted #e2e0d8; }
 .round-tbl td:first-child { color:#3d5470; font-weight:600; width:52%; }
 .round-tbl td:last-child { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
 .round-tbl tr.hl td { background:#faf0ee; color:#c1442e; }
 .timeline { list-style:none; }
-.timeline li { display:flex; gap:8px; padding:2px 0; font-size:8pt; border-bottom:1px dotted #e2e0d8; }
+.timeline li { display:flex; gap:8px; padding:1.5px 0; font-size:7.5pt; border-bottom:1px dotted #e2e0d8; }
 .timeline li:last-child { border-bottom:none; }
 .timeline .y { color:#d9822b; font-weight:700; min-width:52px; font-variant-numeric:tabular-nums; }
 .timeline .ev { color:#12233d; }
-.donuts { display:flex; gap:14px; justify-content:center; margin-bottom:6px; }
+.donuts { display:flex; gap:10px; justify-content:center; margin-bottom:2px; }
 .donut-box { text-align:center; }
-.donut-box .cap { font-size:8pt; color:#3d5470; font-weight:700; margin-bottom:3px; }
-.legend { text-align:center; margin-top:2px; font-size:7.5pt; }
+.donut-box .cap { font-size:7pt; color:#3d5470; font-weight:700; margin-bottom:2px; }
+.legend { text-align:center; margin-top:1px; font-size:6.5pt; line-height:1.4; }
+.legend span { margin-right:6px !important; }
 .ftr { position:absolute; bottom:4mm; left:0; right:0; padding:0 4mm; display:flex; justify-content:space-between; font-size:7pt; color:#3d5470; border-top:1px solid #e2e0d8; padding-top:4px; }
 /* Page 2 */
 .holders-tbl { width:100%; border-collapse:collapse; font-size:8pt; }
@@ -19822,12 +19825,12 @@ body { font-family: "Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiry
 
       <div class="section">
         <h3>⑤ チケットサイズ別 想定持分（シリーズA @¥${roundPrice.toLocaleString()}）</h3>
-        <table style="width:100%;border-collapse:collapse;font-size:7.5pt">
+        <table style="width:100%;border-collapse:collapse;font-size:7pt">
           <thead><tr style="background:#12233d;color:#fff">
-            <th style="padding:4px 6px;text-align:left;font-weight:700">チケット</th>
-            <th style="padding:4px 6px;text-align:right;font-weight:700">取得株数</th>
-            <th style="padding:4px 6px;text-align:right;font-weight:700;background:#d9822b">想定持分 (SO込)</th>
-            <th style="padding:4px 6px;text-align:right;font-weight:700">想定持分 (顕在)</th>
+            <th style="padding:2px 5px;text-align:left;font-weight:700">チケット</th>
+            <th style="padding:2px 5px;text-align:right;font-weight:700">取得株数</th>
+            <th style="padding:2px 5px;text-align:right;font-weight:700;background:#d9822b">想定持分 (SO込)</th>
+            <th style="padding:2px 5px;text-align:right;font-weight:700">想定持分 (顕在)</th>
           </tr></thead>
           <tbody>
             ${TICKET_SIZES.map(t => {
@@ -19836,15 +19839,15 @@ body { font-family: "Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiry
               const pFD = (postFD + shares) > 0 ? shares / (postFD + shares) : 0;
               const label = t >= 100000000 ? (t/100000000).toLocaleString('ja-JP') + '億円' : (t/10000).toLocaleString('ja-JP') + '万円';
               return '<tr style="border-bottom:1px solid #eee">'
-                + '<td style="padding:3px 6px;font-weight:700;color:#12233d">¥' + label + '</td>'
-                + '<td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">' + num(shares) + '</td>'
-                + '<td style="padding:3px 6px;text-align:right;font-weight:800;color:#c1442e;background:rgba(217,130,43,0.05);font-variant-numeric:tabular-nums">' + pct(pFD) + '</td>'
-                + '<td style="padding:3px 6px;text-align:right;font-variant-numeric:tabular-nums">' + pct(pK) + '</td>'
+                + '<td style="padding:2px 5px;font-weight:700;color:#12233d">¥' + label + '</td>'
+                + '<td style="padding:2px 5px;text-align:right;font-variant-numeric:tabular-nums">' + num(shares) + '</td>'
+                + '<td style="padding:2px 5px;text-align:right;font-weight:800;color:#c1442e;background:rgba(217,130,43,0.05);font-variant-numeric:tabular-nums">' + pct(pFD) + '</td>'
+                + '<td style="padding:2px 5px;text-align:right;font-variant-numeric:tabular-nums">' + pct(pK) + '</td>'
                 + '</tr>';
             }).join('')}
           </tbody>
         </table>
-        <div style="font-size:6.5pt;color:#3d5470;margin-top:3px">※ NEO1000ファンドは 1口3,000万円 / 想定持分はポストマネー基準</div>
+        <div style="font-size:6pt;color:#3d5470;margin-top:2px">※ NEO1000ファンドは 1口3,000万円 / 想定持分はポストマネー基準 (postK + チケット株数)</div>
       </div>
     </div>
   </div>
