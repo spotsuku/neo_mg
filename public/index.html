@@ -2353,6 +2353,30 @@ input.cells-edit-input {
 
     <div class="cp-kpis" id="cp-kpis"></div>
 
+    <!-- 🎯 新規ラウンド (シリーズA想定) の株価設定 - 変更で全体に自動反映 -->
+    <div class="cp-card" style="margin-bottom:16px;border-top:3px solid var(--cp-court)">
+      <h2 class="cp-h2">🎯 新規ラウンド（シリーズA）株価設定</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;align-items:end">
+        <div>
+          <label style="display:block;font-size:11px;color:var(--cp-ink2);font-weight:700;margin-bottom:4px">想定株価（円/株）</label>
+          <input id="cp-round-price" type="number" min="1000" step="500" value="80000"
+            style="width:100%;padding:10px 12px;border:1px solid var(--cp-line);border-radius:6px;font-size:16px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;color:var(--cp-ink);background:#fff">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;color:var(--cp-ink2);font-weight:700;margin-bottom:4px">ラウンド名（表示ラベル）</label>
+          <input id="cp-round-label" type="text" value="シリーズA後（想定）"
+            style="width:100%;padding:10px 12px;border:1px solid var(--cp-line);border-radius:6px;font-size:13px;color:var(--cp-ink);background:#fff">
+        </div>
+        <div style="font-size:11.5px;color:var(--cp-ink2);line-height:1.7;background:var(--cp-paper);padding:8px 10px;border-radius:6px">
+          <div><b style="color:var(--cp-ink)">プレA(現在)株価: ¥36,500</b></div>
+          <div>倍率: <b id="cp-round-multiple" style="color:var(--cp-court)">2.19倍</b> ／ プレマネー時価: <b id="cp-round-premoney">26.9億円</b></div>
+        </div>
+      </div>
+      <div style="font-size:10.5px;color:var(--cp-ink2);margin-top:8px;line-height:1.7">
+        ここで設定した株価は「NEO1000ファンド シミュレーション」の新規出資株価スライダーと連動し、株価推移グラフ／時価総額／全ラウンドの株数推移／株主名簿（シリーズA後）に即時反映されます。
+      </div>
+    </div>
+
     <div class="cp-grid">
       <div class="cp-card">
         <h2 class="cp-h2">持株比率（区分別）— ラウンド別</h2>
@@ -19470,7 +19494,56 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function recalcAll(){
-    rebuild(); updatePie(); updateBar(); updateSim(); renderTbl();
+    rebuild(); updatePie(); updateBar(); updateSim(); renderTbl(); updatePriceChart(); updateRoundInfo();
+  }
+
+  // 新規ラウンド株価変更時: STAGES[LAST].price を更新し、株価推移チャートを再描画
+  function updatePriceChart(){
+    if (!priceChart) return;
+    STAGES[LAST].price = newPrice;
+    priceChart.data.datasets[0].data = STAGES.map(s => s.price);
+    priceChart.update();
+  }
+  function updateRoundInfo(){
+    // 想定株価カードの倍率・プレマネー時価表示を更新
+    const mult = document.getElementById('cp-round-multiple');
+    const prem = document.getElementById('cp-round-premoney');
+    if (mult) mult.textContent = (newPrice / 36500).toFixed(2) + '倍';
+    if (prem) prem.textContent = oku(newPrice * BASE_K);
+    // 株主追加モーダルの「シリーズA」ラウンド option の値も更新
+    const roundOpt = document.querySelector('#cp-add-round option[value="' + STAGES[LAST].price + '"]');
+    // 株主追加モーダルの price 既定を newPrice に追随させる場合はここで更新
+  }
+  // 想定株価入力 / ラベル入力 の変更を newPrice / STAGES へ反映し、スライダーも同期
+  function onNewRoundPriceChange(){
+    const p = Math.max(1000, Number(document.getElementById('cp-round-price')?.value) || 80000);
+    newPrice = p;
+    STAGES[LAST].price = p;
+    // NEO1000 スライダーとの双方向同期
+    const slider = document.getElementById('cp-i_np');
+    if (slider) {
+      // slider max は 120000, 超える場合は max を拡張
+      if (p > Number(slider.max)) slider.max = String(p);
+      slider.value = String(p);
+    }
+    // スライダー値表示
+    const npDisplay = document.getElementById('cp-v_np');
+    if (npDisplay) npDisplay.textContent = yen(p) + '／株';
+    recalcAll();
+  }
+  function onNewRoundLabelChange(){
+    const label = (document.getElementById('cp-round-label')?.value || '').trim() || 'シリーズA後（想定）';
+    STAGES[LAST].label = label;
+    // 既存の seg (ラウンド切替) を再描画
+    seg('cp-stageSeg', STAGES.map(s => s.label), stage, v => { stage = v; updatePie(); });
+    seg('cp-tblSeg', STAGES.map(s => s.label), tStage, v => { tStage = v; renderTbl(); });
+    // barChart の xラベル / priceChart の xラベル / pieChart のタイトルも更新
+    if (barChart) { barChart.data.labels = STAGES.map(s => s.label); barChart.update(); }
+    if (priceChart) {
+      priceChart.data.labels = STAGES.map(s => s.label.replace('（現在）','').replace('（想定）','（想定・変動）'));
+      priceChart.update();
+    }
+    updatePie(); renderTbl();
   }
 
   function open(){
@@ -19482,8 +19555,15 @@ document.addEventListener('DOMContentLoaded', function() {
       seg('cp-tblSeg', STAGES.map(s => s.label), tStage, v => { tStage = v; renderTbl(); });
       ['cp-i_bp', 'cp-i_iv', 'cp-i_np'].forEach(id => $(id).addEventListener('input', () => {
         buyPrice = +$('cp-i_bp').value; invest = +$('cp-i_iv').value; newPrice = +$('cp-i_np').value;
+        // NEO1000 スライダー→独立設定カードにも反映
+        const rp = document.getElementById('cp-round-price'); if (rp) rp.value = String(newPrice);
         recalcAll();
       }));
+      // 独立設定カード (新規ラウンド株価/ラベル)
+      const rp = document.getElementById('cp-round-price');
+      if (rp) rp.addEventListener('input', onNewRoundPriceChange);
+      const rl = document.getElementById('cp-round-label');
+      if (rl) rl.addEventListener('input', onNewRoundLabelChange);
       // Chart.js が読み込まれるのを待って初期化
       if (typeof Chart !== 'undefined') {
         initCharts();
@@ -19499,7 +19579,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  window.CAPPOLICY = { open, openAddModal, closeAddModal, submitAdd, onRoundChange, recalcAddShares, DATA: D, STAGES };
+  window.CAPPOLICY = { open, openAddModal, closeAddModal, submitAdd, onRoundChange, recalcAddShares, onNewRoundPriceChange, onNewRoundLabelChange, DATA: D, STAGES };
 })();
     </script>
 
