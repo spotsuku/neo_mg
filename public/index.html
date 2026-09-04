@@ -19291,7 +19291,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let html = '';
     for (const cat of CATS) {
       const rs = ROWS.filter(r => r.c === cat);
-      const visible = rs.filter(r => valOf(r, tStage, 'fd') > 0 || (tStage === LAST && r.k[CURRENT] > 0));
+      // カスタム追加行 (r._custom) は 0株でも常時表示 (追加した株主が見えないと編集も削除もできないため)
+      const visible = rs.filter(r => r._custom || valOf(r, tStage, 'fd') > 0 || (tStage === LAST && r.k[CURRENT] > 0));
       if (!visible.length) continue;
       const sk = rs.reduce((a, r) => a + valOf(r, tStage, 'k'), 0);
       const sf = rs.reduce((a, r) => a + valOf(r, tStage, 'fd'), 0);
