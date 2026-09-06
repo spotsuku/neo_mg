@@ -2341,7 +2341,7 @@ input.cells-edit-input {
 
 <!-- ──────────────────────────────────────
      資本政策 (window.CAPPOLICY)
-     株主政策・NEO1000ファンド シミュレーション
+     株主政策・NEO応援オーナーズファンド シミュレーション
      機密データを含むため Vercel Deployment Protection の有効化を推奨。
      内部ロジック・DATA は原本 (CapitalPolicyTab.jsx) を移植。UI は独自パレット。
 ────────────────────────────────────── -->
@@ -2377,7 +2377,7 @@ input.cells-edit-input {
           <div>倍率: <b id="cp-round-multiple" style="color:var(--cp-court)">2.19倍</b> ／ プレマネー時価: <b id="cp-round-premoney">26.9億円</b></div>
         </div>
       </div>
-      <!-- 想定出資額サマリー: NEO1000 (スライダー) + カスタム シリーズA投資家 合算 -->
+      <!-- 想定出資額サマリー: NEO応援オーナーズファンド (スライダー) + カスタム シリーズA投資家 合算 -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--cp-line)">
         <div style="background:var(--cp-paper);border-radius:6px;padding:8px 10px">
           <div style="font-size:10px;color:var(--cp-ink2);font-weight:700">🎯 想定出資額 合計 (シリーズA調達)</div>
@@ -2396,8 +2396,8 @@ input.cells-edit-input {
         </div>
       </div>
       <div style="font-size:10.5px;color:var(--cp-ink2);margin-top:8px;line-height:1.7">
-        「想定出資額 合計」= NEO1000ファンド スライダー + 株主名簿から追加された シリーズA投資家の出資額合計。想定株価を変更すると全体が再計算されます。<br>
-        ここで設定した株価は「NEO1000ファンド シミュレーション」の新規出資株価スライダーと連動し、株価推移グラフ／時価総額／全ラウンドの株数推移／株主名簿（シリーズA後）に即時反映されます。
+        「想定出資額 合計」= NEO応援オーナーズファンド スライダー + 株主名簿から追加された シリーズA投資家の出資額合計。想定株価を変更すると全体が再計算されます。<br>
+        ここで設定した株価は「NEO応援オーナーズファンド シミュレーション」の新規出資株価スライダーと連動し、株価推移グラフ／時価総額／全ラウンドの株数推移／株主名簿（シリーズA後）に即時反映されます。
       </div>
     </div>
 
@@ -2406,7 +2406,7 @@ input.cells-edit-input {
       <h2 class="cp-h2">💰 チケットサイズ別 想定持分（シリーズA後）</h2>
       <div style="font-size:11px;color:var(--cp-ink2);margin-bottom:10px">
         投資家が上記想定株価で新規出資した場合の株数と、ポストマネー時価総額に対する持分比率。<br>
-        <span style="font-size:10.5px">※ 表示は「発行後の総株式数（NEO1000 + 想定シリーズA投資家含む）に対する持分」の目安値。想定株価変更で自動再計算。</span>
+        <span style="font-size:10.5px">※ 表示は「発行後の総株式数（NEO応援オーナーズファンド + 想定シリーズA投資家含む）に対する持分」の目安値。想定株価変更で自動再計算。</span>
       </div>
       <div style="overflow-x:auto">
         <table id="cp-ticket-table" style="width:100%;border-collapse:collapse;font-size:12px">
@@ -2448,7 +2448,7 @@ input.cells-edit-input {
     </div>
 
     <div class="cp-card" style="border-top:3px solid var(--cp-court);margin-bottom:16px">
-      <h2 class="cp-h2">NEO1000オーナーズファンド シミュレーション</h2>
+      <h2 class="cp-h2">NEO応援オーナーズファンド シミュレーション</h2>
       <div style="font-size:11.5px;color:var(--cp-ink2);margin-bottom:12px">セカンダリー買取とシリーズA条件は<b>未確定・変動</b>です。「誰から何株買い取るか」は下の<b>株主名簿（シリーズA後タブ）の売却株数列</b>で株主ごとに編集でき、ここに即時反映されます。</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:20px">
         <div style="display:grid;gap:12px;align-content:start">
@@ -2463,7 +2463,7 @@ input.cells-edit-input {
           <div id="cp-buyneed" style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums"></div>
           <div id="cp-buynote" style="font-size:11px"></div>
           <div id="cp-alloc" style="border-top:1px solid var(--cp-line);margin-top:4px;padding-top:6px;display:grid;gap:2px"></div>
-          <div style="font-size:12px;font-weight:800;margin-top:10px">② NEO1000の取得比率</div>
+          <div style="font-size:12px;font-weight:800;margin-top:10px">② NEO応援オーナーズファンドの取得比率</div>
           <div id="cp-stake" style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums"></div>
           <div id="cp-stakenote" style="font-size:11px;color:var(--cp-ink2)"></div>
           <div id="cp-adders" style="display:grid;gap:2px"></div>
@@ -2475,7 +2475,7 @@ input.cells-edit-input {
             <div style="position:relative;width:160px;height:160px"><canvas id="cp-simPie"></canvas></div>
             <div id="cp-complist" style="font-size:11.5px;line-height:1.9"></div>
           </div>
-          <div style="font-size:10px;color:var(--cp-ink2);line-height:1.7">買取はセカンダリーのため総株数は増えず、売却株主の持分がNEO1000へ移転。売却しない株主の株数は不変（比率のみ新規発行分で希薄化）。GP報酬等は未考慮。</div>
+          <div style="font-size:10px;color:var(--cp-ink2);line-height:1.7">買取はセカンダリーのため総株数は増えず、売却株主の持分がNEO応援オーナーズファンドへ移転。売却しない株主の株数は不変（比率のみ新規発行分で希薄化）。GP報酬等は未考慮。</div>
         </div>
       </div>
     </div>
@@ -19160,7 +19160,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </script>
 
     <!-- ════════════════════════════════════════════════════════════════
-         CAPPOLICY (資本政策): 全ラウンド推移 + NEO1000ファンドシミュレーション
+         CAPPOLICY (資本政策): 全ラウンド推移 + NEO応援オーナーズファンドシミュレーション
          原本 CapitalPolicyTab.jsx / CapitalPolicyTab.html のロジックを移植。
          DATA / STAGES / 計算ロジックは不変。UI は Chart.js を使用。
          ════════════════════════════════════════════════════════════════ -->
@@ -19178,7 +19178,7 @@ document.addEventListener('DOMContentLoaded', function() {
   ];
   const CURRENT = 4, LAST = 5;
   const BASE_K = 33616.36, BASE_SO = 2350, UNIT = 30000000, BUDGET = 100000000;
-  const FUND_CAT = 'NEO1000・シリーズA投資家';
+  const FUND_CAT = 'NEO応援オーナーズファンド・シリーズA投資家';
   const CATS = ['経営株主','NEO共創株主','シード株主',FUND_CAT,'SO保有者','創業期株主（退出済）'];
   const COLORS = {'経営株主':'#12233d','NEO共創株主':'#2f6f8f','シード株主':'#8fae9c',[FUND_CAT]:'#c1442e','SO保有者':'#b9b3a5','創業期株主（退出済）':'#7a766a'};
   const yen = n => '¥' + Math.round(n).toLocaleString('ja-JP');
@@ -19222,7 +19222,7 @@ document.addEventListener('DOMContentLoaded', function() {
     fundShares = totalSell + newShares;
     let idx = ROWS.findIndex(r => r.c === 'SO保有者');
     if (idx < 0) idx = ROWS.length;
-    ROWS.splice(idx, 0, {n:'NEO1000ファンド（新規出資＋セカンダリー）', c:FUND_CAT,
+    ROWS.splice(idx, 0, {n:'NEO応援オーナーズファンド（新規出資＋セカンダリー）', c:FUND_CAT,
       a:'新規出資（株価は変動）＋既存株主からの買取（変動）',
       k:[0,0,0,0,0,fundShares], s:[0,0,0,0,0,0], inv:invest, sell:0, add:0});
     // カスタム株主の顕在株・SO を BASE_K/BASE_SO に加算する（実装数と合計を整合）。
@@ -19637,10 +19637,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // ── チケットサイズ別 想定持分 ──
   // 各チケット (円) に対して: 株数 = ticket / newPrice、持分 = 株数 / postK (顕在) or postFD (SO込み)
-  // ※ NEO1000 スライダー + カスタム シリーズA 投資家が既に postK に組み込まれているため、
+  // ※ NEO応援オーナーズファンド スライダー + カスタム シリーズA 投資家が既に postK に組み込まれているため、
   //    "追加でこのチケットを入れた場合" の希薄化を考慮して postK + shares を分母にする
   const TICKET_SIZES = [10000000, 30000000, 50000000, 100000000, 200000000, 300000000, 500000000];
-  const UNIT_TICKET = 30000000; // NEO1000 1口 3,000万円
+  const UNIT_TICKET = 30000000; // NEO応援オーナーズファンド 1口 3,000万円
   function renderTicketTable(){
     const tbody = document.getElementById('cp-ticket-tbody');
     if (!tbody) return;
@@ -19700,11 +19700,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const roundPrice = newPrice;
     const preMoney = roundPrice * BASE_K;
     const postMoney = roundPrice * postK;
-    const newIssueNeo = newShares;                              // NEO1000 のみの新規発行株数
+    const newIssueNeo = newShares;                              // NEO応援オーナーズファンドのみの新規発行株数
     const newIssueOther = _customSeriesAShares;                 // 他 シリーズA投資家 (カスタム追加) の株数
     const newIssueTotal = newIssueNeo + newIssueOther;
     const secShares = totalSell;
-    const raiseAmtNeo = newIssueNeo * roundPrice;               // NEO1000 のみの調達額
+    const raiseAmtNeo = newIssueNeo * roundPrice;               // NEO応援オーナーズファンドのみの調達額
     const raiseAmtOther = _customSeriesAInvest;                 // 他 シリーズA投資家 の出資額合計
     const raiseAmtTotal = raiseAmtNeo + raiseAmtOther;
     const secAmt = secShares * buyPrice;
@@ -19864,13 +19864,13 @@ body { font-family: "Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiry
           <tr><td>ラウンド</td><td>シリーズA</td></tr>
           <tr><td>想定株価</td><td>¥${roundPrice.toLocaleString()} / 株</td></tr>
           <tr class="hl"><td>想定調達額 合計 (新株発行)</td><td>${oku(raiseAmtTotal)}</td></tr>
-          <tr><td>　└ NEO1000ファンド</td><td>${oku(raiseAmtNeo)}（${num(newIssueNeo)}株）</td></tr>
+          <tr><td>　└ NEO応援オーナーズファンド</td><td>${oku(raiseAmtNeo)}（${num(newIssueNeo)}株）</td></tr>
           ${raiseAmtOther > 0 ? `<tr><td>　└ 他シリーズA投資家</td><td>${oku(raiseAmtOther)}（${num(newIssueOther)}株）</td></tr>` : ''}
           <tr><td>新株発行数 合計</td><td>${num(newIssueTotal)} 株</td></tr>
           <tr><td>セカンダリー買取</td><td>${num(secShares)} 株 (¥${(secAmt/1e8).toFixed(2)}億円)</td></tr>
           <tr class="hl"><td>プレマネー時価総額</td><td>${oku(preMoney)}</td></tr>
           <tr class="hl"><td>ポストマネー時価総額</td><td>${oku(postMoney)}</td></tr>
-          <tr><td>NEO1000ファンド想定持分 (SO込)</td><td>${pct(stakeNEO1000)}</td></tr>
+          <tr><td>NEO応援オーナーズファンド想定持分 (SO込)</td><td>${pct(stakeNEO1000)}</td></tr>
           <tr><td>発行後 総株式数 (顕在)</td><td>${num(postK)} 株</td></tr>
         </tbody></table>
       </div>
@@ -19923,7 +19923,7 @@ body { font-family: "Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiry
             }).join('')}
           </tbody>
         </table>
-        <div style="font-size:6pt;color:#3d5470;margin-top:2px">※ NEO1000ファンドは 1口3,000万円 / 想定持分はポストマネー基準 (postK + チケット株数)</div>
+        <div style="font-size:6pt;color:#3d5470;margin-top:2px">※ NEO応援オーナーズファンドは 1口3,000万円 / 想定持分はポストマネー基準 (postK + チケット株数)</div>
       </div>
     </div>
   </div>
@@ -20005,7 +20005,7 @@ body { font-family: "Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiry
 
   <div class="disclaimer">
     ※ 株数は100分割調整後。「SO込」＝潜在株式（新株予約権）込みのフルダイリューテッドベース。「シリーズA後(想定)」は下記想定条件下でのシミュレーション結果です。<br>
-    ※ 想定条件: シリーズA株価 ¥${roundPrice.toLocaleString()} / 新規出資 合計 ${oku(raiseAmtTotal)} (NEO1000 ${oku(raiseAmtNeo)}${raiseAmtOther > 0 ? ' + 他 ' + oku(raiseAmtOther) : ''}) / セカンダリー買取 ${num(secShares)}株 (@¥${buyPrice.toLocaleString()})。条件は未確定・変動する可能性があります。<br>
+    ※ 想定条件: シリーズA株価 ¥${roundPrice.toLocaleString()} / 新規出資 合計 ${oku(raiseAmtTotal)} (NEO応援オーナーズファンド ${oku(raiseAmtNeo)}${raiseAmtOther > 0 ? ' + 他 ' + oku(raiseAmtOther) : ''}) / セカンダリー買取 ${num(secShares)}株 (@¥${buyPrice.toLocaleString()})。条件は未確定・変動する可能性があります。<br>
     ※ 出典: 「資本政策最新」シート＋「株式整理 シリーズA買取」シート。J-KISS転換価格 ¥29,200 ＝ CAP株価¥36,500 × 80%。
   </div>
 
@@ -20041,8 +20041,8 @@ ${'</scr'+'ipt>'}
     const prem = document.getElementById('cp-round-premoney');
     if (mult) mult.textContent = (newPrice / 36500).toFixed(2) + '倍';
     if (prem) prem.textContent = oku(newPrice * BASE_K);
-    // 想定出資額 合計 = NEO1000 スライダー + カスタム シリーズA投資家 合算
-    const neoFundRaise = newShares * newPrice;         // NEO1000 が新規発行で払い込む額 (= invest と同義)
+    // 想定出資額 合計 = NEO応援オーナーズファンド スライダー + カスタム シリーズA投資家 合算
+    const neoFundRaise = newShares * newPrice;         // NEO応援オーナーズファンドが新規発行で払い込む額 (= invest と同義)
     const totalRaise   = neoFundRaise + _customSeriesAInvest;
     const totalNewShares = newShares + _customSeriesAShares;
     const raiseEl = document.getElementById('cp-round-total-raise');
@@ -20052,11 +20052,11 @@ ${'</scr'+'ipt>'}
     const pmEl    = document.getElementById('cp-round-postmoney');
     if (raiseEl) raiseEl.textContent = oku(totalRaise);
     if (brkEl) {
-      brkEl.innerHTML = 'NEO1000: <b>' + oku(neoFundRaise) + '</b>'
+      brkEl.innerHTML = 'NEO応援オーナーズファンド: <b>' + oku(neoFundRaise) + '</b>'
         + (_customSeriesAInvest > 0 ? ' ＋ 他シリーズA投資家: <b style="color:var(--cp-court)">' + oku(_customSeriesAInvest) + '</b>' : ' ＋ 他: —');
     }
     if (shEl) shEl.textContent = num(totalNewShares) + '株';
-    if (shSubEl) shSubEl.textContent = 'NEO1000: ' + num(newShares) + '株' + (_customSeriesAShares > 0 ? ' ＋ 他: ' + num(_customSeriesAShares) + '株' : '');
+    if (shSubEl) shSubEl.textContent = 'NEO応援オーナーズファンド: ' + num(newShares) + '株' + (_customSeriesAShares > 0 ? ' ＋ 他: ' + num(_customSeriesAShares) + '株' : '');
     if (pmEl) pmEl.textContent = oku(newPrice * postK);
   }
   // 想定株価入力 / ラベル入力 の変更を newPrice / STAGES へ反映し、スライダーも同期
@@ -20064,7 +20064,7 @@ ${'</scr'+'ipt>'}
     const p = Math.max(1000, Number(document.getElementById('cp-round-price')?.value) || 80000);
     newPrice = p;
     STAGES[LAST].price = p;
-    // NEO1000 スライダーとの双方向同期
+    // NEO応援オーナーズファンド スライダーとの双方向同期
     const slider = document.getElementById('cp-i_np');
     if (slider) {
       // slider max は 120000, 超える場合は max を拡張
@@ -20102,7 +20102,7 @@ ${'</scr'+'ipt>'}
       seg('cp-tblSeg', STAGES.map(s => s.label), tStage, v => { tStage = v; renderTbl(); });
       ['cp-i_bp', 'cp-i_iv', 'cp-i_np'].forEach(id => $(id).addEventListener('input', () => {
         buyPrice = +$('cp-i_bp').value; invest = +$('cp-i_iv').value; newPrice = +$('cp-i_np').value;
-        // NEO1000 スライダー→独立設定カードにも反映
+        // NEO応援オーナーズファンド スライダー→独立設定カードにも反映
         const rp = document.getElementById('cp-round-price'); if (rp) rp.value = String(newPrice);
         STAGES[LAST].price = newPrice;
         syncSeriesAOption();
