@@ -2498,7 +2498,7 @@ input.cells-edit-input {
 <!-- 資本政策: 株主追加モーダル (wrap 外配置=どこからでも開閉可) -->
 <div id="cp-add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:300;align-items:center;justify-content:center;font-family:'Hiragino Kaku Gothic ProN','Noto Sans JP','Yu Gothic',Meiryo,sans-serif">
   <div style="background:#fff;border-radius:12px;padding:22px 24px;width:92%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 12px 32px rgba(0,0,0,0.24);color:#12233d">
-    <div style="font-size:16px;font-weight:800;margin-bottom:14px">株主を追加</div>
+    <div class="cp-modal-title" style="font-size:16px;font-weight:800;margin-bottom:14px">株主を追加</div>
     <div style="display:grid;gap:11px">
       <div><label style="font-size:11px;color:#3d5470;font-weight:700;display:block;margin-bottom:3px">株主名（必須）</label><input id="cp-add-name" type="text" placeholder="例: 山田 太郎（○○株式会社）" style="width:100%;padding:8px 10px;border:1px solid #e2e0d8;border-radius:6px;font-family:inherit;font-size:13px"></div>
       <div><label style="font-size:11px;color:#3d5470;font-weight:700;display:block;margin-bottom:3px">区分（必須）</label>
@@ -2540,7 +2540,7 @@ input.cells-edit-input {
     </div>
     <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
       <button onclick="window.CAPPOLICY && window.CAPPOLICY.closeAddModal()" style="padding:8px 16px;border:1px solid #e2e0d8;background:#fff;color:#12233d;border-radius:6px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">キャンセル</button>
-      <button onclick="window.CAPPOLICY && window.CAPPOLICY.submitAdd()" style="padding:8px 16px;border:0;background:#12233d;color:#fff;border-radius:6px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer">追加</button>
+      <button class="cp-modal-submit" onclick="window.CAPPOLICY && window.CAPPOLICY.submitAdd()" style="padding:8px 16px;border:0;background:#12233d;color:#fff;border-radius:6px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer">追加</button>
     </div>
   </div>
 </div>
@@ -19409,8 +19409,9 @@ document.addEventListener('DOMContentLoaded', function() {
           ? '<td>' + (canSell ? '<input class="cp-sellinput' + ((sells[r.n]||0) > 0 ? ' cp-active' : '') + '" type="number" min="0" max="' + r.k[CURRENT] + '" step="50" value="' + (sells[r.n]||0) + '" data-name="' + nameEsc + '" data-max="' + r.k[CURRENT] + '" data-kind="sell">' : '—') + '</td>'
             + '<td>' + (canSell ? '<input class="cp-sellinput cp-addinput' + ((adds[r.n]||0) > 0 ? ' cp-active-add' : '') + '" type="number" min="0" step="50" value="' + (adds[r.n]||0) + '" data-name="' + nameEsc + '" data-kind="add">' : '—') + '</td>'
           : '';
-        const delBtn = r._custom ? ' <button class="cp-del-btn" data-name="' + nameEsc + '" title="この株主を削除" style="background:none;border:0;color:#c1442e;cursor:pointer;font-size:14px;padding:0 4px;margin-left:4px">✕</button>' : '';
-        html += '<tr' + (r.c === FUND_CAT ? ' class="cp-fund"' : '') + '><td>' + (soldOut ? '<span class="cp-sold">' + nameEsc + '（全株売却）</span>' : nameEsc) + delBtn + '</td>'
+        const editBtn = r._custom ? ' <button class="cp-edit-btn" data-name="' + nameEsc + '" title="この株主を編集" style="background:none;border:0;color:var(--cp-court);cursor:pointer;font-size:13px;padding:0 4px;margin-left:2px">✎</button>' : '';
+        const delBtn  = r._custom ? ' <button class="cp-del-btn" data-name="' + nameEsc + '" title="この株主を削除" style="background:none;border:0;color:#c1442e;cursor:pointer;font-size:14px;padding:0 4px">✕</button>' : '';
+        html += '<tr' + (r.c === FUND_CAT ? ' class="cp-fund"' : '') + '><td>' + (soldOut ? '<span class="cp-sold">' + nameEsc + '（全株売却）</span>' : nameEsc) + editBtn + delBtn + '</td>'
           + '<td><span class="cp-tag" style="background:' + COLORS[cat] + '">' + escapeHtml(cat) + '</span></td>'
           + '<td class="cp-acq">' + escapeHtml(r.a) + '</td>' + sellCell
           + '<td>' + num(k) + '</td><td>' + num(f) + '</td>'
@@ -19467,6 +19468,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
     });
+    // ✎ 編集ボタン: 既存モーダルを編集モードで開く
+    document.querySelectorAll('#sec-capital-policy .cp-edit-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const name = e.target.dataset.name;
+        openEditModal(name);
+      });
+    });
   }
 
   // ── 株主追加モーダル制御 ──
@@ -19485,7 +19493,10 @@ document.addEventListener('DOMContentLoaded', function() {
     opt.value = String(newPrice);
     opt.textContent = 'シリーズA  ¥' + newPrice.toLocaleString() + '/株 (想定)';
   }
+  // モーダルの状態: 追加モード or 編集モード (編集中の元の株主名を保持)
+  let _editingName = null;
   function openAddModal(){
+    _editingName = null;
     const m = document.getElementById('cp-add-modal');
     if (!m) return;
     // シリーズA option を最新の想定株価に更新
@@ -19500,9 +19511,43 @@ document.addEventListener('DOMContentLoaded', function() {
     m.querySelector('#cp-add-acq').value = '';
     m.querySelector('#cp-add-s').value = '0';
     m.querySelector('#cp-add-inv').value = '0';
+    // タイトル・保存ボタンを追加モードに戻す
+    const title = m.querySelector('.cp-modal-title');   if (title)  title.textContent  = '株主を追加';
+    const submitBtn = m.querySelector('.cp-modal-submit'); if (submitBtn) submitBtn.textContent = '追加';
     recalcAddShares();
     m.style.display = 'flex';
     setTimeout(() => m.querySelector('#cp-add-name').focus(), 30);
+  }
+  // 編集モードで開く: 既存カスタム株主の値をプリフィルし、submit で上書き保存
+  function openEditModal(name){
+    const row = customRows.find(r => r.n === name);
+    if (!row) { alert('編集対象の株主が見つかりません: ' + name); return; }
+    _editingName = name;
+    const m = document.getElementById('cp-add-modal');
+    if (!m) return;
+    syncSeriesAOption();
+    m.querySelector('#cp-add-name').value = row.n || '';
+    m.querySelector('#cp-add-cat').value = row.c || 'NEO共創株主';
+    const roundSel = m.querySelector('#cp-add-round');
+    const priceIn = m.querySelector('#cp-add-price');
+    const roundVal = row._round != null ? String(row._round) : '';
+    if (roundSel) {
+      // オプションに存在する値ならそれを選択、なければ「その他」
+      const has = Array.from(roundSel.options).some(o => o.value === roundVal);
+      roundSel.value = has ? roundVal : '';
+    }
+    if (priceIn) priceIn.value = String(row._round || newPrice);
+    m.querySelector('#cp-add-acq').value = row.a || '';
+    // 顕在株数は k[LAST] (シリーズA新規) または k[CURRENT] (既存ラウンド) を表示
+    // → inv と price から自動計算されるため直接編集は不要 (プレビュー表示のみ)
+    m.querySelector('#cp-add-s').value = String(Number(row.s?.[LAST] || row.s?.[CURRENT] || 0));
+    m.querySelector('#cp-add-inv').value = String(Number(row.inv) || 0);
+    // タイトル・保存ボタンを編集モードに
+    const title = m.querySelector('.cp-modal-title');   if (title)  title.textContent  = '株主を編集: ' + row.n;
+    const submitBtn = m.querySelector('.cp-modal-submit'); if (submitBtn) submitBtn.textContent = '上書き保存';
+    recalcAddShares();
+    m.style.display = 'flex';
+    setTimeout(() => m.querySelector('#cp-add-inv').focus(), 30);
   }
   function closeAddModal(){
     const m = document.getElementById('cp-add-modal');
@@ -19550,7 +19595,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const sNow = Math.max(0, Number(m.querySelector('#cp-add-s').value) || 0);
     const inv = Math.max(0, Number(m.querySelector('#cp-add-inv').value) || 0);
     if (!name) { alert('株主名を入力してください'); return; }
-    if (allBaseRows().some(r => r.n === name)) { alert('同名の株主が既に存在します: ' + name); return; }
+    // 編集モードでは自分自身との重複チェックはスキップ
+    if (allBaseRows().some(r => r.n === name && r.n !== _editingName)) {
+      alert('同名の株主が既に存在します: ' + name); return;
+    }
     // 顕在株数は常に 出資額 ÷ 株価 で自動計算 (小数第2位)
     let kNow = 0;
     if (inv > 0 && price > 0) {
@@ -19562,7 +19610,24 @@ document.addEventListener('DOMContentLoaded', function() {
     // 既存ラウンド (シード/J-KISS/プレA など) の場合は CURRENT/LAST とも同じ株数
     const kArr = isNewRoundInv ? [0, 0, 0, 0, 0, kNow] : [0, 0, 0, 0, kNow, kNow];
     const sArr = isNewRoundInv ? [0, 0, 0, 0, 0, sNow] : [0, 0, 0, 0, sNow, sNow];
-    customRows.push({ n: name, c: cat, a: acq, k: kArr, s: sArr, inv, sold: 0, _custom: true, _round: price });
+    const record = { n: name, c: cat, a: acq, k: kArr, s: sArr, inv, sold: 0, _custom: true, _round: price };
+    if (_editingName != null) {
+      // 編集モード: 同名 (旧名) の customRow を record で置換
+      const idx = customRows.findIndex(r => r.n === _editingName);
+      if (idx >= 0) {
+        customRows[idx] = record;
+        // 名前が変わった場合、sells/adds のキーも移し替え
+        if (_editingName !== name) {
+          if (sells[_editingName] != null) { sells[name] = sells[_editingName]; delete sells[_editingName]; }
+          if (adds[_editingName]  != null) { adds[name]  = adds[_editingName];  delete adds[_editingName];  }
+        }
+      } else {
+        customRows.push(record); // フォールバック
+      }
+      _editingName = null;
+    } else {
+      customRows.push(record);
+    }
     saveCustom(); closeAddModal(); recalcAll();
   }
 
@@ -20063,7 +20128,7 @@ ${'</scr'+'ipt>'}
     }
   }
 
-  window.CAPPOLICY = { open, openAddModal, closeAddModal, submitAdd, onRoundChange, recalcAddShares, onNewRoundPriceChange, onNewRoundLabelChange, printBriefing, DATA: D, STAGES };
+  window.CAPPOLICY = { open, openAddModal, openEditModal, closeAddModal, submitAdd, onRoundChange, recalcAddShares, onNewRoundPriceChange, onNewRoundLabelChange, printBriefing, DATA: D, STAGES };
 })();
     </script>
 
