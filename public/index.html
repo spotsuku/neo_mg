@@ -2516,7 +2516,8 @@ input.cells-edit-input {
           <option value="20000">シード  ¥20,000/株</option>
           <option value="29200">J-KISS転換  ¥29,200/株</option>
           <option value="36500" selected>プレA  ¥36,500/株</option>
-          <option value="80000">シリーズA  ¥80,000/株</option>
+          <!-- シリーズA option は openAddModal で「新規ラウンド設定カード」の想定株価に動的更新 -->
+          <option value="80000" data-role="seriesA">シリーズA  ¥80,000/株</option>
           <option value="">その他（自由入力）</option>
         </select>
       </div>
@@ -19477,15 +19478,25 @@ document.addEventListener('DOMContentLoaded', function() {
     '36500': 'プレA ¥36,500',
     '80000': 'シリーズA ¥80,000',
   };
+  // シリーズA option (data-role="seriesA") の value / 表示ラベルを現在の想定株価に同期
+  function syncSeriesAOption(){
+    const opt = document.querySelector('#cp-add-round option[data-role="seriesA"]');
+    if (!opt) return;
+    opt.value = String(newPrice);
+    opt.textContent = 'シリーズA  ¥' + newPrice.toLocaleString() + '/株 (想定)';
+  }
   function openAddModal(){
     const m = document.getElementById('cp-add-modal');
     if (!m) return;
+    // シリーズA option を最新の想定株価に更新
+    syncSeriesAOption();
     m.querySelector('#cp-add-name').value = '';
     m.querySelector('#cp-add-cat').value = 'NEO共創株主';
     const roundSel = m.querySelector('#cp-add-round');
-    if (roundSel) roundSel.value = '36500';
+    // 既定を シリーズA (想定株価) に (最も多い追加ケースのため)
+    if (roundSel) roundSel.value = String(newPrice);
     const priceIn = m.querySelector('#cp-add-price');
-    if (priceIn) priceIn.value = '36500';
+    if (priceIn) priceIn.value = String(newPrice);
     m.querySelector('#cp-add-acq').value = '';
     m.querySelector('#cp-add-s').value = '0';
     m.querySelector('#cp-add-inv').value = '0';
@@ -19998,6 +20009,8 @@ ${'</scr'+'ipt>'}
     // スライダー値表示
     const npDisplay = document.getElementById('cp-v_np');
     if (npDisplay) npDisplay.textContent = yen(p) + '／株';
+    // 株主追加モーダルの シリーズA option も追随
+    syncSeriesAOption();
     recalcAll();
   }
   function onNewRoundLabelChange(){
@@ -20026,6 +20039,8 @@ ${'</scr'+'ipt>'}
         buyPrice = +$('cp-i_bp').value; invest = +$('cp-i_iv').value; newPrice = +$('cp-i_np').value;
         // NEO1000 スライダー→独立設定カードにも反映
         const rp = document.getElementById('cp-round-price'); if (rp) rp.value = String(newPrice);
+        STAGES[LAST].price = newPrice;
+        syncSeriesAOption();
         recalcAll();
       }));
       // 独立設定カード (新規ラウンド株価/ラベル)
