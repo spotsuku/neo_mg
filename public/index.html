@@ -19259,17 +19259,22 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function renderKPIs(){
     const miki = mikiRatio(CURRENT);
+    // シリーズA 想定 プレバリュエーション (現行 newPrice × 現在の発行済株式数)
+    const seriesAPre = newPrice * BASE_K;
+    const seriesAMult = (newPrice / 36500).toFixed(2);
     const kpis = [
       ['現在地','プレシリーズA完了','J-KISS転換・代表SO行使済み（2026年7月時点）'],
       ['現在の株価', yen(36500)+'／株', 'プレシリーズA価格（分割調整後の設立時¥100の365倍）'],
       ['現在の時価総額', oku(36500 * BASE_K), 'SO込み ' + oku(36500 * (BASE_K + BASE_SO))],
+      ['シリーズA プレバリュエーション (想定)', oku(seriesAPre), '想定株価 ' + yen(newPrice) + ' × ' + num(BASE_K) + '株 ／ プレA比 ×' + seriesAMult + '倍'],
       ['発行済株式数', num(BASE_K) + '株', 'SO込み ' + num(BASE_K + BASE_SO) + '株'],
       ['三木家 合算比率', pct(miki.ratioK), '三木智弘 + ㈱MIKI ／ SO込み ' + pct(miki.ratioFD) + ' (' + num(miki.k) + '株)'],
       ['調達累計（設立〜プレA）', oku(282400000), '株主の累計出資ベース（シリーズA想定分を除く）'],
       ['株主数（現在）', '23名', 'ほかSO保有者5名'],
     ];
-    $('cp-kpis').innerHTML = kpis.map(k =>
-      '<div class="cp-kpi"><div class="l">' + escapeHtml(k[0]) + '</div><div class="v">' + escapeHtml(k[1]) + '</div><div class="s">' + escapeHtml(k[2]) + '</div></div>'
+    $('cp-kpis').innerHTML = kpis.map((k, i) =>
+      // 4枚目 (シリーズA プレバリュエーション) は border-top をオレンジ強調
+      '<div class="cp-kpi"' + (i === 3 ? ' style="border-top-color:var(--cp-court);border-top-width:4px"' : '') + '><div class="l">' + escapeHtml(k[0]) + '</div><div class="v">' + escapeHtml(k[1]) + '</div><div class="s">' + escapeHtml(k[2]) + '</div></div>'
     ).join('');
   }
 
@@ -20059,6 +20064,8 @@ ${'</scr'+'ipt>'}
     if (shEl) shEl.textContent = num(totalNewShares) + '株';
     if (shSubEl) shSubEl.textContent = 'NEO応援オーナーズファンド: ' + num(newShares) + '株' + (_customSeriesAShares > 0 ? ' ＋ 他: ' + num(_customSeriesAShares) + '株' : '');
     if (pmEl) pmEl.textContent = oku(newPrice * postK);
+    // 想定株価変更でKPIカード (シリーズA プレバリュエーション) も更新
+    if (initialized) renderKPIs();
   }
   // 想定株価入力 / ラベル入力 の変更を newPrice / STAGES へ反映し、スライダーも同期
   function onNewRoundPriceChange(){
