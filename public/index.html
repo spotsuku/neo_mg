@@ -19216,7 +19216,16 @@ document.addEventListener('DOMContentLoaded', function() {
       const sell = Math.min(sells[r.n]||0, r.k[CURRENT]);
       const add = Math.max(adds[r.n]||0, 0);
       totalSell += sell; totalAdd += add;
-      const k = [...r.k]; k[LAST] = r.k[CURRENT] - sell + add;
+      // シリーズA新規カスタム株主 (_custom && _round===newPrice) は
+      // 保存済み k[LAST] (= 出資額÷株価 で登録した株数) を保持し、
+      // 追加出資 (add) をそこに加算する。既存株主とは異なる扱い。
+      const isSeriesA_new = r._custom && Number(r._round) > 0 && Math.abs(Number(r._round) - newPrice) < 1;
+      const k = [...r.k];
+      if (isSeriesA_new) {
+        k[LAST] = (Number(r.k[LAST]) || 0) + add;
+      } else {
+        k[LAST] = r.k[CURRENT] - sell + add;
+      }
       const s = [...r.s]; s[LAST] = r.s[CURRENT];
       return {...r, k, s, sell, add};
     });
@@ -19409,11 +19418,16 @@ document.addEventListener('DOMContentLoaded', function() {
       for (const r of visible) {
         const k = valOf(r, tStage, 'k'), f = valOf(r, tStage, 'fd');
         const soldOut = tStage === LAST && r.sell > 0 && k === 0;
+        // シリーズA新規カスタム株主 (プレA時点で株なし・シリーズAで新規参加)
+        const isSeriesA_new = r._custom && Number(r._round) > 0 && Math.abs(Number(r._round) - newPrice) < 1;
+        // 売却株数: プレA既存株を持つ株主のみ (シリーズA新規は売る株がないので不可)
         const canSell = tStage === LAST && r.c !== FUND_CAT && r.k[CURRENT] > 0;
+        // 追加出資: 既存株主 or シリーズA新規カスタム。数株を直接編集したい場合は ✎ で再モーダル
+        const canAdd = tStage === LAST && r.c !== FUND_CAT && (r.k[CURRENT] > 0 || isSeriesA_new);
         const nameEsc = escapeHtml(r.n);
         const sellCell = tStage === LAST
           ? '<td>' + (canSell ? '<input class="cp-sellinput' + ((sells[r.n]||0) > 0 ? ' cp-active' : '') + '" type="number" min="0" max="' + r.k[CURRENT] + '" step="50" value="' + (sells[r.n]||0) + '" data-name="' + nameEsc + '" data-max="' + r.k[CURRENT] + '" data-kind="sell">' : '—') + '</td>'
-            + '<td>' + (canSell ? '<input class="cp-sellinput cp-addinput' + ((adds[r.n]||0) > 0 ? ' cp-active-add' : '') + '" type="number" min="0" step="50" value="' + (adds[r.n]||0) + '" data-name="' + nameEsc + '" data-kind="add">' : '—') + '</td>'
+            + '<td>' + (canAdd ? '<input class="cp-sellinput cp-addinput' + ((adds[r.n]||0) > 0 ? ' cp-active-add' : '') + '" type="number" min="0" step="50" value="' + (adds[r.n]||0) + '" data-name="' + nameEsc + '" data-kind="add">' : '—') + '</td>'
           : '';
         const editBtn = r._custom ? ' <button class="cp-edit-btn" data-name="' + nameEsc + '" title="この株主を編集" style="background:none;border:0;color:var(--cp-court);cursor:pointer;font-size:13px;padding:0 4px;margin-left:2px">✎</button>' : '';
         const delBtn  = r._custom ? ' <button class="cp-del-btn" data-name="' + nameEsc + '" title="この株主を削除" style="background:none;border:0;color:#c1442e;cursor:pointer;font-size:14px;padding:0 4px">✕</button>' : '';
