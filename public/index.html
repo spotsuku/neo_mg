@@ -19213,20 +19213,25 @@ document.addEventListener('DOMContentLoaded', function() {
   function rebuild(){
     newShares = invest / newPrice; totalSell = 0; totalAdd = 0;
     ROWS = allBaseRows().filter(r => r.c !== 'シリーズA投資家').map(r => {
-      const sell = Math.min(sells[r.n]||0, r.k[CURRENT]);
-      const add = Math.max(adds[r.n]||0, 0);
-      totalSell += sell; totalAdd += add;
-      // シリーズA新規カスタム株主 (_custom && _round===newPrice) は
-      // 保存済み k[LAST] (= 出資額÷株価 で登録した株数) を保持し、
-      // 追加出資 (add) をそこに加算する。既存株主とは異なる扱い。
-      const isSeriesA_new = r._custom && Number(r._round) > 0 && Math.abs(Number(r._round) - newPrice) < 1;
       const k = [...r.k];
-      if (isSeriesA_new) {
-        k[LAST] = (Number(r.k[LAST]) || 0) + add;
+      const s = [...r.s]; s[LAST] = r.s[CURRENT];
+      let sell, add;
+      if (r._custom) {
+        // カスタム株主は常に保存済 k[LAST] を尊重し、追加出資/売却で調整。
+        // 想定株価 (newPrice) が変わっても株数は消えない。
+        // 売却上限は保存済 k[LAST] (シリーズA新規カスタム) or k[CURRENT] (既存ラウンド)。
+        const baseLast = Number(r.k[LAST]) || 0;
+        const sellMax = baseLast > 0 ? baseLast : (Number(r.k[CURRENT]) || 0);
+        sell = Math.min(sells[r.n]||0, sellMax);
+        add = Math.max(adds[r.n]||0, 0);
+        k[LAST] = baseLast - sell + add;
       } else {
+        // 原本 D.rows の既存株主: プレA (CURRENT) から売却/追加出資でシリーズA後 (LAST) を算出
+        sell = Math.min(sells[r.n]||0, r.k[CURRENT]);
+        add = Math.max(adds[r.n]||0, 0);
         k[LAST] = r.k[CURRENT] - sell + add;
       }
-      const s = [...r.s]; s[LAST] = r.s[CURRENT];
+      totalSell += sell; totalAdd += add;
       return {...r, k, s, sell, add};
     });
     fundShares = totalSell + newShares;
@@ -19240,13 +19245,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // customKAtCurrent には含まれず、代わりに customSeriesA* に別枠で集計。
     const customKAtCurrent = customRows.reduce((t, r) => t + (Number(r.k?.[CURRENT])||0), 0);
     const customSAtCurrent = customRows.reduce((t, r) => t + (Number(r.s?.[CURRENT])||0), 0);
-    // シリーズA新規投資家 の集計 (LAST 時点の株数と出資額)
-    _customSeriesAShares = customRows
-      .filter(r => Number(r._round) > 0 && Math.abs(Number(r._round) - newPrice) < 1)
-      .reduce((t, r) => t + (Number(r.k?.[LAST])||0), 0);
-    _customSeriesAInvest = customRows
-      .filter(r => Number(r._round) > 0 && Math.abs(Number(r._round) - newPrice) < 1)
-      .reduce((t, r) => t + (Number(r.inv)||0), 0);
+    // シリーズA新規投資家 の集計 (add/sell 反映後の LAST 時点株数と出資額)
+    _customSeriesAShares = ROWS
+      .filter(r => r._custom && Number(r._round) > 0 && Math.abs(Number(r._round) - newPrice) < 1)
+      .reduce((t, r) => t + (Number(r.k[LAST])||0), 0);
+    _customSeriesAInvest = ROWS
+      .filter(r => r._custom && Number(r._round) > 0 && Math.abs(Number(r._round) - newPrice) < 1)
+      .reduce((t, r) => t + (Number(r.k[LAST])||0) * newPrice, 0);
     postK = BASE_K + customKAtCurrent + newShares + totalAdd + _customSeriesAShares;
     postFD = postK + BASE_SO + customSAtCurrent;
   }
@@ -19418,15 +19423,18 @@ document.addEventListener('DOMContentLoaded', function() {
       for (const r of visible) {
         const k = valOf(r, tStage, 'k'), f = valOf(r, tStage, 'fd');
         const soldOut = tStage === LAST && r.sell > 0 && k === 0;
-        // シリーズA新規カスタム株主 (プレA時点で株なし・シリーズAで新規参加)
-        const isSeriesA_new = r._custom && Number(r._round) > 0 && Math.abs(Number(r._round) - newPrice) < 1;
-        // 売却株数: プレA既存株を持つ株主のみ (シリーズA新規は売る株がないので不可)
-        const canSell = tStage === LAST && r.c !== FUND_CAT && r.k[CURRENT] > 0;
-        // 追加出資: 既存株主 or シリーズA新規カスタム。数株を直接編集したい場合は ✎ で再モーダル
-        const canAdd = tStage === LAST && r.c !== FUND_CAT && (r.k[CURRENT] > 0 || isSeriesA_new);
+        // 売却上限: カスタム株主は保存済 k[LAST] (シリーズA新規) or k[CURRENT] (既存ラウンド)、
+        //          原本株主は k[CURRENT]。
+        const sellMax = r._custom
+          ? ((Number(r.k[LAST])||0) > 0 ? (Number(r.k[LAST])||0) : (Number(r.k[CURRENT])||0))
+          : (Number(r.k[CURRENT])||0);
+        // 売却/追加出資 とも「シリーズA後 (LAST) タブでファンド以外・株を保有」条件で許可
+        const canSell = tStage === LAST && r.c !== FUND_CAT && sellMax > 0;
+        // 追加出資は カスタム株主 or 既存株主 (k[CURRENT]>0) いずれもOK
+        const canAdd  = tStage === LAST && r.c !== FUND_CAT && (r._custom || r.k[CURRENT] > 0);
         const nameEsc = escapeHtml(r.n);
         const sellCell = tStage === LAST
-          ? '<td>' + (canSell ? '<input class="cp-sellinput' + ((sells[r.n]||0) > 0 ? ' cp-active' : '') + '" type="number" min="0" max="' + r.k[CURRENT] + '" step="50" value="' + (sells[r.n]||0) + '" data-name="' + nameEsc + '" data-max="' + r.k[CURRENT] + '" data-kind="sell">' : '—') + '</td>'
+          ? '<td>' + (canSell ? '<input class="cp-sellinput' + ((sells[r.n]||0) > 0 ? ' cp-active' : '') + '" type="number" min="0" max="' + sellMax + '" step="50" value="' + (sells[r.n]||0) + '" data-name="' + nameEsc + '" data-max="' + sellMax + '" data-kind="sell">' : '—') + '</td>'
             + '<td>' + (canAdd ? '<input class="cp-sellinput cp-addinput' + ((adds[r.n]||0) > 0 ? ' cp-active-add' : '') + '" type="number" min="0" step="50" value="' + (adds[r.n]||0) + '" data-name="' + nameEsc + '" data-kind="add">' : '—') + '</td>'
           : '';
         const editBtn = r._custom ? ' <button class="cp-edit-btn" data-name="' + nameEsc + '" title="この株主を編集" style="background:none;border:0;color:var(--cp-court);cursor:pointer;font-size:13px;padding:0 4px;margin-left:2px">✎</button>' : '';
