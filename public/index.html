@@ -831,8 +831,10 @@ input.cells-edit-input {
 #sec-capital-policy th{background:var(--cp-ink);color:#fff;padding:8px 9px;text-align:right;font-weight:600;white-space:nowrap;position:sticky;top:0}
 #sec-capital-policy th:nth-child(-n+3),#sec-capital-policy td:nth-child(-n+3){text-align:left}
 #sec-capital-policy th.cp-sellcol{background:var(--cp-fund)}
+#sec-capital-policy th.cp-transfercol{background:#9c67b8}
 #sec-capital-policy th.cp-addcol{background:#2f6f8f}
 #sec-capital-policy input.cp-addinput.cp-active-add{border-color:#2f6f8f;color:#2f6f8f;font-weight:700}
+#sec-capital-policy input.cp-transferinput.cp-active-transfer{border-color:#9c67b8;color:#9c67b8;font-weight:700}
 #sec-capital-policy td{padding:7px 9px;border-bottom:1px solid var(--cp-line);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--cp-ink);background:#fff}
 #sec-capital-policy tr.cp-sub td{background:var(--cp-court-soft);font-weight:800}
 #sec-capital-policy tr.cp-tot td{background:var(--cp-ink);color:#fff;font-weight:800}
@@ -2487,7 +2489,12 @@ input.cells-edit-input {
         <button class="cp-add-btn" onclick="window.CAPPOLICY && window.CAPPOLICY.openAddModal()" style="background:var(--cp-ink);color:#fff;border:0;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">＋ 株主を追加</button>
       </div>
       <div class="cp-controls"><span class="cp-seg" id="cp-tblSeg"></span></div>
-      <div class="cp-editnote" id="cp-editnote" style="display:none"><span style="color:var(--cp-fund)">「売却株数」</span>＝セカンダリー売却、<span style="color:#2f6f8f">「追加出資株数」</span>＝新規出資株価での追加引受。株主ごとに編集でき、シミュレーションに即時反映されます（Enterまたはフォーカスアウトで確定）</div>
+      <div class="cp-editnote" id="cp-editnote" style="display:none">
+        <span style="color:var(--cp-fund)">売却</span>＝ファンドへのセカンダリー売却、
+        <span style="color:#9c67b8">譲渡</span>＝個人・法人間の株数変動 (+受入 / −渡し)、
+        <span style="color:#2f6f8f">増資</span>＝シリーズA新規発行の引受。
+        🆕 バッジ付き株主は検討中の新規追加。株主ごとに編集可 (Enterまたはフォーカスアウトで確定)
+      </div>
       <div class="cp-tblwrap"><table id="cp-tbl"><thead id="cp-thead"></thead><tbody></tbody></table></div>
       <div class="cp-legend-note">「SO込」＝潜在株式（SO・新株予約権）込みのフルダイリューテッドベース。株数は100分割調整後。シリーズA後（想定）の売却株数・追加出資株数・株価・出資額は変動値です。追加出資は新規出資株価での引受として発行済株式数に加算されます。<br>出典：「資本政策最新」シート（設立2020/12〜シード・SO行使の実績）＋「株式整理 シリーズA買取」シート（J-KISS転換以降）。<br>※推定を含む箇所：高橋健太氏500株→石川聡彦・野尻・佐良土・平野の4名へ譲渡、田中祐太氏1,000株→辻本郷へ譲渡、国本氏のシード期+500株。J-KISS転換価格 ¥29,200 ＝ CAP株価¥36,500 × 80%。</div>
     </div>
@@ -19188,10 +19195,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const pct = n => (n*100).toFixed(2) + '%';
   const escapeHtml = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
-  const sells = {}, adds = {};
+  const sells = {}, adds = {}, transfers = {};
   D.rows.forEach(r => { if(r.sold > 0) sells[r.n] = r.sold; });
   let buyPrice = 20000, invest = 200000000, newPrice = 80000;
-  let ROWS = [], newShares = 0, totalSell = 0, totalAdd = 0, fundShares = 0, postK = 0, postFD = 0;
+  let ROWS = [], newShares = 0, totalSell = 0, totalAdd = 0, totalTransferAbs = 0, fundShares = 0, postK = 0, postFD = 0;
   let stage = CURRENT, basisFd = 1, tStage = LAST;
   let pieChart = null, barChart = null, priceChart = null, simPie = null;
   let initialized = false;
@@ -19211,28 +19218,25 @@ document.addEventListener('DOMContentLoaded', function() {
   function allBaseRows(){ return D.rows.concat(customRows); }
 
   function rebuild(){
-    newShares = invest / newPrice; totalSell = 0; totalAdd = 0;
+    newShares = invest / newPrice; totalSell = 0; totalAdd = 0; totalTransferAbs = 0;
     ROWS = allBaseRows().filter(r => r.c !== 'シリーズA投資家').map(r => {
       const k = [...r.k];
       const s = [...r.s]; s[LAST] = r.s[CURRENT];
       let sell, add;
+      const transfer = Number(transfers[r.n]) || 0; // 譲渡: signed (+受入 / -渡し)
       if (r._custom) {
-        // カスタム株主は常に保存済 k[LAST] を尊重し、追加出資/売却で調整。
-        // 想定株価 (newPrice) が変わっても株数は消えない。
-        // 売却上限は保存済 k[LAST] (シリーズA新規カスタム) or k[CURRENT] (既存ラウンド)。
         const baseLast = Number(r.k[LAST]) || 0;
         const sellMax = baseLast > 0 ? baseLast : (Number(r.k[CURRENT]) || 0);
         sell = Math.min(sells[r.n]||0, sellMax);
         add = Math.max(adds[r.n]||0, 0);
-        k[LAST] = baseLast - sell + add;
+        k[LAST] = baseLast - sell + add + transfer;
       } else {
-        // 原本 D.rows の既存株主: プレA (CURRENT) から売却/追加出資でシリーズA後 (LAST) を算出
         sell = Math.min(sells[r.n]||0, r.k[CURRENT]);
         add = Math.max(adds[r.n]||0, 0);
-        k[LAST] = r.k[CURRENT] - sell + add;
+        k[LAST] = r.k[CURRENT] - sell + add + transfer;
       }
-      totalSell += sell; totalAdd += add;
-      return {...r, k, s, sell, add};
+      totalSell += sell; totalAdd += add; totalTransferAbs += Math.abs(transfer);
+      return {...r, k, s, sell, add, transfer};
     });
     fundShares = totalSell + newShares;
     let idx = ROWS.findIndex(r => r.c === 'SO保有者');
@@ -19406,7 +19410,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function renderTbl(){
     $('cp-editnote').style.display = tStage === LAST ? 'block' : 'none';
-    const sellTh = tStage === LAST ? '<th class="cp-sellcol">売却株数</th><th class="cp-addcol">追加出資株数</th>' : '';
+    const sellTh = tStage === LAST ? '<th class="cp-sellcol">売却</th><th class="cp-transfercol" style="background:#9c67b8">譲渡 <span style="font-weight:400;font-size:9.5px">(±)</span></th><th class="cp-addcol">増資</th>' : '';
     $('cp-thead').innerHTML = '<tr><th>株主（敬称略）</th><th>区分</th><th>取得ラウンド／取得時株価</th>' + sellTh + '<th>顕在株</th><th>SO込株数</th><th>顕在シェア</th><th>SO込シェア</th><th>累計出資額</th></tr>';
     const totK = ROWS.reduce((a, r) => a + valOf(r, tStage, 'k'), 0);
     const totF = ROWS.reduce((a, r) => a + valOf(r, tStage, 'fd'), 0);
@@ -19433,13 +19437,19 @@ document.addEventListener('DOMContentLoaded', function() {
         // 追加出資は カスタム株主 or 既存株主 (k[CURRENT]>0) いずれもOK
         const canAdd  = tStage === LAST && r.c !== FUND_CAT && (r._custom || r.k[CURRENT] > 0);
         const nameEsc = escapeHtml(r.n);
+        // 譲渡は signed 値 (min/max なし)、+ で受入 / - で渡す
+        const transferVal = Number(transfers[r.n]) || 0;
+        const canTransfer = tStage === LAST && r.c !== FUND_CAT;
         const sellCell = tStage === LAST
           ? '<td>' + (canSell ? '<input class="cp-sellinput' + ((sells[r.n]||0) > 0 ? ' cp-active' : '') + '" type="number" min="0" max="' + sellMax + '" step="50" value="' + (sells[r.n]||0) + '" data-name="' + nameEsc + '" data-max="' + sellMax + '" data-kind="sell">' : '—') + '</td>'
+            + '<td>' + (canTransfer ? '<input class="cp-sellinput cp-transferinput' + (transferVal !== 0 ? ' cp-active-transfer' : '') + '" type="number" step="50" value="' + transferVal + '" data-name="' + nameEsc + '" data-kind="transfer" title="+ で譲渡受入 / − で譲渡渡し">' : '—') + '</td>'
             + '<td>' + (canAdd ? '<input class="cp-sellinput cp-addinput' + ((adds[r.n]||0) > 0 ? ' cp-active-add' : '') + '" type="number" min="0" step="50" value="' + (adds[r.n]||0) + '" data-name="' + nameEsc + '" data-kind="add">' : '—') + '</td>'
           : '';
         const editBtn = r._custom ? ' <button class="cp-edit-btn" data-name="' + nameEsc + '" title="この株主を編集" style="background:none;border:0;color:var(--cp-court);cursor:pointer;font-size:13px;padding:0 4px;margin-left:2px">✎</button>' : '';
         const delBtn  = r._custom ? ' <button class="cp-del-btn" data-name="' + nameEsc + '" title="この株主を削除" style="background:none;border:0;color:#c1442e;cursor:pointer;font-size:14px;padding:0 4px">✕</button>' : '';
-        html += '<tr' + (r.c === FUND_CAT ? ' class="cp-fund"' : '') + '><td>' + (soldOut ? '<span class="cp-sold">' + nameEsc + '（全株売却）</span>' : nameEsc) + editBtn + delBtn + '</td>'
+        // カスタム株主 (検討中) は 🆕 バッジで既存と視覚的に区別
+        const newBadge = r._custom ? '<span style="display:inline-block;background:var(--cp-court);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;margin-right:5px;letter-spacing:.02em">🆕 検討中</span>' : '';
+        html += '<tr' + (r.c === FUND_CAT ? ' class="cp-fund"' : (r._custom ? ' style="background:rgba(217,130,43,0.04)"' : '')) + '><td>' + newBadge + (soldOut ? '<span class="cp-sold">' + nameEsc + '（全株売却）</span>' : nameEsc) + editBtn + delBtn + '</td>'
           + '<td><span class="cp-tag" style="background:' + COLORS[cat] + '">' + escapeHtml(cat) + '</span></td>'
           + '<td class="cp-acq">' + escapeHtml(r.a) + '</td>' + sellCell
           + '<td>' + num(k) + '</td><td>' + num(f) + '</td>'
@@ -19447,7 +19457,12 @@ document.addEventListener('DOMContentLoaded', function() {
           + '<td>' + (r.inv ? yen(r.inv) : '—') + '</td></tr>';
       }
       const catAdd = rs.reduce((a, r) => a + (r.add || 0), 0);
-      const sellSub = tStage === LAST ? '<td>' + (cat === FUND_CAT ? '—' : num(catSell)) + '</td><td>' + (cat === FUND_CAT ? '—' : num(catAdd)) + '</td>' : '';
+      const catTransfer = rs.reduce((a, r) => a + (r.transfer || 0), 0);
+      const sellSub = tStage === LAST
+        ? '<td>' + (cat === FUND_CAT ? '—' : num(catSell)) + '</td>'
+          + '<td>' + (cat === FUND_CAT ? '—' : (catTransfer >= 0 ? '+' : '') + num(catTransfer)) + '</td>'
+          + '<td>' + (cat === FUND_CAT ? '—' : num(catAdd)) + '</td>'
+        : '';
       html += '<tr class="cp-sub"><td>' + escapeHtml(cat) + ' 合計</td><td></td><td></td>' + sellSub + '<td>' + num(sk) + '</td><td>' + num(sf) + '</td><td>' + (totK && sk ? pct(sk / totK) : '—') + '</td><td>' + (totF && sf ? pct(sf / totF) : '—') + '</td><td>' + (si ? yen(si) : '—') + '</td></tr>';
       // 経営株主 の後に「三木家 合算 (三木智弘 + ㈱MIKI)」ハイライト行を追加
       if (cat === '経営株主') {
@@ -19457,7 +19472,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const mf = mikiRows.reduce((a, r) => a + valOf(r, tStage, 'fd'), 0);
         const mSell = mikiRows.reduce((a, r) => a + (r.sell || 0), 0);
         const mAdd = mikiRows.reduce((a, r) => a + (r.add || 0), 0);
-        const mikiSellSub = tStage === LAST ? '<td>' + num(mSell) + '</td><td>' + num(mAdd) + '</td>' : '';
+        const mTransfer = mikiRows.reduce((a, r) => a + (r.transfer || 0), 0);
+        const mikiSellSub = tStage === LAST
+          ? '<td>' + num(mSell) + '</td><td>' + (mTransfer >= 0 ? '+' : '') + num(mTransfer) + '</td><td>' + num(mAdd) + '</td>'
+          : '';
         if (mf > 0) {
           html += '<tr style="background:rgba(18,35,61,0.06);border-left:3px solid var(--cp-ink)">'
             + '<td style="font-weight:700;padding-left:10px">└ 三木家 合算 <span style="font-size:9.5px;font-weight:400;color:var(--cp-ink2)">(三木智弘 + ㈱MIKI)</span></td>'
@@ -19470,14 +19488,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }
     }
-    const sellTot = tStage === LAST ? '<td>' + num(totalSell) + '</td><td>' + num(totalAdd) + '</td>' : '';
+    const totalTransfer = ROWS.reduce((a, r) => a + (r.transfer || 0), 0);
+    const sellTot = tStage === LAST
+      ? '<td>' + num(totalSell) + '</td>'
+        + '<td>' + (totalTransfer >= 0 ? '+' : '') + num(totalTransfer) + '</td>'
+        + '<td>' + num(totalAdd) + '</td>'
+      : '';
     html += '<tr class="cp-tot"><td>合計（' + escapeHtml(STAGES[tStage].label) + '）</td><td></td><td></td>' + sellTot + '<td>' + num(totK) + '</td><td>' + num(totF) + '</td><td>100.00%</td><td>100.00%</td><td>' + yen(ROWS.reduce((a, r) => a + r.inv, 0)) + '</td></tr>';
     document.querySelector('#cp-tbl tbody').innerHTML = html;
     document.querySelectorAll('#sec-capital-policy .cp-sellinput').forEach(inp => {
       inp.addEventListener('change', e => {
         const name = e.target.dataset.name;
-        if (e.target.dataset.kind === 'add') {
+        const kind = e.target.dataset.kind;
+        if (kind === 'add') {
           adds[name] = Math.max(0, +e.target.value || 0);
+        } else if (kind === 'transfer') {
+          // 譲渡は signed (正=受入 / 負=渡し)。min/max なし。
+          transfers[name] = Math.round(+e.target.value || 0);
         } else {
           const mx = +e.target.dataset.max;
           sells[name] = Math.max(0, Math.min(+e.target.value || 0, mx));
@@ -19491,7 +19518,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const name = e.target.dataset.name;
         if (confirm('株主「' + name + '」を削除しますか？（この操作は取り消せません）')) {
           customRows = customRows.filter(r => r.n !== name);
-          delete sells[name]; delete adds[name];
+          delete sells[name]; delete adds[name]; delete transfers[name];
           saveCustom(); recalcAll();
         }
       });
@@ -19644,10 +19671,11 @@ document.addEventListener('DOMContentLoaded', function() {
       const idx = customRows.findIndex(r => r.n === _editingName);
       if (idx >= 0) {
         customRows[idx] = record;
-        // 名前が変わった場合、sells/adds のキーも移し替え
+        // 名前が変わった場合、sells/adds/transfers のキーも移し替え
         if (_editingName !== name) {
-          if (sells[_editingName] != null) { sells[name] = sells[_editingName]; delete sells[_editingName]; }
-          if (adds[_editingName]  != null) { adds[name]  = adds[_editingName];  delete adds[_editingName];  }
+          if (sells[_editingName] != null)     { sells[name] = sells[_editingName];         delete sells[_editingName]; }
+          if (adds[_editingName]  != null)     { adds[name]  = adds[_editingName];          delete adds[_editingName];  }
+          if (transfers[_editingName] != null) { transfers[name] = transfers[_editingName]; delete transfers[_editingName]; }
         }
       } else {
         customRows.push(record); // フォールバック
@@ -19979,53 +20007,71 @@ body { font-family: "Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiry
 
   <table class="holders-tbl">
     <thead><tr>
-      <th style="width:20%">株主（敬称略）</th>
-      <th style="width:11%">区分</th>
-      <th style="width:23%">取得ラウンド / 取得時株価</th>
-      <th style="width:8%">顕在株</th>
-      <th style="width:8%">SO込株数</th>
-      <th style="width:7%">顕在シェア</th>
+      <th style="width:19%">株主（敬称略）</th>
+      <th style="width:10%">区分</th>
+      <th style="width:20%">取得ラウンド / 取得時株価</th>
+      <th style="width:7%;background:#c1442e">売却</th>
+      <th style="width:7%;background:#9c67b8">譲渡</th>
+      <th style="width:7%;background:#2f6f8f">増資</th>
+      <th style="width:7%">顕在株</th>
+      <th style="width:7%">SO込株数</th>
       <th style="width:7%">SO込シェア</th>
-      <th style="width:8%">シリーズA後 (想定)</th>
-      <th style="width:8%">累計出資額</th>
+      <th style="width:9%">累計出資額</th>
     </tr></thead>
     <tbody>
       ${(() => {
         let html = '';
         let lastCat = null;
-        let catK = 0, catFD = 0, catInv = 0, catLast = 0;
+        let catK = 0, catFD = 0, catInv = 0, catLast = 0, catSell = 0, catXfer = 0, catAdd = 0;
         const flushSubtotal = () => {
           if (lastCat === null) return;
-          html += `<tr class="sub"><td>${escapeHtml(lastCat)} 小計</td><td></td><td></td><td>${num(catK)}</td><td>${num(catK+catFD)}</td><td>${pct((catK+catFD)/(totCur||1))}</td><td>${pct((catK+catFD)/(totCur||1))}</td><td>${num(catLast)}</td><td>${catInv?yen(catInv):'—'}</td></tr>`;
+          html += `<tr class="sub"><td>${escapeHtml(lastCat)} 小計</td><td></td><td></td>`
+            + `<td>${catSell ? num(catSell) : '—'}</td>`
+            + `<td>${catXfer !== 0 ? (catXfer > 0 ? '+' : '') + num(catXfer) : '—'}</td>`
+            + `<td>${catAdd ? num(catAdd) : '—'}</td>`
+            + `<td>${num(catK)}</td><td>${num(catK+catFD)}</td>`
+            + `<td>${pct((catK+catFD)/(totCur||1))}</td>`
+            + `<td>${catInv?yen(catInv):'—'}</td></tr>`;
         };
         listRows.forEach(r => {
-          if (r.c !== lastCat) { flushSubtotal(); lastCat = r.c; catK = catFD = catInv = catLast = 0; }
+          if (r.c !== lastCat) { flushSubtotal(); lastCat = r.c; catK = catFD = catInv = catLast = catSell = catXfer = catAdd = 0; }
           const kCur = Number(r.k?.[CURRENT])||0;
           const sCur = Number(r.s?.[CURRENT])||0;
           const fdCur = kCur + sCur;
           const kLast = Number(r.k?.[LAST])||0;
           const sLast = Number(r.s?.[LAST])||0;
           const fdLast = kLast + sLast;
+          const rSell = Number(r.sell)||0, rXfer = Number(r.transfer)||0, rAdd = Number(r.add)||0;
           catK += kCur; catFD += sCur; catInv += (Number(r.inv)||0); catLast += fdLast;
+          catSell += rSell; catXfer += rXfer; catAdd += rAdd;
+          const newBadge = r._custom ? '<span style="display:inline-block;background:#d9822b;color:#fff;font-size:6.5pt;font-weight:700;padding:1px 4px;border-radius:99px;margin-right:3px">🆕 検討中</span>' : '';
           html += `<tr>
-            <td>${escapeHtml(r.n)}</td>
+            <td>${newBadge}${escapeHtml(r.n)}</td>
             <td><span class="tag" style="background:${COLORS[r.c]}">${escapeHtml(r.c)}</span></td>
             <td class="acq-col">${escapeHtml(r.a)}</td>
-            <td>${kCur ? num(kCur) : '—'}</td>
-            <td>${fdCur ? num(fdCur) : '—'}</td>
-            <td>${totCur && fdCur ? pct(fdCur/totCur) : '—'}</td>
-            <td>${totCur && fdCur ? pct(fdCur/totCur) : '—'}</td>
+            <td>${rSell ? num(rSell) : '—'}</td>
+            <td>${rXfer !== 0 ? (rXfer > 0 ? '+' : '') + num(rXfer) : '—'}</td>
+            <td>${rAdd ? num(rAdd) : '—'}</td>
+            <td>${kLast ? num(kLast) : '—'}</td>
             <td>${fdLast ? num(fdLast) : '—'}</td>
+            <td>${totLast && fdLast ? pct(fdLast/totLast) : '—'}</td>
             <td>${r.inv ? yen(r.inv) : '—'}</td>
           </tr>`;
         });
         flushSubtotal();
         // 総合計
-        const gK = listRows.reduce((s,r) => s + (Number(r.k?.[CURRENT])||0), 0);
-        const gFD = listRows.reduce((s,r) => s + (Number(r.k?.[CURRENT])||0) + (Number(r.s?.[CURRENT])||0), 0);
-        const gLast = listRows.reduce((s,r) => s + (Number(r.k?.[LAST])||0) + (Number(r.s?.[LAST])||0), 0);
+        const gK = listRows.reduce((s,r) => s + (Number(r.k?.[LAST])||0), 0);
+        const gFD = listRows.reduce((s,r) => s + (Number(r.k?.[LAST])||0) + (Number(r.s?.[LAST])||0), 0);
+        const gSell = listRows.reduce((s,r) => s + (Number(r.sell)||0), 0);
+        const gXfer = listRows.reduce((s,r) => s + (Number(r.transfer)||0), 0);
+        const gAdd = listRows.reduce((s,r) => s + (Number(r.add)||0), 0);
         const gInv = listRows.reduce((s,r) => s + (Number(r.inv)||0), 0);
-        html += `<tr class="tot"><td>合計</td><td></td><td></td><td>${num(gK)}</td><td>${num(gFD)}</td><td>100.00%</td><td>100.00%</td><td>${num(gLast)}</td><td>${yen(gInv)}</td></tr>`;
+        html += `<tr class="tot"><td>合計</td><td></td><td></td>`
+          + `<td>${num(gSell)}</td>`
+          + `<td>${gXfer >= 0 ? '+' : ''}${num(gXfer)}</td>`
+          + `<td>${num(gAdd)}</td>`
+          + `<td>${num(gK)}</td><td>${num(gFD)}</td><td>100.00%</td>`
+          + `<td>${yen(gInv)}</td></tr>`;
         return html;
       })()}
     </tbody>
