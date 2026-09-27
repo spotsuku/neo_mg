@@ -7557,51 +7557,67 @@ function parseMFCsvDirect(csvText, targetMonths) {
     return isNaN(n) ? 0 : Math.round(n);
   }
 
-  // 科目マッピング（マネーフォワード勘定科目 → DBキー）
+  // 科目マッピング（マネーフォワード勘定科目 → DBキー / 正準12項目）
   const ACCOUNT_MAP = {
-    // PL: labor
+    // PL: labor (人件費・社保込み)
     '役員報酬':   { key:'labor',     type:'pl' },
     '給料賃金':   { key:'labor',     type:'pl' },
     '給与手当':   { key:'labor',     type:'pl' },
     '賞与':       { key:'labor',     type:'pl' },
     '法定福利費': { key:'labor',     type:'pl' },
     '福利厚生費': { key:'labor',     type:'pl' },
-    // PL: outsource
+    // PL: outsource (業務委託費)
     '業務委託料':        { key:'outsource', type:'pl' },
     '業務委託料（開発費）': { key:'outsource', type:'pl' },
     '業務委託費':        { key:'outsource', type:'pl' },
-    // PL: adv
+    // PL: reward (支払い報酬 = 税理士・弁護士等プロ費用)
+    '支払報酬':   { key:'reward',    type:'pl' },
+    '支払報酬料': { key:'reward',    type:'pl' },
+    // PL: gaichu (制作/イベント外注)
+    '外注費':     { key:'gaichu',    type:'pl' },
+    // PL: recruit (採用研修費)
+    '採用費':     { key:'recruit',   type:'pl' },
+    '採用教育費': { key:'recruit',   type:'pl' },
+    '研修採用費': { key:'recruit',   type:'pl' },
+    '研修費':     { key:'recruit',   type:'pl' },
+    '教育研修費': { key:'recruit',   type:'pl' },
+    // PL: adv (広告販促費)
     '広告宣伝費': { key:'adv',       type:'pl' },
     '販売促進費': { key:'adv',       type:'pl' },
-    // PL: gaichu
-    '支払報酬':   { key:'gaichu',    type:'pl' },
-    '外注費':     { key:'gaichu',    type:'pl' },
-    // PL: other（上記以外の販管費）
-    '旅費交通費': { key:'other',     type:'pl' },
-    '通信費':     { key:'other',     type:'pl' },
+    // PL: travel (旅費交通費)
+    '旅費交通費': { key:'travel',    type:'pl' },
+    // PL: comm (通信費)
+    '通信費':     { key:'comm',      type:'pl' },
+    // PL: entertain (会議・交際費)
+    '接待交際費': { key:'entertain', type:'pl' },
+    '交際費':     { key:'entertain', type:'pl' },
+    '会議費':     { key:'entertain', type:'pl' },
+    // PL: rent (賃料 本社のみ)
+    '地代家賃':   { key:'rent',      type:'pl' },
+    '賃借料':     { key:'rent',      type:'pl' },
+    // PL: supplies (消耗品・減価償却費)
+    '消耗品費':   { key:'supplies',  type:'pl' },
+    '備品・消耗品費': { key:'supplies', type:'pl' },
+    '減価償却費': { key:'supplies',  type:'pl' },
+    // PL: other (それ以外の販管費: 水道光熱・租税公課・保険・雑費 等)
     '水道光熱費': { key:'other',     type:'pl' },
-    '備品・消耗品費': { key:'other', type:'pl' },
-    '消耗品費':   { key:'other',     type:'pl' },
-    '地代家賃':   { key:'other',     type:'pl' },
     '租税公課':   { key:'other',     type:'pl' },
     '支払手数料': { key:'other',     type:'pl' },
     'システム利用料': { key:'other', type:'pl' },
-    '接待交際費': { key:'other',     type:'pl' },
-    '会議費':     { key:'other',     type:'pl' },
-    '研修採用費': { key:'other',     type:'pl' },
-    '採用費':     { key:'other',     type:'pl' },
     '保険料':     { key:'other',     type:'pl' },
     '新聞図書費': { key:'other',     type:'pl' },
     '諸会費':     { key:'other',     type:'pl' },
     '荷造運賃':   { key:'other',     type:'pl' },
     '雑費':       { key:'other',     type:'pl' },
-    '減価償却費': { key:'other',     type:'pl' },
   };
 
   // 月別累積集計
-  const acc = {}; // { month: { pl: {labor:0,...}, rev:0, opexTotal:0 } }
+  const acc = {}; // { month: { pl: {labor:0,...12科目...}, rev:0, opexTotal:0 } }
   availableMonths.forEach(m => {
-    acc[m] = { rev:0, opexTotal:0, pl:{ labor:0,outsource:0,adv:0,gaichu:0,other:0 } };
+    acc[m] = { rev:0, opexTotal:0, pl:{
+      labor:0, outsource:0, reward:0, gaichu:0, recruit:0, adv:0,
+      travel:0, comm:0, entertain:0, rent:0, supplies:0, other:0
+    } };
   });
 
   let inOpex = false;
@@ -7655,8 +7671,15 @@ function parseMFCsvDirect(csvText, targetMonths) {
       rev:       Math.round(a.rev / 1000),
       labor:     Math.round(a.pl.labor / 1000),
       outsource: Math.round(a.pl.outsource / 1000),
-      adv:       Math.round(a.pl.adv / 1000),
+      reward:    Math.round(a.pl.reward / 1000),
       gaichu:    Math.round(a.pl.gaichu / 1000),
+      recruit:   Math.round(a.pl.recruit / 1000),
+      adv:       Math.round(a.pl.adv / 1000),
+      travel:    Math.round(a.pl.travel / 1000),
+      comm:      Math.round(a.pl.comm / 1000),
+      entertain: Math.round(a.pl.entertain / 1000),
+      rent:      Math.round(a.pl.rent / 1000),
+      supplies:  Math.round(a.pl.supplies / 1000),
       other:     Math.round(a.pl.other / 1000),
       opexTotal: Math.round(a.opexTotal / 1000),
     };
@@ -8021,21 +8044,30 @@ async function analyzeCSV() {
       };
       direct.months.forEach(m => {
         const d = direct.data[m];
-        // other = CSV販管費合計 - 各科目の合計（千円）で逆算
-        // d.other は直接パース値（ACCOUNT_MAP外科目は含まれない可能性があるため逆算を使用）
-        const otherCalc = d.opexTotal - d.labor - d.outsource - d.adv - d.gaichu;
-        console.log(`[Direct Parse] ${m}: opex=${d.opexTotal} labor=${d.labor} out=${d.outsource} adv=${d.adv} gc=${d.gaichu} other_calc=${otherCalc} other_direct=${d.other}`);
+        // other = CSV販管費合計 − 11科目 (直接パースで拾えなかった残余を other に集約)
+        // 直接パース値 d.other もあるが、未マッピング科目を確実に取り込むため逆算を優先
+        const mapped = d.labor + d.outsource + d.reward + d.gaichu + d.recruit + d.adv
+                     + d.travel + d.comm + d.entertain + d.rent + d.supplies;
+        const otherCalc = d.opexTotal - mapped;
+        console.log(`[Direct Parse] ${m}: opex=${d.opexTotal} labor=${d.labor} out=${d.outsource} rwd=${d.reward} gc=${d.gaichu} rec=${d.recruit} adv=${d.adv} trv=${d.travel} com=${d.comm} ent=${d.entertain} rnt=${d.rent} sup=${d.supplies} other_calc=${otherCalc} other_direct=${d.other}`);
         parsedForPreview.months[m] = {
           pl: {
             rev:       d.rev,
             labor:     d.labor,
             outsource: d.outsource,
-            adv:       d.adv,
+            reward:    d.reward,
             gaichu:    d.gaichu,
+            recruit:   d.recruit,
+            adv:       d.adv,
+            travel:    d.travel,
+            comm:      d.comm,
+            entertain: d.entertain,
+            rent:      d.rent,
+            supplies:  d.supplies,
             other:     Math.max(0, otherCalc),
           }
         };
-        log.innerHTML += `<span class="log-info">${MONTH_LABELS[m]||m}: 売上${d.rev.toLocaleString()}千円 / 人件費${d.labor.toLocaleString()}千円 / 委託${d.outsource.toLocaleString()}千円 / 広告${d.adv.toLocaleString()}千円 / その他${otherCalc.toLocaleString()}千円</span>\n`;
+        log.innerHTML += `<span class="log-info">${MONTH_LABELS[m]||m}: 売上${d.rev.toLocaleString()}千円 / 人件費${d.labor.toLocaleString()} / 委託${d.outsource.toLocaleString()} / 報酬${d.reward.toLocaleString()} / 外注${d.gaichu.toLocaleString()} / 採用${d.recruit.toLocaleString()} / 広告${d.adv.toLocaleString()} / 旅費${d.travel.toLocaleString()} / 通信${d.comm.toLocaleString()} / 会議${d.entertain.toLocaleString()} / 家賃${d.rent.toLocaleString()} / 消耗${d.supplies.toLocaleString()} / その他${otherCalc.toLocaleString()}千円</span>\n`;
       });
 
       window._csvPendingResult = { parsed: parsedForPreview, months: direct.months, kind, csvType };
@@ -8439,10 +8471,17 @@ function renderCSVConfirmTable(parsed, months, kind) {
       title: '── PL（千円）', color: 'rgba(55,138,221,0.12)',
       rows: [
         { section:'pl', key:'rev',        label:'売上合計',                       isRev:true },
-        { section:'pl', key:'labor',      label:'人件費',                         isOut:true },
+        { section:'pl', key:'labor',      label:'人件費(社保込)',                 isOut:true },
         { section:'pl', key:'outsource',  label:'業務委託費',                     isOut:true },
-        { section:'pl', key:'adv',        label:'広告販促費',                     isOut:true },
+        { section:'pl', key:'reward',     label:'支払い報酬',                     isOut:true },
         { section:'pl', key:'gaichu',     label:'外注費',                         isOut:true },
+        { section:'pl', key:'recruit',    label:'採用研修費',                     isOut:true },
+        { section:'pl', key:'adv',        label:'広告販促費',                     isOut:true },
+        { section:'pl', key:'travel',     label:'旅費交通費',                     isOut:true },
+        { section:'pl', key:'comm',       label:'通信費',                         isOut:true },
+        { section:'pl', key:'entertain',  label:'会議・交際費',                   isOut:true },
+        { section:'pl', key:'rent',       label:'賃料(本社のみ)',                 isOut:true },
+        { section:'pl', key:'supplies',   label:'消耗品・減価償却費',             isOut:true },
         { section:'pl', key:'other',      label:'その他販管費',                   isOut:true },
         { section:'pl', key:'_opexCheck', label:'✅ 販管費合計（検算）※この値がCSVの販管費合計と一致するか確認',isCalc:true },
         { section:'pl', key:'cogsHomeroom', label:'原価:ホームルーム',            isOut:true },
@@ -8523,9 +8562,10 @@ function renderCSVConfirmTable(parsed, months, kind) {
         const monthData = parsed.months?.[m] || {};
         let val;
         if (row.key === '_opexCheck') {
-          // 検算：labor+outsource+adv+gaichu+other の合計
+          // 検算：12科目 (labor + outsource + reward + gaichu + recruit + adv + travel + comm + entertain + rent + supplies + other) の合計
           const plD = monthData.pl || monthData;
-          val = ['labor','outsource','adv','gaichu','other'].reduce((t,k) => t+(Number(plD[k])||0), 0);
+          val = ['labor','outsource','reward','gaichu','recruit','adv','travel','comm','entertain','rent','supplies','other']
+            .reduce((t,k) => t+(Number(plD[k])||0), 0);
         } else {
           val = (monthData[row.section]?.[row.key])
              ?? (row.section !== 'bs' ? monthData[row.key] : undefined)
