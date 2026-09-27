@@ -12599,6 +12599,7 @@ function mfInit() {
         <span style="font-size:10px;color:var(--text3)">未分類の科目をAIでPL/BSに自動分類できます（次回取得時にも適用）</span>
         <button class="btn btn-p" style="font-size:10px;padding:3px 10px;font-weight:700" onclick="mfAiCategorizeBd()" id="mf-ai-bd-btn">🤖 AIで一括仕分け</button>
         <button class="btn btn-g" style="font-size:10px;padding:3px 10px;font-weight:700;display:none" onclick="mfAcceptAllAiBd()" id="mf-accept-ai-bd-btn">✓ AI提案を全て記憶</button>
+        <button class="btn" style="font-size:10px;padding:3px 10px;font-weight:700;background:var(--bg2);color:var(--text2);border:1px solid var(--border2)" onclick="mfResetOverrides()" title="以前の仕分け設定を全て削除して既定マッピングに戻します">🗑 記憶をリセット</button>
         <span id="mf-bd-saved" style="font-size:10px;color:var(--text3);display:none"></span>
       </div>
       <div class="scroll-x" style="margin-top:8px">
@@ -13180,10 +13181,17 @@ function mfRenderPreview() {
       { v:'rev', l:'PL: 売上' },
       { v:'rev_other', l:'PL: その他収益' },
       { v:'cogs', l:'PL: 原価' },
-      { v:'labor', l:'PL: 人件費' },
+      { v:'labor', l:'PL: 人件費(社保込)' },
       { v:'outsource', l:'PL: 業務委託' },
+      { v:'reward', l:'PL: 支払い報酬' },
+      { v:'gaichu', l:'PL: 外注費' },
+      { v:'recruit', l:'PL: 採用研修' },
       { v:'adv', l:'PL: 広告販促' },
-      { v:'gaichu', l:'PL: 外注' },
+      { v:'travel', l:'PL: 旅費交通' },
+      { v:'comm', l:'PL: 通信費' },
+      { v:'entertain', l:'PL: 会議・交際費' },
+      { v:'rent', l:'PL: 賃料(本社)' },
+      { v:'supplies', l:'PL: 消耗品・減価償却' },
       { v:'other', l:'PL: その他販管費' },
     ];
     const BS_CATS = [
@@ -13823,7 +13831,7 @@ JSON形式のみで返答（説明不要）:
     }
 
     // UIに反映
-    const PL_KEYS_SET = new Set(['rev','rev_other','cogs','labor','outsource','adv','gaichu','other']);
+    const PL_KEYS_SET = new Set(['rev','rev_other','cogs','labor','outsource','reward','gaichu','recruit','adv','travel','comm','entertain','rent','supplies','other']);
     const BS_KEYS_SET = new Set(['cash','receivable','other_ca','fixed','payable','borrowing_short','borrowing','other_cl','capital','retained','warrant']);
     let changeCount = 0;
     document.querySelectorAll('.mf-bd-cat-select').forEach(sel => {
@@ -13860,7 +13868,7 @@ JSON形式のみで返答（説明不要）:
 
 // ── BD AI提案を全て記憶 ──
 window.mfAcceptAllAiBd = function() {
-  const PL_KEYS_SET = new Set(['rev','rev_other','cogs','labor','outsource','adv','gaichu','other']);
+  const PL_KEYS_SET = new Set(['rev','rev_other','cogs','labor','outsource','reward','gaichu','recruit','adv','travel','comm','entertain','rent','supplies','other']);
   let plOv = {}, bsOv = {};
   try { plOv = JSON.parse(localStorage.getItem('mfPlCategoryOverrides') || '{}'); } catch(e) {}
   try { bsOv = JSON.parse(localStorage.getItem('mfBsCategoryOverrides') || '{}'); } catch(e) {}
@@ -13894,13 +13902,87 @@ window.mfCancelPreview = function() {
   document.getElementById('mf-preview-card').style.display = 'none';
 };
 
+// ── 記憶(上書き)を全リセット ──
+// 過去のAI仕分けで「その他販管費(other)」に集約されてしまった科目や、
+// PL 12科目リファクタ前の古い分類を全て削除して既定マッピングに戻す
+window.mfResetOverrides = function() {
+  const plOv = localStorage.getItem('mfPlCategoryOverrides');
+  const bsOv = localStorage.getItem('mfBsCategoryOverrides');
+  const cfOv = localStorage.getItem('mfCfCategoryOverrides');
+  let plCount = 0, bsCount = 0, cfCount = 0;
+  try { plCount = Object.keys(JSON.parse(plOv || '{}')).length; } catch(e) {}
+  try { bsCount = Object.keys(JSON.parse(bsOv || '{}')).length; } catch(e) {}
+  try { cfCount = Object.keys(JSON.parse(cfOv || '{}')).length; } catch(e) {}
+  const total = plCount + bsCount + cfCount;
+  if (!confirm(`保存済みの仕分け上書きを全て削除します（PL:${plCount}件, BS:${bsCount}件, CF:${cfCount}件）。\n次回のMF取得時は既定マッピングに戻ります。よろしいですか？`)) return;
+  localStorage.removeItem('mfPlCategoryOverrides');
+  localStorage.removeItem('mfBsCategoryOverrides');
+  localStorage.removeItem('mfCfCategoryOverrides');
+  const saved = document.getElementById('mf-bd-saved');
+  if (saved) {
+    saved.style.display = 'inline';
+    saved.style.color = 'var(--tc-green)';
+    saved.textContent = `✓ ${total}件の仕分け上書きを削除しました。「取得」ボタンで再取得してください。`;
+  } else {
+    alert(`✓ ${total}件の仕分け上書きを削除しました。MF連携タブで再取得してください。`);
+  }
+  // 現在プレビュー表示中なら再描画（ドロップダウンの状態リセット）
+  if (window._mfPending && typeof window.mfRenderPreview === 'function') {
+    try { window.mfRenderPreview(); } catch(e) {}
+  }
+};
+
+// ── 起動時マイグレーション: 12科目リファクタ以前の 'other' 上書きを掃除 ──
+// AI仕分けが古かった時代、以下の科目はカテゴリが存在しなかったので 'other' に落ちていた。
+// 今は個別カテゴリがあるので、これらの上書きを削除して既定マッピングに戻す。
+(function migrateMfPlOverrides() {
+  try {
+    const raw = localStorage.getItem('mfPlCategoryOverrides');
+    if (!raw) return;
+    const ov = JSON.parse(raw);
+    if (!ov || typeof ov !== 'object') return;
+    // 新しく個別カテゴリを持つ科目 (旧: other にAI仕分けされていた可能性が高い)
+    const STALE_OTHER_ACCTS = new Set([
+      // reward
+      '支払報酬', '支払報酬料',
+      // recruit
+      '採用費', '採用教育費', '研修採用費', '研修費', '教育研修費',
+      // travel
+      '旅費交通費',
+      // comm
+      '通信費',
+      // entertain
+      '接待交際費', '交際費', '会議費',
+      // rent
+      '地代家賃', '賃借料',
+      // supplies
+      '消耗品費', '備品・消耗品費', '減価償却費',
+      // gaichu (外注費が古くは outsource や other に落ちていた場合)
+      '外注費', '外注加工費',
+    ]);
+    let cleared = 0;
+    for (const acct of Object.keys(ov)) {
+      if (STALE_OTHER_ACCTS.has(acct) && ov[acct] === 'other') {
+        delete ov[acct];
+        cleared++;
+      }
+    }
+    if (cleared > 0) {
+      localStorage.setItem('mfPlCategoryOverrides', JSON.stringify(ov));
+      console.log('[mf-migration] 旧 "other" 上書きを ' + cleared + ' 件削除しました。次回のMF取得で12科目に正しく分類されます。');
+    }
+  } catch(e) {
+    console.warn('[mf-migration] failed:', e.message);
+  }
+})();
+
 // ── PL/BS 勘定科目の分類先上書き保存 ──
 // 分類先の先頭2文字で PL / BS を自動判別し、対応する localStorage キーに保存
 window.mfSavePlBsOverride = function(sel) {
   const acct = sel.dataset.acct;
   const cat = sel.value;
   if (!acct) return;
-  const PL_KEYS = ['rev','rev_other','cogs','labor','outsource','adv','gaichu','other'];
+  const PL_KEYS = ['rev','rev_other','cogs','labor','outsource','reward','gaichu','recruit','adv','travel','comm','entertain','rent','supplies','other'];
   const BS_KEYS = ['cash','receivable','other_ca','fixed','payable','borrowing_short','borrowing','other_cl','capital','retained','warrant'];
   let plOv = {}, bsOv = {};
   try { plOv = JSON.parse(localStorage.getItem('mfPlCategoryOverrides') || '{}'); } catch(e) {}
