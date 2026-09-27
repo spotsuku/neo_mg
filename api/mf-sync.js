@@ -116,29 +116,42 @@ async function resolveFiscalPeriods(token, fiscalYear) {
 //  勘定科目マスタ取得 + カテゴリマッピング構築
 // ══════════════════════════════════════════
 
-// PL科目マッピング（勘定科目名 → ダッシュボードキー）
+// PL科目マッピング（勘定科目名 → ダッシュボードキー / 正準12項目対応）
 // 厳密版: MFの損益計算書「売上高合計」と一致させるため、売上高のみを rev にマッピング
 // 会費収入・協賛金収入等は rev_other（未分類）として扱い、デフォルトでは合算しない
 const PL_ACCT_MAP = {
   // 売上（MFの「売上高」セクションと一致）
   '売上高':'rev','売上':'rev',
-  // 人件費（MFの給与系科目と一致）
+  // 人件費 (社保込み)
   '役員報酬':'labor','給与手当':'labor','給料手当':'labor','給料賃金':'labor',
   '賞与':'labor','法定福利費':'labor','福利厚生費':'labor','退職金':'labor',
-  // 業務委託
+  // 業務委託費
   '業務委託費':'outsource','業務委託料':'outsource','業務委託':'outsource',
-  // 広告販促
+  // 支払い報酬 (税理士・弁護士等プロ費用)
+  '支払報酬':'reward','支払報酬料':'reward',
+  // 外注費 (制作/イベント外注)
+  '外注費':'gaichu','外注加工費':'gaichu',
+  // 採用研修費
+  '採用費':'recruit','採用教育費':'recruit','研修採用費':'recruit',
+  '研修費':'recruit','教育研修費':'recruit',
+  // 広告販促費
   '広告宣伝費':'adv','販売促進費':'adv',
-  // 外注費
-  '外注費':'gaichu','外注加工費':'gaichu','支払報酬':'gaichu',
+  // 旅費交通費
+  '旅費交通費':'travel',
+  // 通信費
+  '通信費':'comm',
+  // 会議・交際費
+  '接待交際費':'entertain','交際費':'entertain','会議費':'entertain',
+  // 賃料 (本社)
+  '地代家賃':'rent','賃借料':'rent',
+  // 消耗品・減価償却費
+  '消耗品費':'supplies','備品・消耗品費':'supplies','減価償却費':'supplies',
   // 売上原価
   '仕入高':'cogs','原価':'cogs','会場費':'cogs',
-  // ── その他販管費（上記以外）を 'other' にまとめる ──
-  '旅費交通費':'other','通信費':'other','水道光熱費':'other','消耗品費':'other',
-  '備品・消耗品費':'other','地代家賃':'other','租税公課':'other','支払手数料':'other',
-  'システム利用料':'other','接待交際費':'other','会議費':'other','研修採用費':'other',
-  '採用費':'other','保険料':'other','新聞図書費':'other','諸会費':'other',
-  '荷造運賃':'other','雑費':'other','減価償却費':'other','リース料':'other',
+  // その他販管費 (未マッピング科目)
+  '水道光熱費':'other','租税公課':'other','支払手数料':'other',
+  'システム利用料':'other','保険料':'other','新聞図書費':'other','諸会費':'other',
+  '荷造運賃':'other','雑費':'other','リース料':'other',
   '修繕費':'other',
   // イベント費用: 2026年度以降は cogs（resolvePlKey 内で年度判定）。
   // 2025年度以前は 'other'（販管費）として処理する。
@@ -399,7 +412,8 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
 
   // ── PL: 月次損益（借方・貸方の純額を計算） ──
   // 'non_op' は営業外費用・法人税等（PL preview には出さず BS retained 計算でのみ使用）
-  const PL_KEYS = ['rev', 'rev_other', 'labor', 'outsource', 'adv', 'gaichu', 'other', 'cogs', 'non_op'];
+  const PL_KEYS = ['rev', 'rev_other', 'labor', 'outsource', 'reward', 'gaichu', 'recruit',
+                   'adv', 'travel', 'comm', 'entertain', 'rent', 'supplies', 'other', 'cogs', 'non_op'];
   const pl = {};
   PL_KEYS.forEach(k => { pl[k] = { actual: new Array(n).fill(0) }; });
   // 借方・貸方を別々に集計（純額計算用）
@@ -622,7 +636,7 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
 
   // ── PL 純額計算（円単位の小数から千円に最終丸め） ──
   // 収益(rev/rev_other): 貸方 − 借方（返品・値引は借方で相殺）
-  // 費用(labor/outsource/adv/gaichu/other/cogs): 借方 − 貸方（戻し処理は貸方で相殺）
+  // 費用(labor/outsource/reward/gaichu/recruit/adv/travel/comm/entertain/rent/supplies/other/cogs/non_op): 借方 − 貸方（戻し処理は貸方で相殺）
   PL_KEYS.forEach(k => {
     const isRev = (k === 'rev' || k === 'rev_other');
     for (let i = 0; i < n; i++) {
@@ -711,7 +725,7 @@ function buildFromJournals(journals, fiscalYear, options = {}) {
     if (isAnchorMonth(i)) {
       const rev = (plCredit.rev[i]       - plDebit.rev[i]) +
                   (plCredit.rev_other[i] - plDebit.rev_other[i]);
-      const expKeys = ['cogs','labor','outsource','adv','gaichu','other','non_op'];
+      const expKeys = ['cogs','labor','outsource','reward','gaichu','recruit','adv','travel','comm','entertain','rent','supplies','other','non_op'];
       const exp = expKeys.reduce((t, k) => t + (plDebit[k][i] - plCredit[k][i]), 0);
       cumNetIncome += rev - exp;
     }

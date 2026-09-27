@@ -12925,15 +12925,23 @@ function mfRenderPreview() {
       { label:'　原価',                  key:'cogs',      isOut:true },
       { label:'　　粗利',                key:'__calc__', isRev:true, formula: (i) => ((p.pl.rev?.actual?.[i]) || 0) - ((p.pl.cogs?.actual?.[i]) || 0) },
       { label:'【販管費】',             key:'__header__' },
-      { label:'　人件費',                key:'labor',     isOut:true },
+      { label:'　人件費(社保込)',        key:'labor',     isOut:true },
       { label:'　業務委託',              key:'outsource', isOut:true },
-      { label:'　広告販促',              key:'adv',       isOut:true },
+      { label:'　支払い報酬',            key:'reward',    isOut:true },
       { label:'　外注費',                key:'gaichu',    isOut:true },
+      { label:'　採用研修',              key:'recruit',   isOut:true },
+      { label:'　広告販促',              key:'adv',       isOut:true },
+      { label:'　旅費交通',              key:'travel',    isOut:true },
+      { label:'　通信費',                key:'comm',      isOut:true },
+      { label:'　会議・交際',            key:'entertain', isOut:true },
+      { label:'　賃料(本社)',            key:'rent',      isOut:true },
+      { label:'　消耗品・減価償却',      key:'supplies',  isOut:true },
       { label:'　その他販管費',          key:'other',     isOut:true },
       { label:'　　営業利益',            key:'__calc__', isRev:true, formula: (i) => {
         const rev = (p.pl.rev?.actual?.[i]) || 0;
         const cogs = (p.pl.cogs?.actual?.[i]) || 0;
-        const opex = ['labor','outsource','adv','gaichu','other'].reduce((t,k) => t + ((p.pl[k]?.actual?.[i]) || 0), 0);
+        const opex = ['labor','outsource','reward','gaichu','recruit','adv','travel','comm','entertain','rent','supplies','other']
+          .reduce((t,k) => t + ((p.pl[k]?.actual?.[i]) || 0), 0);
         return rev - cogs - opex;
       }},
       { label:'【営業外収益】',         key:'__header__' },
@@ -13357,15 +13365,23 @@ window.mfOnCommitMonthChange = function() {
       { label:'　原価',                  key:'cogs',      isOut:true },
       { label:'　　粗利',                key:'__calc__', isRev:true, formula: (i) => ((p.pl.rev?.actual?.[i]) || 0) - ((p.pl.cogs?.actual?.[i]) || 0) },
       { label:'【販管費】',             key:'__header__' },
-      { label:'　人件費',                key:'labor',     isOut:true },
+      { label:'　人件費(社保込)',        key:'labor',     isOut:true },
       { label:'　業務委託',              key:'outsource', isOut:true },
-      { label:'　広告販促',              key:'adv',       isOut:true },
+      { label:'　支払い報酬',            key:'reward',    isOut:true },
       { label:'　外注費',                key:'gaichu',    isOut:true },
+      { label:'　採用研修',              key:'recruit',   isOut:true },
+      { label:'　広告販促',              key:'adv',       isOut:true },
+      { label:'　旅費交通',              key:'travel',    isOut:true },
+      { label:'　通信費',                key:'comm',      isOut:true },
+      { label:'　会議・交際',            key:'entertain', isOut:true },
+      { label:'　賃料(本社)',            key:'rent',      isOut:true },
+      { label:'　消耗品・減価償却',      key:'supplies',  isOut:true },
       { label:'　その他販管費',          key:'other',     isOut:true },
       { label:'　　営業利益',            key:'__calc__', isRev:true, formula: (i) => {
         const rev = (p.pl.rev?.actual?.[i]) || 0;
         const cogs = (p.pl.cogs?.actual?.[i]) || 0;
-        const opex = ['labor','outsource','adv','gaichu','other'].reduce((t,k) => t + ((p.pl[k]?.actual?.[i]) || 0), 0);
+        const opex = ['labor','outsource','reward','gaichu','recruit','adv','travel','comm','entertain','rent','supplies','other']
+          .reduce((t,k) => t + ((p.pl[k]?.actual?.[i]) || 0), 0);
         return rev - cogs - opex;
       }},
       { label:'【営業外収益】',         key:'__header__' },
@@ -13730,11 +13746,18 @@ window.mfAiCategorizeBd = async function() {
       { v:'rev',       l:'PL: 売上',         hint:'売上高・本業収益' },
       { v:'rev_other', l:'PL: その他収益',   hint:'雑収入・受取利息・為替差益等' },
       { v:'cogs',      l:'PL: 原価',         hint:'仕入・会場費・原価系' },
-      { v:'labor',     l:'PL: 人件費',       hint:'給与・賞与・役員報酬・社保・福利厚生' },
+      { v:'labor',     l:'PL: 人件費(社保込)', hint:'給与・賞与・役員報酬・社保・福利厚生' },
       { v:'outsource', l:'PL: 業務委託',     hint:'業務委託料' },
+      { v:'reward',    l:'PL: 支払い報酬',   hint:'税理士・弁護士等プロ費用 (支払報酬料)' },
+      { v:'gaichu',    l:'PL: 外注費',       hint:'外注加工費・制作外注' },
+      { v:'recruit',   l:'PL: 採用研修',     hint:'採用費・研修費・教育研修費' },
       { v:'adv',       l:'PL: 広告販促',     hint:'広告宣伝・販売促進' },
-      { v:'gaichu',    l:'PL: 外注',         hint:'専門家報酬・外注加工' },
-      { v:'other',     l:'PL: その他販管費', hint:'家賃/通信/旅費/租税公課/会議費 等' },
+      { v:'travel',    l:'PL: 旅費交通',     hint:'旅費交通費' },
+      { v:'comm',      l:'PL: 通信費',       hint:'通信費' },
+      { v:'entertain', l:'PL: 会議・交際費', hint:'接待交際費・交際費・会議費' },
+      { v:'rent',      l:'PL: 賃料(本社)',   hint:'地代家賃・賃借料' },
+      { v:'supplies',  l:'PL: 消耗品・減価償却', hint:'消耗品費・備品消耗品・減価償却費' },
+      { v:'other',     l:'PL: その他販管費', hint:'水道光熱/租税公課/支払手数料/保険/雑費 等' },
     ];
     const bsCats = [
       { v:'cash',       l:'BS資産: 現預金',         hint:'現金・普通預金等' },
@@ -14116,7 +14139,8 @@ window.mfCommitConfirmed = async function() {
     }
 
     if (p.type === 'trial_pl') {
-      const keys = ['rev','labor','outsource','adv','gaichu','other','cogs'];
+      // 12科目 (正準) 対応: reward/recruit/travel/comm/entertain/rent/supplies を追加
+      const keys = ['rev','labor','outsource','reward','gaichu','recruit','adv','travel','comm','entertain','rent','supplies','other','cogs'];
       keys.forEach(k => {
         if (!db.pl.actual[k]) db.pl.actual[k] = new Array(db.months.length).fill(0);
         if (!p.pl[k]?.actual) return;
